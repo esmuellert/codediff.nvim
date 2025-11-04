@@ -47,6 +47,10 @@ test("Scrolls to change in middle of file", function()
     table.insert(modified_lines, "unchanged line " .. i)
   end
 
+  -- Write files to disk
+  vim.fn.writefile(original_lines, "/tmp/test_left.txt")
+  vim.fn.writefile(modified_lines, "/tmp/test_right.txt")
+
   local lines_diff = diff.compute_diff(original_lines, modified_lines)
   local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
     left_type = render.BufferType.REAL_FILE,
@@ -55,7 +59,9 @@ test("Scrolls to change in middle of file", function()
     right_config = { file_path = "/tmp/test_right.txt" },
   })
   
+  -- Wait for vim.schedule to complete
   vim.cmd("redraw")
+  vim.wait(100)
 
   local left_cursor = vim.api.nvim_win_get_cursor(view.left_win)
   local right_cursor = vim.api.nvim_win_get_cursor(view.right_win)
@@ -69,6 +75,10 @@ test("Scrolls to change at beginning", function()
   local original_lines = {"old line 1", "unchanged 2", "unchanged 3"}
   local modified_lines = {"new line 1", "unchanged 2", "unchanged 3"}
 
+  -- Write files to disk
+  vim.fn.writefile(original_lines, "/tmp/test_left2.txt")
+  vim.fn.writefile(modified_lines, "/tmp/test_right2.txt")
+
   local lines_diff = diff.compute_diff(original_lines, modified_lines)
   local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
     left_type = render.BufferType.REAL_FILE,
@@ -77,7 +87,9 @@ test("Scrolls to change at beginning", function()
     right_config = { file_path = "/tmp/test_right2.txt" },
   })
 
+  -- Wait for vim.schedule to complete
   vim.cmd("redraw")
+  vim.wait(100)
 
   local left_cursor = vim.api.nvim_win_get_cursor(view.left_win)
   local right_cursor = vim.api.nvim_win_get_cursor(view.right_win)
@@ -104,6 +116,10 @@ test("Centers line in large file", function()
     table.insert(modified_lines, "unchanged line " .. i)
   end
 
+  -- Write files to disk
+  vim.fn.writefile(original_lines, "/tmp/test_left3.txt")
+  vim.fn.writefile(modified_lines, "/tmp/test_right3.txt")
+
   local lines_diff = diff.compute_diff(original_lines, modified_lines)
   local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
     left_type = render.BufferType.REAL_FILE,
@@ -112,7 +128,9 @@ test("Centers line in large file", function()
     right_config = { file_path = "/tmp/test_right3.txt" },
   })
 
+  -- Wait for vim.schedule to complete
   vim.cmd("redraw")
+  vim.wait(100)
 
   local cursor = vim.api.nvim_win_get_cursor(view.right_win)
   assert(cursor[1] == 51, "Cursor should be at line 51")
