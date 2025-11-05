@@ -60,7 +60,7 @@ jobs:
       - name: Run libvscode-diff tests (Ubuntu/macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          cd libvscode-diff/build
+          cd build/libvscode-diff
           ctest --output-on-failure
 
       - name: Build library (Windows)
