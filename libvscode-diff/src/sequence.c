@@ -16,6 +16,7 @@
 #include "platform.h"
 #include "string_hash_map.h"
 #include "utf8_utils.h"
+#include "utf8proc.h"
 #include <ctype.h>
 #include <limits.h>
 #include <stdint.h>
@@ -41,13 +42,26 @@ static int get_utf16_substring_length(const char *str_start, const char *str_end
     return 0;
   }
 
-  // Temporarily null-terminate at str_end to measure substring
-  char saved_char = *str_end;
-  ((char *)str_end)[0] = '\0';
-  int utf16_length = utf8_to_utf16_length(str_start);
-  ((char *)str_end)[0] = saved_char;
+  int utf16_len = 0;
+  const char *ptr = str_start;
+  const utf8proc_uint8_t *ustr = (const utf8proc_uint8_t *)str_start;
 
-  return utf16_length;
+  while (ptr < str_end) {
+    utf8proc_int32_t codepoint;
+    utf8proc_ssize_t bytes = utf8proc_iterate(ustr + (ptr - str_start), str_end - ptr, &codepoint);
+    if (bytes <= 0)
+      break;
+
+    ptr += bytes;
+
+    if (codepoint <= 0xFFFF) {
+      utf16_len += 1;
+    } else {
+      utf16_len += 2;
+    }
+  }
+
+  return utf16_len;
 }
 
 /**

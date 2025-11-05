@@ -9,6 +9,9 @@ project(vscode-diff-nvim VERSION ${PROJECT_VERSION})
 # This is the root CMakeLists.txt for the Neovim plugin
 # It delegates C building to libvscode-diff/
 
+# Enable testing at root level so CTest can find tests from subdirectories
+enable_testing()
+
 # Add C core subdirectory
 add_subdirectory(libvscode-diff)
 
