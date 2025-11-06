@@ -8,7 +8,8 @@ local config = require('vscode-diff.config')
 -- Track active diff sessions
 -- Structure: { 
 --   tabpage_id = { 
---     left_bufnr, right_bufnr, left_win, right_win, left_uri, 
+--     left_bufnr, right_bufnr, left_win, right_win,
+--     left_virtual_uri, right_virtual_uri,  -- Cached URIs for virtual buffers (nil if real)
 --     left_state, right_state,
 --     suspended = bool,
 --     stored_diff_result = lines_diff,  -- Only store diff result
@@ -138,11 +139,13 @@ local function resume_diff(tabpage)
   local right_lines = vim.api.nvim_buf_get_lines(diff.right_bufnr, 0, -1, false)
   
   local lines_diff
+  local diff_was_recomputed = false
   
   if need_recompute or not diff.stored_diff_result then
     -- Buffer or file changed, recompute diff
     local diff_module = require('vscode-diff.diff')
     lines_diff = diff_module.compute_diff(left_lines, right_lines)
+    diff_was_recomputed = true
     
     if lines_diff then
       -- Store new diff result
@@ -164,8 +167,8 @@ local function resume_diff(tabpage)
     local core = require('vscode-diff.render.core')
     core.render_diff(diff.left_bufnr, diff.right_bufnr, left_lines, right_lines, lines_diff)
     
-    -- Re-sync scrollbind after rendering (same as auto_refresh)
-    if vim.api.nvim_win_is_valid(diff.left_win) and vim.api.nvim_win_is_valid(diff.right_win) then
+    -- Re-sync scrollbind ONLY if diff was recomputed (fillers may have changed)
+    if diff_was_recomputed and vim.api.nvim_win_is_valid(diff.left_win) and vim.api.nvim_win_is_valid(diff.right_win) then
       local current_win = vim.api.nvim_get_current_win()
       
       if current_win == diff.left_win or current_win == diff.right_win then
@@ -225,13 +228,22 @@ function M.register(tabpage, left_bufnr, right_bufnr, left_win, right_win, origi
   local left_state = save_buffer_state(left_bufnr)
   local right_state = save_buffer_state(right_bufnr)
   
-  -- Cache the left buffer URI NOW before it gets deleted
+  -- Cache virtual buffer URIs NOW before they get deleted
   -- This is needed to send didClose notification even after buffer deletion
-  local left_uri = nil
+  local left_virtual_uri = nil
+  local right_virtual_uri = nil
+  
   if vim.api.nvim_buf_is_valid(left_bufnr) then
     local bufname = vim.api.nvim_buf_get_name(left_bufnr)
     if bufname:match('^vscodediff://') then
-      left_uri = vim.uri_from_bufnr(left_bufnr)
+      left_virtual_uri = vim.uri_from_bufnr(left_bufnr)
+    end
+  end
+  
+  if vim.api.nvim_buf_is_valid(right_bufnr) then
+    local bufname = vim.api.nvim_buf_get_name(right_bufnr)
+    if bufname:match('^vscodediff://') then
+      right_virtual_uri = vim.uri_from_bufnr(right_bufnr)
     end
   end
   
@@ -240,7 +252,8 @@ function M.register(tabpage, left_bufnr, right_bufnr, left_win, right_win, origi
     right_bufnr = right_bufnr,
     left_win = left_win,
     right_win = right_win,
-    left_uri = left_uri,
+    left_virtual_uri = left_virtual_uri,
+    right_virtual_uri = right_virtual_uri,
     left_state = left_state,
     right_state = right_state,
     suspended = false,
@@ -312,26 +325,41 @@ local function cleanup_diff(tabpage)
   restore_buffer_state(diff.left_bufnr, diff.left_state)
   restore_buffer_state(diff.right_bufnr, diff.right_state)
   
-  -- Send didClose notification for virtual buffer
+  -- Send didClose notifications for virtual buffers
   -- This prevents "already open" errors when reopening same file in diff
-  -- Uses cached URI since the buffer might already be deleted at cleanup time
-  if diff.left_uri then
-    local clients = vim.lsp.get_clients({ bufnr = diff.right_bufnr })
-    
-    for _, client in ipairs(clients) do
-      if client.server_capabilities.semanticTokensProvider then
+  -- Uses cached URIs since buffers might already be deleted at cleanup time
+  
+  -- Get LSP clients from any valid buffer
+  local ref_bufnr = vim.api.nvim_buf_is_valid(diff.left_bufnr) and diff.left_bufnr or diff.right_bufnr
+  local clients = vim.lsp.get_clients({ bufnr = ref_bufnr })
+  
+  for _, client in ipairs(clients) do
+    if client.server_capabilities.semanticTokensProvider then
+      if diff.left_virtual_uri then
         pcall(client.notify, 'textDocument/didClose', {
-          textDocument = { uri = diff.left_uri }
+          textDocument = { uri = diff.left_virtual_uri }
+        })
+      end
+      if diff.right_virtual_uri then
+        pcall(client.notify, 'textDocument/didClose', {
+          textDocument = { uri = diff.right_virtual_uri }
         })
       end
     end
   end
   
-  -- Delete left buffer if it's still valid
+  -- Delete virtual buffers if they're still valid
   if vim.api.nvim_buf_is_valid(diff.left_bufnr) then
     local bufname = vim.api.nvim_buf_get_name(diff.left_bufnr)
     if bufname:match('^vscodediff://') then
       pcall(vim.api.nvim_buf_delete, diff.left_bufnr, { force = true })
+    end
+  end
+  
+  if vim.api.nvim_buf_is_valid(diff.right_bufnr) then
+    local bufname = vim.api.nvim_buf_get_name(diff.right_bufnr)
+    if bufname:match('^vscodediff://') then
+      pcall(vim.api.nvim_buf_delete, diff.right_bufnr, { force = true })
     end
   end
   
