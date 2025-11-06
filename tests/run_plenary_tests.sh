@@ -35,7 +35,7 @@ SPEC_FILES=(
 for spec_file in "${SPEC_FILES[@]}"; do
   echo -e "${CYAN}Running: $spec_file${NC}"
   if nvim --headless --noplugin -u tests/init.lua \
-    -c "lua require('plenary.test_harness').test_directory('$spec_file', { minimal_init = '$PROJECT_ROOT/tests/init.lua' })" 2>&1; then
+    -c "lua require('plenary.test_harness').test_file('$spec_file', { minimal_init = '$PROJECT_ROOT/tests/init.lua' })" 2>&1; then
     echo ""
   else
     echo -e "${RED}✗ $spec_file failed${NC}"
