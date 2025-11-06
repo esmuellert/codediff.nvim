@@ -128,12 +128,15 @@ SequenceDiffArray *myers_dp_diff_algorithm(const ISequence *seq1, const ISequenc
   // Timeout tracking
   clock_t start_time = clock();
   double timeout_seconds = timeout_ms / 1000.0;
+  int timeout_check_counter = 0;
+  const int TIMEOUT_CHECK_INTERVAL = 1024;
 
   // Fill matrices (VSCode's algorithm)
   for (int s1 = 0; s1 < len1; s1++) {
     for (int s2 = 0; s2 < len2; s2++) {
-      // Check timeout
-      if (timeout_ms > 0) {
+      // Check timeout periodically (not on every iteration to avoid overhead)
+      if (timeout_ms > 0 && ++timeout_check_counter >= TIMEOUT_CHECK_INTERVAL) {
+        timeout_check_counter = 0;
         clock_t current_time = clock();
         double elapsed = (double)(current_time - start_time) / CLOCKS_PER_SEC;
         if (elapsed > timeout_seconds) {
