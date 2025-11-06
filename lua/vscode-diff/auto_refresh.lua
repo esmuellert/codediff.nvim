@@ -48,6 +48,11 @@ local function do_diff_update(bufnr)
 
   -- Async diff computation
   vim.schedule(function()
+    -- Check if session was cleaned up while scheduled
+    if not active_sessions[bufnr] then
+      return
+    end
+    
     -- Double-check buffer validity after schedule
     if not vim.api.nvim_buf_is_valid(session.left_bufnr) or not vim.api.nvim_buf_is_valid(session.right_bufnr) then
       active_sessions[bufnr] = nil
