@@ -2,7 +2,10 @@
 // Diff Tool - Standalone executable for computing and displaying diffs
 // ============================================================================
 //
-// Usage: diff_tool <original_file> <modified_file>
+// Usage: diff_tool [-t] <original_file> <modified_file>
+//
+// Options:
+//   -t    Show timing information for compute_diff
 //
 // This tool:
 // 1. Reads two files from disk
@@ -17,6 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <stdbool.h>
 
 // ============================================================================
 // File Reading Utilities
@@ -118,14 +123,23 @@ static void free_lines(char** lines, int count) {
 // ============================================================================
 
 int main(int argc, char* argv[]) {
+    // Parse arguments
+    bool show_timing = false;
+    int file_arg_start = 1;
+
+    if (argc > 1 && strcmp(argv[1], "-t") == 0) {
+        show_timing = true;
+        file_arg_start = 2;
+    }
+
     // Check arguments
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <original_file> <modified_file>\n", argv[0]);
+    if (argc - file_arg_start != 2) {
+        fprintf(stderr, "Usage: %s [-t] <original_file> <modified_file>\n", argv[0]);
         return 1;
     }
-    
-    const char* original_file = argv[1];
-    const char* modified_file = argv[2];
+
+    const char* original_file = argv[file_arg_start];
+    const char* modified_file = argv[file_arg_start + 1];
     
     // Read original file
     char** original_lines = NULL;
@@ -149,15 +163,16 @@ int main(int argc, char* argv[]) {
     printf("Modified: %s (%d lines)\n", modified_file, modified_count);
     printf("=================================================================\n\n");
     
-    // Set up diff options
+    // Set up diff options (matching Lua FFI defaults)
     DiffOptions options = {
         .ignore_trim_whitespace = false,
-        .max_computation_time_ms = 0,  // No timeout
+        .max_computation_time_ms = 5000,  // 5 second timeout (same as Lua FFI)
         .compute_moves = false,
         .extend_to_subwords = false
     };
-    
-    // Compute diff
+
+    // Compute diff with timing
+    clock_t start_time = clock();
     LinesDiff* diff = compute_diff(
         (const char**)original_lines,
         original_count,
@@ -165,6 +180,8 @@ int main(int argc, char* argv[]) {
         modified_count,
         &options
     );
+    clock_t end_time = clock();
+    double elapsed_ms = ((double)(end_time - start_time)) / CLOCKS_PER_SEC * 1000.0;
     
     if (!diff) {
         fprintf(stderr, "Error: Failed to compute diff\n");
@@ -178,6 +195,9 @@ int main(int argc, char* argv[]) {
     printf("=================================================================\n");
     printf("Number of changes: %d\n", diff->changes.count);
     printf("Hit timeout: %s\n", diff->hit_timeout ? "yes" : "no");
+    if (show_timing) {
+        printf("Computation time: %.3f ms\n", elapsed_ms);
+    }
     printf("\n");
     
     if (diff->changes.count > 0) {
