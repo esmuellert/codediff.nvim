@@ -268,7 +268,10 @@ describe("Render Lifecycle", function()
 
     assert.is_true(success, "Should handle cleanup with deleted buffers gracefully")
 
-    vim.cmd('tabclose')
+    -- Close tab manually (don't use tabclose which might fail if it's the last tab)
+    if vim.api.nvim_tabpage_is_valid(tabpage) then
+      pcall(vim.cmd, 'tabclose!')
+    end
   end)
 
   -- Test 9: Session tracks buffer numbers correctly

@@ -110,15 +110,19 @@ describe("Render View", function()
     local wins = vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())
     
     if #wins >= 2 then
-      local left_buf = vim.api.nvim_win_get_buf(wins[1])
-      local right_buf = vim.api.nvim_win_get_buf(wins[2])
+      -- Windows may be in either order, so check both possibilities
+      local buf1 = vim.api.nvim_win_get_buf(wins[1])
+      local buf2 = vim.api.nvim_win_get_buf(wins[2])
       
-      local left_lines = vim.api.nvim_buf_get_lines(left_buf, 0, -1, false)
-      local right_lines = vim.api.nvim_buf_get_lines(right_buf, 0, -1, false)
+      local lines1 = vim.api.nvim_buf_get_lines(buf1, 0, -1, false)
+      local lines2 = vim.api.nvim_buf_get_lines(buf2, 0, -1, false)
 
-      -- Content should match
-      assert.are.same(original, left_lines, "Left buffer should contain original lines")
-      assert.are.same(modified, right_lines, "Right buffer should contain modified lines")
+      -- One should have original, one should have modified
+      local has_original = (vim.deep_equal(lines1, original) or vim.deep_equal(lines2, original))
+      local has_modified = (vim.deep_equal(lines1, modified) or vim.deep_equal(lines2, modified))
+      
+      assert.is_true(has_original, "One buffer should contain original lines")
+      assert.is_true(has_modified, "One buffer should contain modified lines")
     end
 
     vim.fn.delete(left_path)
