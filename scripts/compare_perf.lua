@@ -32,7 +32,7 @@ end
 
 -- Test Gdiff
 local gdiff_time = nil
-print("Testing Gdiff...")
+print("Testing Gdiff (with inline:char for precise character-level diffs)...")
 
 -- Check if vim-fugitive is available
 local has_fugitive = pcall(function()
@@ -42,6 +42,10 @@ end)
 if not has_fugitive or vim.fn.exists(':Gdiff') == 0 then
   print("  ⚠️  vim-fugitive not available, skipping Gdiff")
 else
+  -- Enable precise character-level diffs (same as vscode-diff)
+  -- Set (not append) to ensure inline:char is active
+  vim.opt.diffopt = 'internal,filler,algorithm:histogram,inline:char'
+  
   vim.cmd('edit ' .. vim.fn.fnameescape(file))
   local start = vim.loop.hrtime()
   local success = pcall(vim.cmd, 'Gdiff ' .. revision)
