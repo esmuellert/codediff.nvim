@@ -21,3 +21,4 @@ example/
 .DS_Store
 Thumbs.db
 .cache/
+tests/plenary.nvim
