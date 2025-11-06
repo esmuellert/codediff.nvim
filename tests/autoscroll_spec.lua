@@ -24,6 +24,13 @@ describe("Auto-scroll to first hunk", function()
     render.setup_highlights()
   end)
 
+  after_each(function()
+    -- Clean up any lingering tabs
+    while vim.fn.tabpagenr('$') > 1 do
+      vim.cmd('tabclose!')
+    end
+  end)
+
   -- Test 1: Change in middle of file
   it("Scrolls to change in middle of file", function()
     local original_lines = {}
@@ -42,9 +49,9 @@ describe("Auto-scroll to first hunk", function()
       table.insert(modified_lines, "unchanged line " .. i)
     end
 
-    -- Write files to disk
-    local left_path = get_temp_path("test_left.txt")
-    local right_path = get_temp_path("test_right.txt")
+    -- Write files to disk with unique names
+    local left_path = get_temp_path("autoscroll_test1_left.txt")
+    local right_path = get_temp_path("autoscroll_test1_right.txt")
     vim.fn.writefile(original_lines, left_path)
     vim.fn.writefile(modified_lines, right_path)
 
@@ -65,6 +72,10 @@ describe("Auto-scroll to first hunk", function()
 
     assert.are.equal(21, left_cursor[1], "Left cursor should be at line 21")
     assert.are.equal(21, right_cursor[1], "Right cursor should be at line 21")
+
+    -- Cleanup
+    vim.fn.delete(left_path)
+    vim.fn.delete(right_path)
   end)
 
   -- Test 2: Change at beginning
@@ -72,9 +83,9 @@ describe("Auto-scroll to first hunk", function()
     local original_lines = {"old line 1", "unchanged 2", "unchanged 3"}
     local modified_lines = {"new line 1", "unchanged 2", "unchanged 3"}
 
-    -- Write files to disk
-    local left_path = get_temp_path("test_left2.txt")
-    local right_path = get_temp_path("test_right2.txt")
+    -- Write files to disk with unique names
+    local left_path = get_temp_path("autoscroll_test2_left.txt")
+    local right_path = get_temp_path("autoscroll_test2_right.txt")
     vim.fn.writefile(original_lines, left_path)
     vim.fn.writefile(modified_lines, right_path)
 
@@ -95,6 +106,10 @@ describe("Auto-scroll to first hunk", function()
 
     assert.are.equal(1, left_cursor[1], "Cursor should be at line 1")
     assert.are.equal(1, right_cursor[1], "Cursor should be at line 1")
+
+    -- Cleanup
+    vim.fn.delete(left_path)
+    vim.fn.delete(right_path)
   end)
 
   -- Test 3: Large file centering
@@ -116,8 +131,8 @@ describe("Auto-scroll to first hunk", function()
     end
 
     -- Write files to disk
-    local left_path = get_temp_path("test_left3.txt")
-    local right_path = get_temp_path("test_right3.txt")
+    local left_path = get_temp_path("autoscroll_test3_left.txt")
+    local right_path = get_temp_path("autoscroll_test3_right.txt")
     vim.fn.writefile(original_lines, left_path)
     vim.fn.writefile(modified_lines, right_path)
 
@@ -135,23 +150,33 @@ describe("Auto-scroll to first hunk", function()
 
     local cursor = vim.api.nvim_win_get_cursor(view.right_win)
     assert.are.equal(51, cursor[1], "Cursor should be at line 51")
+    -- Cleanup
+    vim.fn.delete(left_path)
+    vim.fn.delete(right_path)
   end)
 
   -- Test 4: No changes
   it("Handles no changes gracefully", function()
     local lines = {"line 1", "line 2", "line 3"}
+    local left_path = get_temp_path("autoscroll_test4_left.txt")
+    local right_path = get_temp_path("autoscroll_test4_right.txt")
+    
     local lines_diff = diff.compute_diff(lines, lines)
     local view = render.create_diff_view(lines, lines, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
-      left_config = { file_path = get_temp_path("test_left4.txt") },
+      left_config = { file_path = left_path },
       right_type = render.BufferType.REAL_FILE,
-      right_config = { file_path = get_temp_path("test_right4.txt") },
+      right_config = { file_path = right_path },
     })
 
     vim.cmd("redraw")
 
     local cursor = vim.api.nvim_win_get_cursor(view.right_win)
     assert.are.equal(1, cursor[1], "Cursor should be at line 1 when no changes")
+    
+    -- Cleanup
+    vim.fn.delete(left_path)
+    vim.fn.delete(right_path)
   end)
 
   -- Test 5: Right window is active (for scroll sync)
@@ -167,17 +192,24 @@ describe("Auto-scroll to first hunk", function()
     original[15] = "OLD line 15"
     modified[15] = "NEW line 15"
 
+    local left_path = get_temp_path("autoscroll_test5_left.txt")
+    local right_path = get_temp_path("autoscroll_test5_right.txt")
+
     local lines_diff = diff.compute_diff(original, modified)
     local view = render.create_diff_view(original, modified, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
-      left_config = { file_path = get_temp_path("test_left5.txt") },
+      left_config = { file_path = left_path },
       right_type = render.BufferType.REAL_FILE,
-      right_config = { file_path = get_temp_path("test_right5.txt") },
+      right_config = { file_path = right_path },
     })
 
     vim.cmd("redraw")
 
     local current_win = vim.api.nvim_get_current_win()
     assert.are.equal(view.right_win, current_win, "Right window should be active for scroll sync")
+    
+    -- Cleanup
+    vim.fn.delete(left_path)
+    vim.fn.delete(right_path)
   end)
 end)
