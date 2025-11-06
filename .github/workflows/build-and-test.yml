@@ -79,7 +79,8 @@ jobs:
         run: |
           $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
           $nvimVersion = "nightly"
-          $downloadUrl = "https://github.com/neovim/neovim/releases/download/$nvimVersion/nvim-win$arch.zip"
+          $archSuffix = if ($arch -eq "arm64") { "-arm64" } else { "64" }
+          $downloadUrl = "https://github.com/neovim/neovim/releases/download/$nvimVersion/nvim-win$archSuffix.zip"
           $installPath = "C:\tools\neovim"
           
           Write-Host "Downloading Neovim $arch from $downloadUrl"
@@ -89,7 +90,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $installPath | Out-Null
           Expand-Archive -Path "$env:TEMP\nvim.zip" -DestinationPath $installPath -Force
           
-          $nvimBinPath = "$installPath\nvim-win$arch\bin"
+          $nvimBinPath = "$installPath\nvim-win$archSuffix\bin"
           Write-Host "Adding $nvimBinPath to PATH"
           echo "$nvimBinPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           
