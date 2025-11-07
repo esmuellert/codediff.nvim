@@ -172,7 +172,8 @@ int main(int argc, char* argv[]) {
     };
 
     // Compute diff with timing
-    clock_t start_time = clock();
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
     LinesDiff* diff = compute_diff(
         (const char**)original_lines,
         original_count,
@@ -180,8 +181,9 @@ int main(int argc, char* argv[]) {
         modified_count,
         &options
     );
-    clock_t end_time = clock();
-    double elapsed_ms = ((double)(end_time - start_time)) / CLOCKS_PER_SEC * 1000.0;
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    double elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 + 
+                        (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
     
     if (!diff) {
         fprintf(stderr, "Error: Failed to compute diff\n");
