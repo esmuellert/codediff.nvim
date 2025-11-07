@@ -73,6 +73,10 @@ jobs:
           brew install --HEAD neovim
           nvim --version | head -n 1
 
+      - name: Set up MSVC (Windows)
+        if: startsWith(matrix.runs-on, 'windows')
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install Neovim (Windows)
         if: startsWith(matrix.runs-on, 'windows')
         shell: pwsh
