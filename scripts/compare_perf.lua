@@ -1,11 +1,11 @@
 -- Simple Gdiff vs CodeDiff comparison
--- Usage: nvim --headless -c "lua dofile('scripts/compare_perf.lua')" -- <file> <revision>
--- Example: nvim --headless -c "lua dofile('scripts/compare_perf.lua')" -- lua/vscode-diff/diff.lua HEAD~5
+-- Usage: nvim --headless --noplugin -u NONE -c "lua dofile('scripts/compare_perf.lua')" -- <file> <revision>
+-- Example: nvim --headless --noplugin -u NONE -c "lua dofile('scripts/compare_perf.lua')" -- lua/vscode-diff/diff.lua HEAD~5
 
 local args = vim.fn.argv()
 if #args < 2 then
-  print("Usage: nvim --headless -c \"lua dofile('scripts/compare_perf.lua')\" -- <file> <revision>")
-  print("Example: nvim --headless -c \"lua dofile('scripts/compare_perf.lua')\" -- lua/vscode-diff/diff.lua HEAD~5")
+  print("Usage: nvim --headless --noplugin -u NONE -c \"lua dofile('scripts/compare_perf.lua')\" -- <file> <revision>")
+  print("Example: nvim --headless --noplugin -u NONE -c \"lua dofile('scripts/compare_perf.lua')\" -- lua/vscode-diff/diff.lua HEAD~5")
   vim.cmd('cquit 1')
 end
 
@@ -15,19 +15,30 @@ local revision = args[2]
 
 print(string.format("\nComparing: %s @ %s\n", file, revision))
 
--- Setup paths (Windows compatible)
+-- Setup minimal runtime path - only load the two plugins we're testing
 local home = vim.fn.has('win32') == 1 and vim.fn.expand('~/AppData/Local') or vim.fn.expand('~/.local/share')
 vim.opt.runtimepath:prepend(home .. '/nvim/lazy/vim-fugitive')
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 -- Helper: wait for rendering to complete
+-- Note: In headless mode, extmarks may not be applied (async rendering limitation),
+-- but windows are created synchronously. We wait a fixed time to ensure fair comparison.
 local function wait_for_render()
-  vim.cmd('redraw')
-  -- Wait for extmarks/highlights to be applied
-  vim.wait(200, function()
-    -- Check if diff highlighting is applied (windows exist)
-    return vim.fn.winnr('$') > 1
-  end)
+  -- Wait for windows to be created
+  local max_wait = 500
+  local interval = 10
+
+  for i = 1, max_wait / interval do
+    if vim.fn.winnr('$') > 1 then
+      -- Windows created, wait a fixed additional time for rendering
+      -- This ensures consistent measurement across both plugins
+      vim.wait(200)
+      return true
+    end
+    vim.wait(interval)
+  end
+
+  return false
 end
 
 -- Test Gdiff
@@ -64,10 +75,12 @@ end
 local codediff_time = nil
 print("\nTesting CodeDiff...")
 
--- Check if vscode-diff is available
-local has_codediff = pcall(require, 'vscode-diff')
+-- Load vscode-diff plugin manually
+pcall(dofile, vim.fn.getcwd() .. '/plugin/vscode-diff.lua')
 
-if not has_codediff or vim.fn.exists(':CodeDiff') == 0 then
+local has_codediff = vim.fn.exists(':CodeDiff') ~= 0
+
+if not has_codediff then
   print("  ⚠️  vscode-diff.nvim not available, skipping CodeDiff")
 else
   vim.cmd('edit ' .. vim.fn.fnameescape(file))
