@@ -59,7 +59,7 @@ test-c: build
 \t@cd build && ctest --output-on-failure
 
 test-lua:
-\t@./tests/run_tests.sh
+\t@./tests/run_plenary_tests.sh
 
 clean:
 \t@rm -rf build

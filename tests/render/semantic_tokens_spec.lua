@@ -6,8 +6,8 @@ describe("Semantic Tokens Rendering", function()
   it("Module loads successfully", function()
     local semantic = require("vscode-diff.render.semantic_tokens")
     assert.is_not_nil(semantic, "Module should load")
-    assert.are.equal("function", type(semantic.apply_semantic_tokens), "Should export apply_semantic_tokens")
-    assert.are.equal("function", type(semantic.clear), "Should export clear")
+    assert.equal("function", type(semantic.apply_semantic_tokens), "Should export apply_semantic_tokens")
+    assert.equal("function", type(semantic.clear), "Should export clear")
   end)
 
   -- Test 2: Version compatibility check
@@ -16,7 +16,7 @@ describe("Semantic Tokens Rendering", function()
     
     -- Should gracefully return false if no clients
     local result = semantic.apply_semantic_tokens(1, 1)
-    assert.are.equal(false, result, "Should return false when no LSP clients")
+    assert.equal(false, result, "Should return false when no LSP clients")
     
     -- On Neovim 0.9+, semantic tokens module should exist
     if vim.fn.has('nvim-0.9') == 1 then
@@ -95,7 +95,7 @@ describe("Semantic Tokens Rendering", function()
     local result = semantic.apply_semantic_tokens(left_buf, right_buf)
     
     -- Result should be false if no LSP client attached, which is expected
-    assert.are.equal("boolean", type(result), "Should return boolean")
+    assert.equal("boolean", type(result), "Should return boolean")
     
     -- Cleanup
     vim.api.nvim_buf_delete(left_buf, { force = true })
@@ -114,11 +114,11 @@ describe("Semantic Tokens Rendering", function()
     }
     
     -- Verify array length (should be multiple of 5)
-    assert.are.equal(0, #mock_tokens % 5, "Token data should be multiple of 5")
+    assert.equal(0, #mock_tokens % 5, "Token data should be multiple of 5")
     
     -- Each token has exactly 5 elements
     local token_count = #mock_tokens / 5
-    assert.are.equal(2, token_count, "Should have 2 tokens in mock data")
+    assert.equal(2, token_count, "Should have 2 tokens in mock data")
   end)
 
   -- Test 8: Highlight priority respects Neovim defaults
@@ -126,12 +126,12 @@ describe("Semantic Tokens Rendering", function()
     -- Should use vim.hl.priorities.semantic_tokens if available
     if vim.hl.priorities and vim.hl.priorities.semantic_tokens then
       local priority = vim.hl.priorities.semantic_tokens
-      assert.are.equal("number", type(priority), "Priority should be a number")
+      assert.equal("number", type(priority), "Priority should be a number")
       assert.is_true(priority > 0, "Priority should be positive")
     else
       -- Fallback for older Neovim versions
       local fallback = 125
-      assert.are.equal("number", type(fallback), "Fallback priority should be a number")
+      assert.equal("number", type(fallback), "Fallback priority should be a number")
     end
   end)
 
@@ -146,7 +146,7 @@ describe("Semantic Tokens Rendering", function()
     
     -- Get URI
     local uri = vim.uri_from_bufnr(buf)
-    assert.are.equal("string", type(uri), "URI should be a string")
+    assert.equal("string", type(uri), "URI should be a string")
     assert.is_true(uri:match("^file://") ~= nil, "URI should start with file://")
     
     -- Cleanup
@@ -164,7 +164,7 @@ describe("Semantic Tokens Rendering", function()
     
     -- Should return false gracefully
     local result = semantic.apply_semantic_tokens(left_buf, right_buf)
-    assert.are.equal(false, result, "Should return false with no LSP client")
+    assert.equal(false, result, "Should return false with no LSP client")
     
     -- Cleanup
     vim.api.nvim_buf_delete(left_buf, { force = true })
@@ -181,16 +181,16 @@ describe("Semantic Tokens Rendering", function()
     local filepath = "src/file.lua"
     
     local url = virtual_file.create_url(git_root, commit, filepath)
-    assert.are.equal("string", type(url), "URL should be a string")
+    assert.equal("string", type(url), "URL should be a string")
     assert.is_true(url:match("^vscodediff://") ~= nil, "URL should start with vscodediff://")
     
     -- Test URL parsing (normalize both for comparison)
     local parsed_root, parsed_commit, parsed_path = virtual_file.parse_url(url)
     local normalized_parsed = vim.fn.fnamemodify(parsed_root, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
     local normalized_expected = vim.fn.fnamemodify(git_root, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
-    assert.are.equal(normalized_expected, normalized_parsed, "Parsed git root should match")
-    assert.are.equal(commit, parsed_commit, "Parsed commit should match")
-    assert.are.equal(filepath, parsed_path, "Parsed filepath should match")
+    assert.equal(normalized_expected, normalized_parsed, "Parsed git root should match")
+    assert.equal(commit, parsed_commit, "Parsed commit should match")
+    assert.equal(filepath, parsed_path, "Parsed filepath should match")
 
     -- Test with different inputs (use platform-agnostic path)
     local test_root = vim.fn.has("win32") == 1 and "C:/test" or "/tmp/test"
@@ -199,9 +199,9 @@ describe("Semantic Tokens Rendering", function()
     -- Normalize both paths for comparison on Windows
     local normalized_root2 = vim.fn.fnamemodify(root2, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
     local normalized_test_root = vim.fn.fnamemodify(test_root, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
-    assert.are.equal(normalized_test_root, normalized_root2, "Root should match")
-    assert.are.equal("abc123", commit2, "Commit should match")
-    assert.are.equal("test.lua", path2, "Path should match")
+    assert.equal(normalized_test_root, normalized_root2, "Root should match")
+    assert.equal("abc123", commit2, "Commit should match")
+    assert.equal("test.lua", path2, "Path should match")
   end)
 
   -- Test 12: Diagnostics disabled on virtual buffers
@@ -213,14 +213,14 @@ describe("Semantic Tokens Rendering", function()
     local test_buf = vim.api.nvim_create_buf(false, true)
     
     -- Initially diagnostics should be enabled
-    assert.are.equal(true, vim.diagnostic.is_enabled({bufnr = test_buf}), 
+    assert.equal(true, vim.diagnostic.is_enabled({bufnr = test_buf}), 
       "Diagnostics should be enabled by default")
     
     -- Disable diagnostics
     vim.diagnostic.enable(false, {bufnr = test_buf})
     
     -- Verify disabled
-    assert.are.equal(false, vim.diagnostic.is_enabled({bufnr = test_buf}),
+    assert.equal(false, vim.diagnostic.is_enabled({bufnr = test_buf}),
       "Diagnostics should be disabled after vim.diagnostic.enable(false)")
     
     -- Cleanup

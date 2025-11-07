@@ -81,7 +81,7 @@ describe("Render Lifecycle", function()
     lifecycle.cleanup(tabpage)
 
     local marks_after = vim.api.nvim_buf_get_extmarks(right_buf, highlights.ns_highlight, 0, -1, {})
-    assert.are.equal(0, #marks_after, "All highlights should be cleared after cleanup")
+    assert.equal(0, #marks_after, "All highlights should be cleared after cleanup")
 
     vim.cmd('tabclose')
     vim.api.nvim_buf_delete(left_buf, {force = true})
@@ -122,7 +122,7 @@ describe("Render Lifecycle", function()
     lifecycle.cleanup(tabpage)
 
     local fillers_after = vim.api.nvim_buf_get_extmarks(left_buf, highlights.ns_filler, 0, -1, {})
-    assert.are.equal(0, #fillers_after, "All fillers should be cleared after cleanup")
+    assert.equal(0, #fillers_after, "All fillers should be cleared after cleanup")
 
     vim.cmd('tabclose')
     vim.api.nvim_buf_delete(left_buf, {force = true})

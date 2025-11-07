@@ -17,7 +17,7 @@ test-c: build
 	@cd build && ctest --output-on-failure
 
 test-lua:
-	@./tests/run_tests.sh
+	@./tests/run_plenary_tests.sh
 
 clean:
 	@rm -rf build

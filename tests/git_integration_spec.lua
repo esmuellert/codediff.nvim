@@ -16,7 +16,7 @@ describe("Git Integration", function()
     
     vim.wait(2000, function() return callback_called end)
     assert.is_true(callback_called, "Callback should be invoked")
-    assert.are.equal("boolean", type(is_git), "Should determine if in git repo")
+    assert.equal("boolean", type(is_git), "Should determine if in git repo")
   end)
 
   -- Test 2: Get git root for valid repo (async)
@@ -40,8 +40,8 @@ describe("Git Integration", function()
     assert.is_true(callback_called, "Callback should be invoked")
     
     if root then
-      assert.are.equal("string", type(root), "Git root should be a string")
-      assert.are.equal(1, vim.fn.isdirectory(root), "Git root should be a directory")
+      assert.equal("string", type(root), "Git root should be a string")
+      assert.equal(1, vim.fn.isdirectory(root), "Git root should be a directory")
     end
   end)
 
@@ -86,7 +86,7 @@ describe("Git Integration", function()
           if not err_resolve and commit_hash then
             git.get_file_content(commit_hash, git_root, rel_path, function(err, lines)
               if not err and lines then
-                assert.are.equal("table", type(lines), "Should return table of lines")
+                assert.equal("table", type(lines), "Should return table of lines")
                 assert.is_true(#lines > 0, "Should have content")
                 test_passed = true
               elseif err then
@@ -125,8 +125,8 @@ describe("Git Integration", function()
     end
     
     local rel_path = git.get_relative_path(file_path, git_root)
-    assert.are.equal("string", type(rel_path), "Should return string")
-    assert.are.equal(expected, rel_path, "Should strip git root: got " .. rel_path)
+    assert.equal("string", type(rel_path), "Should return string")
+    assert.equal(expected, rel_path, "Should strip git root: got " .. rel_path)
   end)
 
   -- Test 6: Error message quality for missing file in revision
@@ -142,7 +142,7 @@ describe("Git Integration", function()
             
             git.get_file_content(commit_hash, git_root, fake_path, function(err, data)
               if err then
-                assert.are.equal("string", type(err), "Error should be a string")
+                assert.equal("string", type(err), "Error should be a string")
                 assert.is_true(#err > 0, "Error message should not be empty")
               end
               test_passed = true
@@ -179,7 +179,7 @@ describe("Git Integration", function()
     end
     
     local rel_path = git.get_relative_path(file_path, git_root)
-    assert.are.equal(expected, rel_path, "Should handle spaces: got " .. rel_path)
+    assert.equal(expected, rel_path, "Should handle spaces: got " .. rel_path)
   end)
 
   -- Test 8: Multiple async calls don't interfere
@@ -233,7 +233,7 @@ describe("Git Integration", function()
                 second_result = lines2
                 
                 if first_result and second_result then
-                  assert.are.equal(#first_result, #second_result, "Cached content should match")
+                  assert.equal(#first_result, #second_result, "Cached content should match")
                   -- Verify they are separate copies (not same reference)
                   assert.are_not.equal(first_result, second_result, "Should return copies, not same reference")
                   test_passed = true

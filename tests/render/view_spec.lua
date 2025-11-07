@@ -48,7 +48,7 @@ describe("Render View", function()
 
     -- Should create a new tab
     local new_tabs = vim.fn.tabpagenr('$')
-    assert.are.equal(initial_tabs + 1, new_tabs, "Should create a new tab")
+    assert.equal(initial_tabs + 1, new_tabs, "Should create a new tab")
 
     -- Clean up files
     vim.fn.delete(left_path)
@@ -283,7 +283,7 @@ describe("Render View", function()
 
     -- Should still be on diff tab
     local current_tab = vim.api.nvim_get_current_tabpage()
-    assert.are.equal(diff_tab, current_tab, "Should be back on diff tab")
+    assert.equal(diff_tab, current_tab, "Should be back on diff tab")
 
     vim.fn.delete(left_path)
     vim.fn.delete(right_path)
@@ -324,7 +324,7 @@ describe("Render View", function()
     })
 
     local tabs_after = vim.fn.tabpagenr('$')
-    assert.are.equal(tabs_before + 2, tabs_after, "Should create 2 new tabs")
+    assert.equal(tabs_before + 2, tabs_after, "Should create 2 new tabs")
 
     vim.fn.delete(left_path1)
     vim.fn.delete(right_path1)
@@ -389,8 +389,8 @@ describe("Render View", function()
     assert.is_not_nil(view.BufferType, "BufferType should be defined")
     assert.is_not_nil(view.BufferType.REAL_FILE, "REAL_FILE should be defined")
     assert.is_not_nil(view.BufferType.VIRTUAL_FILE, "VIRTUAL_FILE should be defined")
-    assert.are.equal("REAL_FILE", view.BufferType.REAL_FILE, "REAL_FILE value should be correct")
-    assert.are.equal("VIRTUAL_FILE", view.BufferType.VIRTUAL_FILE, "VIRTUAL_FILE value should be correct")
+    assert.equal("REAL_FILE", view.BufferType.REAL_FILE, "REAL_FILE value should be correct")
+    assert.equal("VIRTUAL_FILE", view.BufferType.VIRTUAL_FILE, "VIRTUAL_FILE value should be correct")
   end)
 
   -- Test 13: View creation doesn't affect other buffers

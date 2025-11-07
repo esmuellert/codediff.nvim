@@ -146,10 +146,10 @@ describe("Render Core", function()
     local left_fillers = vim.api.nvim_buf_get_extmarks(left_buf, highlights.ns_filler, 0, -1, {})
     local right_fillers = vim.api.nvim_buf_get_extmarks(right_buf, highlights.ns_filler, 0, -1, {})
 
-    assert.are.equal(0, #left_marks, "No highlights in left buffer")
-    assert.are.equal(0, #right_marks, "No highlights in right buffer")
-    assert.are.equal(0, #left_fillers, "No fillers in left buffer")
-    assert.are.equal(0, #right_fillers, "No fillers in right buffer")
+    assert.equal(0, #left_marks, "No highlights in left buffer")
+    assert.equal(0, #right_marks, "No highlights in right buffer")
+    assert.equal(0, #left_fillers, "No fillers in left buffer")
+    assert.equal(0, #right_fillers, "No fillers in right buffer")
 
     vim.api.nvim_buf_delete(left_buf, {force = true})
     vim.api.nvim_buf_delete(right_buf, {force = true})
@@ -263,7 +263,7 @@ describe("Render Core", function()
     local marks_after_second = vim.api.nvim_buf_get_extmarks(right_buf, highlights.ns_highlight, 0, -1, {})
 
     -- Second render should clear old marks (no changes = no marks)
-    assert.are.equal(0, #marks_after_second, "Old extmarks should be cleared on re-render")
+    assert.equal(0, #marks_after_second, "Old extmarks should be cleared on re-render")
     assert.is_true(first_count > 0, "First render had extmarks")
 
     vim.api.nvim_buf_delete(left_buf, {force = true})

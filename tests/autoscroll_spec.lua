@@ -56,22 +56,24 @@ describe("Auto-scroll to first hunk", function()
     vim.fn.writefile(modified_lines, right_path)
 
     local lines_diff = diff.compute_diff(original_lines, modified_lines)
+    if not lines_diff then error("lines_diff is nil") end
     local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
       left_config = { file_path = left_path },
       right_type = render.BufferType.REAL_FILE,
       right_config = { file_path = right_path },
     })
-    
+
     -- Wait for vim.schedule to complete
     vim.cmd("redraw")
     vim.wait(100)
+    if not view then error("view is nil") end
 
     local left_cursor = vim.api.nvim_win_get_cursor(view.left_win)
     local right_cursor = vim.api.nvim_win_get_cursor(view.right_win)
 
-    assert.are.equal(21, left_cursor[1], "Left cursor should be at line 21")
-    assert.are.equal(21, right_cursor[1], "Right cursor should be at line 21")
+    assert(21 == left_cursor[1], "Left cursor should be at line 21")
+    assert(21 == right_cursor[1], "Right cursor should be at line 21")
 
     -- Cleanup
     vim.fn.delete(left_path)
@@ -90,6 +92,7 @@ describe("Auto-scroll to first hunk", function()
     vim.fn.writefile(modified_lines, right_path)
 
     local lines_diff = diff.compute_diff(original_lines, modified_lines)
+    if not lines_diff then error("lines_diff is nil") end
     local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
       left_config = { file_path = left_path },
@@ -100,12 +103,13 @@ describe("Auto-scroll to first hunk", function()
     -- Wait for vim.schedule to complete
     vim.cmd("redraw")
     vim.wait(100)
+    if not view then error("view is nil") end
 
     local left_cursor = vim.api.nvim_win_get_cursor(view.left_win)
     local right_cursor = vim.api.nvim_win_get_cursor(view.right_win)
 
-    assert.are.equal(1, left_cursor[1], "Cursor should be at line 1")
-    assert.are.equal(1, right_cursor[1], "Cursor should be at line 1")
+    assert(1 == left_cursor[1], "Cursor should be at line 1")
+    assert(1 == right_cursor[1], "Cursor should be at line 1")
 
     -- Cleanup
     vim.fn.delete(left_path)
@@ -137,6 +141,7 @@ describe("Auto-scroll to first hunk", function()
     vim.fn.writefile(modified_lines, right_path)
 
     local lines_diff = diff.compute_diff(original_lines, modified_lines)
+    if not lines_diff then error("lines_diff is nil") end
     local view = render.create_diff_view(original_lines, modified_lines, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
       left_config = { file_path = left_path },
@@ -147,9 +152,10 @@ describe("Auto-scroll to first hunk", function()
     -- Wait for vim.schedule to complete
     vim.cmd("redraw")
     vim.wait(100)
+    if not view then error("view is nil") end
 
     local cursor = vim.api.nvim_win_get_cursor(view.right_win)
-    assert.are.equal(51, cursor[1], "Cursor should be at line 51")
+    assert(51 == cursor[1], "Cursor should be at line 51")
     -- Cleanup
     vim.fn.delete(left_path)
     vim.fn.delete(right_path)
@@ -160,8 +166,9 @@ describe("Auto-scroll to first hunk", function()
     local lines = {"line 1", "line 2", "line 3"}
     local left_path = get_temp_path("autoscroll_test4_left.txt")
     local right_path = get_temp_path("autoscroll_test4_right.txt")
-    
+
     local lines_diff = diff.compute_diff(lines, lines)
+    if not lines_diff then error("lines_diff is nil") end
     local view = render.create_diff_view(lines, lines, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
       left_config = { file_path = left_path },
@@ -170,10 +177,11 @@ describe("Auto-scroll to first hunk", function()
     })
 
     vim.cmd("redraw")
+    if not view then error("view is nil") end
 
     local cursor = vim.api.nvim_win_get_cursor(view.right_win)
-    assert.are.equal(1, cursor[1], "Cursor should be at line 1 when no changes")
-    
+    assert(1 == cursor[1], "Cursor should be at line 1 when no changes")
+
     -- Cleanup
     vim.fn.delete(left_path)
     vim.fn.delete(right_path)
@@ -196,6 +204,7 @@ describe("Auto-scroll to first hunk", function()
     local right_path = get_temp_path("autoscroll_test5_right.txt")
 
     local lines_diff = diff.compute_diff(original, modified)
+    if not lines_diff then error("lines_diff is nil") end
     local view = render.create_diff_view(original, modified, lines_diff, {
       left_type = render.BufferType.REAL_FILE,
       left_config = { file_path = left_path },
@@ -203,11 +212,12 @@ describe("Auto-scroll to first hunk", function()
       right_config = { file_path = right_path },
     })
 
+    if not view then error("view is nil") end
     vim.cmd("redraw")
 
     local current_win = vim.api.nvim_get_current_win()
-    assert.are.equal(view.right_win, current_win, "Right window should be active for scroll sync")
-    
+    assert(view.right_win == current_win, "Right window should be active for scroll sync")
+
     -- Cleanup
     vim.fn.delete(left_path)
     vim.fn.delete(right_path)

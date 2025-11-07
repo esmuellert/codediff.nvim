@@ -6,7 +6,11 @@
     "lua/?/init.lua"
   ],
   "diagnostics.globals": [
-    "vim"
+    "vim",
+    "describe",
+    "it",
+    "before_each",
+    "after_each"
   ],
   "workspace.library": [
     "$VIMRUNTIME",

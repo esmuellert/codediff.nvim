@@ -45,10 +45,10 @@ else
   -- Enable precise character-level diffs (same as vscode-diff)
   -- Set (not append) to ensure inline:char is active
   vim.opt.diffopt = 'internal,filler,algorithm:histogram,inline:char'
-  
+
   vim.cmd('edit ' .. vim.fn.fnameescape(file))
   local start = vim.loop.hrtime()
-  local success = pcall(vim.cmd, 'Gdiff ' .. revision)
+  local success = pcall(vim.cmd, { cmd = 'Gdiff', args = { revision } })
   if success then
     wait_for_render()
     gdiff_time = (vim.loop.hrtime() - start) / 1000000
@@ -56,8 +56,8 @@ else
   else
     print("  ❌ Gdiff failed")
   end
-  pcall(vim.cmd, 'tabclose')
-  pcall(vim.cmd, 'bwipeout!')
+  pcall(vim.cmd, { cmd = 'tabclose' })
+  pcall(vim.cmd, { cmd = 'bwipeout', bang = true })
 end
 
 -- Test CodeDiff
@@ -72,7 +72,7 @@ if not has_codediff or vim.fn.exists(':CodeDiff') == 0 then
 else
   vim.cmd('edit ' .. vim.fn.fnameescape(file))
   local start = vim.loop.hrtime()
-  local success = pcall(vim.cmd, 'CodeDiff ' .. revision)
+  local success = pcall(vim.cmd, { cmd = 'CodeDiff', args = { revision } })
   if success then
     wait_for_render()
     codediff_time = (vim.loop.hrtime() - start) / 1000000
@@ -80,8 +80,8 @@ else
   else
     print("  ❌ CodeDiff failed")
   end
-  pcall(vim.cmd, 'tabclose')
-  pcall(vim.cmd, 'bwipeout!')
+  pcall(vim.cmd, { cmd = 'tabclose' })
+  pcall(vim.cmd, { cmd = 'bwipeout', bang = true })
 end
 
 -- Results
