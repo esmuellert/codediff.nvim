@@ -98,20 +98,15 @@ jobs:
 
       - name: Build library (Ubuntu/macOS)
         if: startsWith(matrix.runs-on, 'ubuntu') || startsWith(matrix.runs-on, 'macos')
-        run: |
-          make clean || true
-          make
+        run: make build
 
       - name: Build library (Windows)
         if: startsWith(matrix.runs-on, 'windows')
-        run: |
-          cmake -B build
-          cmake --build build --config Release
+        run: nmake /f Makefile.win build
 
       - name: Run C unit tests (Ubuntu/macOS)
         if: startsWith(matrix.runs-on, 'ubuntu') || startsWith(matrix.runs-on, 'macos')
-        run: |
-          make test-c
+        run: make test-c
 
       - name: Run Valgrind memory leak test (Ubuntu only)
         if: startsWith(matrix.runs-on, 'ubuntu')
@@ -121,23 +116,15 @@ jobs:
 
       - name: Run C unit tests (Windows)
         if: startsWith(matrix.runs-on, 'windows')
-        run: |
-          cmake -B build
-          cmake --build build --config Release
-          cd build/libvscode-diff
-          ctest -C Release --output-on-failure
+        run: nmake /f Makefile.win test-c
 
       - name: Run Neovim tests (Ubuntu/macOS)
         if: startsWith(matrix.runs-on, 'ubuntu') || startsWith(matrix.runs-on, 'macos')
-        run: |
-          chmod +x tests/run_plenary_tests.sh
-          tests/run_plenary_tests.sh
+        run: make test-lua
 
       - name: Run Neovim tests (Windows)
         if: startsWith(matrix.runs-on, 'windows')
-        shell: bash
-        run: |
-          tests/run_plenary_tests.sh
+        run: nmake /f Makefile.win test-lua
 
       - name: Upload build artifacts
         if: success()

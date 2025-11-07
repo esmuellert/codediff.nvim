@@ -7,16 +7,16 @@ all: build
 
 build:
 	cmake -B build -S .
-	cmake --build build
+	cmake --build build --config Release
 	@echo Build successful
 
 test: test-c test-lua
 
 test-c: build
-	cd build && ctest --output-on-failure
+	ctest --test-dir build --output-on-failure -C Release
 
 test-lua:
-	bash tests/run_tests.sh
+	nvim --headless --noplugin -u tests/init.lua -c "lua require('plenary.test_harness').test_directory('tests', { minimal_init = vim.fn.getcwd() .. '/tests/init.lua' })"
 
 clean:
 	if exist build rmdir /s /q build

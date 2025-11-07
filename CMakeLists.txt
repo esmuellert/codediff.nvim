@@ -80,16 +80,16 @@ all: build
 
 build:
 \tcmake -B build -S .
-\tcmake --build build
+\tcmake --build build --config Release
 \t@echo Build successful
 
 test: test-c test-lua
 
 test-c: build
-\tcd build && ctest --output-on-failure
+\tctest --test-dir build --output-on-failure -C Release
 
 test-lua:
-\tbash tests/run_tests.sh
+\tnvim --headless --noplugin -u tests/init.lua -c \"lua require('plenary.test_harness').test_directory('tests', { minimal_init = vim.fn.getcwd() .. '/tests/init.lua' })\"
 
 clean:
 \tif exist build rmdir /s /q build
