@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,11 +46,22 @@ function bumpVersion(level) {
   writeFileSync(versionFile, newVersion + '\n');
   
   console.log(`✓ Bumped version: ${current} → ${newVersion}`);
-  console.log('\nNext steps:');
-  console.log(`  git add VERSION`);
-  console.log(`  git commit -m 'Bump version to ${newVersion}'`);
-  console.log(`  git tag v${newVersion}`);
-  console.log(`  git push && git push --tags`);
+  
+  // Auto-commit VERSION file
+  try {
+    execSync('git add VERSION', { stdio: 'inherit' });
+    execSync(`git commit -m "chore: bump version to ${newVersion}"`, { stdio: 'inherit' });
+    console.log(`✓ Committed VERSION file`);
+    console.log('\nNext steps:');
+    console.log(`  git tag v${newVersion}`);
+    console.log(`  git push && git push --tags`);
+  } catch (error) {
+    console.error('\n⚠️  Failed to auto-commit. Please commit manually:');
+    console.log(`  git add VERSION`);
+    console.log(`  git commit -m 'chore: bump version to ${newVersion}'`);
+    console.log(`  git tag v${newVersion}`);
+    console.log(`  git push && git push --tags`);
+  }
   
   return newVersion;
 }

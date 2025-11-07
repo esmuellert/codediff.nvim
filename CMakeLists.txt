@@ -44,7 +44,7 @@ file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
 # Makefile wrapper for developers (uses CMake underneath)
 # Users: Use build.sh instead (no CMake required)
 
-.PHONY: all build test test-c test-lua clean help
+.PHONY: all build test test-c test-lua clean help bump-patch bump-minor bump-major
 
 all: build
 
@@ -65,8 +65,18 @@ clean:
 \t@rm -rf build
 \t@rm -f libvscode_diff.so libvscode_diff.dylib
 
+bump-patch:
+\t@node scripts/bump_version.mjs patch
+
+bump-minor:
+\t@node scripts/bump_version.mjs minor
+
+bump-major:
+\t@node scripts/bump_version.mjs major
+
 help:
 \t@echo \"Targets: build, test, test-c, test-lua, clean, help\"
+\t@echo \"Version: bump-patch, bump-minor, bump-major\"
 ")
 
 # Generate Makefile.win for Windows nmake
@@ -95,8 +105,18 @@ clean:
 \tif exist build rmdir /s /q build
 \tif exist libvscode_diff.dll del /q libvscode_diff.dll
 
+bump-patch:
+\tnode scripts/bump_version.mjs patch
+
+bump-minor:
+\tnode scripts/bump_version.mjs minor
+
+bump-major:
+\tnode scripts/bump_version.mjs major
+
 help:
 \t@echo Targets: build, test, test-c, test-lua, clean, help
+\t@echo Version: bump-patch, bump-minor, bump-major
 ")
 
 message(STATUS "")

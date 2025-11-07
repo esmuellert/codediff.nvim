@@ -2,7 +2,7 @@
 # Makefile wrapper for developers (uses CMake underneath)
 # Users: Use build.sh instead (no CMake required)
 
-.PHONY: all build test test-c test-lua clean help
+.PHONY: all build test test-c test-lua clean help bump-patch bump-minor bump-major
 
 all: build
 
@@ -23,5 +23,15 @@ clean:
 	@rm -rf build
 	@rm -f libvscode_diff.so libvscode_diff.dylib
 
+bump-patch:
+	@node scripts/bump_version.mjs patch
+
+bump-minor:
+	@node scripts/bump_version.mjs minor
+
+bump-major:
+	@node scripts/bump_version.mjs major
+
 help:
 	@echo "Targets: build, test, test-c, test-lua, clean, help"
+	@echo "Version: bump-patch, bump-minor, bump-major"
