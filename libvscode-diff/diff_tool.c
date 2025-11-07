@@ -14,9 +14,9 @@
 //
 // ============================================================================
 
-#include "include/default_lines_diff_computer.h"
-#include "include/print_utils.h"
-#include "include/types.h"
+#include "default_lines_diff_computer.h"
+#include "print_utils.h"
+#include "types.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

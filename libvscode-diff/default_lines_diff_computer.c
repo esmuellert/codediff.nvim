@@ -11,11 +11,11 @@
 //
 // ============================================================================
 
-#include "include/types.h"
-#include "include/line_level.h"
-#include "include/char_level.h"
-#include "include/range_mapping.h"
-#include "include/utils.h"
+#include "default_lines_diff_computer.h"
+#include "line_level.h"
+#include "char_level.h"
+#include "range_mapping.h"
+#include "utils.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
