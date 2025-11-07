@@ -2,4 +2,5 @@ CompileFlags:
   Add:
     - -Ilibvscode-diff/include
     - -Ilibvscode-diff/vendor
-    - -Ilibvscode-diff/tests
+    - -DUTF8PROC_STATIC
+  CompilationDatabase: build

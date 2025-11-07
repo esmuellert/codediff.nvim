@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 
+# Export compile commands for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Read version from VERSION file (single source of truth)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 string(STRIP "${PROJECT_VERSION}" PROJECT_VERSION)
