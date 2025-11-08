@@ -320,19 +320,23 @@ test_pair() {
     
     # Run C diff tool with timing
     C_OUTPUT="$TEMP_DIR/c_output_${TEST_ID}.txt"
-    C_START=$(date +%s%N)
+    C_START=$(($(date +%s%N)/1000000))
     "$C_DIFF" "$FILE1" "$FILE2" > "$C_OUTPUT" 2>&1
     C_EXIT=$?
-    C_END=$(date +%s%N)
-    C_TIME=$(( (C_END - C_START) / 1000000 )) # Convert to milliseconds
+    C_END=$(($(date +%s%N)/1000000))
+    C_TIME=$((C_END - C_START))
+    # Sanity check: ensure non-negative timing
+    [ $C_TIME -lt 0 ] && C_TIME=0
     
     # Run Node diff tool with timing
     NODE_OUTPUT="$TEMP_DIR/node_output_${TEST_ID}.txt"
-    NODE_START=$(date +%s%N)
+    NODE_START=$(($(date +%s%N)/1000000))
     node "$NODE_DIFF" "$FILE1" "$FILE2" > "$NODE_OUTPUT" 2>&1
     NODE_EXIT=$?
-    NODE_END=$(date +%s%N)
-    NODE_TIME=$(( (NODE_END - NODE_START) / 1000000 )) # Convert to milliseconds
+    NODE_END=$(($(date +%s%N)/1000000))
+    NODE_TIME=$((NODE_END - NODE_START))
+    # Sanity check: ensure non-negative timing
+    [ $NODE_TIME -lt 0 ] && NODE_TIME=0
     
     # Accumulate timing stats
     C_TIMES[$FILE_GROUP]=$((${C_TIMES[$FILE_GROUP]:-0} + C_TIME))
