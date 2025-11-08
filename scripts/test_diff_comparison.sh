@@ -432,12 +432,30 @@ else
         echo "✓ All tests passed! No mismatches found."
     fi
     
-    # Performance comparison (verbose mode only)
-    if [ $VERBOSITY -ge 2 ]; then
-        echo ""
-        echo "========================================"
-        echo "PERFORMANCE COMPARISON"
-        echo "========================================"
+    # Performance comparison (normal and verbose modes)
+    echo ""
+    echo "========================================"
+    echo "PERFORMANCE COMPARISON"
+    echo "========================================"
+    
+    if [ $VERBOSITY -eq 1 ]; then
+        # Normal mode: condensed summary
+        for FILE_IDX in "${!TOP_FILES[@]}"; do
+            TOP_FILE="${TOP_FILES[$FILE_IDX]}"
+            BASENAME=$(basename "$TOP_FILE")
+            
+            if [ ${TEST_COUNTS[$BASENAME]:-0} -gt 0 ]; then
+                C_AVG=$(( ${C_TIMES[$BASENAME]} / ${TEST_COUNTS[$BASENAME]} ))
+                NODE_AVG=$(( ${NODE_TIMES[$BASENAME]} / ${TEST_COUNTS[$BASENAME]} ))
+                
+                if [ $C_AVG -gt 0 ]; then
+                    RATIO=$(( (NODE_AVG * 100) / C_AVG ))
+                    echo "$BASENAME: C=${C_AVG}ms, Node=${NODE_AVG}ms (${RATIO}%)"
+                fi
+            fi
+        done
+    else
+        # Verbose mode: detailed output
         for FILE_IDX in "${!TOP_FILES[@]}"; do
             TOP_FILE="${TOP_FILES[$FILE_IDX]}"
             BASENAME=$(basename "$TOP_FILE")
