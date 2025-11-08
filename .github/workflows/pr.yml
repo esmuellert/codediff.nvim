@@ -11,8 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    uses: ./.github/workflows/build-and-test.yml
-  
+  # Regression check runs in parallel with build-and-test
+  # If this fails, the entire PR workflow is marked as failed
   regression-check:
     uses: ./.github/workflows/regression-check.yml
+  
+  # Build and test also runs in parallel
+  # Both jobs must pass for PR to be mergeable
+  build-and-test:
+    uses: ./.github/workflows/build-and-test.yml
