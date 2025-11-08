@@ -445,6 +445,10 @@ LinesDiff* compute_diff(
             for (diff_idx = 0; diff_idx < num_diffs; diff_idx++) {
                 const SequenceDiff* diff = &line_alignments->diffs[diff_idx];
                 
+                // Thread-local timeout flags
+                bool ws_timeout = false;
+                bool char_timeout = false;
+                
                 // Thread-local whitespace change scanning
                 RangeMappingArray* ws_changes = (RangeMappingArray*)malloc(sizeof(RangeMappingArray));
                 ws_changes->mappings = NULL;
@@ -461,11 +465,10 @@ LinesDiff* compute_diff(
                     &timeout,
                     options,
                     ws_changes,
-                    &hit_timeout
+                    &ws_timeout
                 );
                 
                 // Thread-local character diff refinement
-                bool local_timeout = false;
                 RangeMappingArray* character_diffs = refine_diff(
                     diff,
                     original_lines, original_count,
@@ -473,11 +476,11 @@ LinesDiff* compute_diff(
                     &timeout,
                     consider_whitespace_changes,
                     options,
-                    &local_timeout
+                    &char_timeout
                 );
                 
-                // Store timeout flag without synchronization
-                if (local_timeout) {
+                // Store timeout flags - no race condition since each thread writes to its own index
+                if (ws_timeout || char_timeout) {
                     thread_timeouts[diff_idx] = 1;
                 }
                 
