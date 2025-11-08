@@ -13,3 +13,87 @@ concurrency:
 jobs:
   build-and-test:
     uses: ./.github/workflows/build-and-test.yml
+  
+  regression-check:
+    name: Diff Regression Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare branches
+      
+      - name: Check for libvscode-diff changes
+        id: check-changes
+        run: |
+          # Get base branch name (target of PR)
+          BASE_BRANCH="${{ github.base_ref }}"
+          
+          # Check if there are changes in libvscode-diff between PR and base
+          if git diff --quiet origin/$BASE_BRANCH...HEAD -- libvscode-diff/; then
+            echo "No changes detected in libvscode-diff/"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected in libvscode-diff/"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set up Node.js
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      
+      - name: Install build tools
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+      
+      - name: Run regression test on PR branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "Running diff comparison on PR branch..."
+          scripts/test_diff_comparison.sh -q > current.txt
+          cat current.txt
+          echo "PR results saved to current.txt"
+      
+      - name: Checkout target branch libvscode-diff
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          BASE_BRANCH="${{ github.base_ref }}"
+          echo "Checking out libvscode-diff from $BASE_BRANCH..."
+          git checkout origin/$BASE_BRANCH -- libvscode-diff/
+      
+      - name: Run regression test on target branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "Running diff comparison on target branch..."
+          scripts/test_diff_comparison.sh -q > baseline.txt
+          cat baseline.txt
+          echo "Target results saved to baseline.txt"
+      
+      - name: Compare results
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "Comparing diff outputs..."
+          echo "PR branch results:"
+          cat current.txt
+          echo ""
+          echo "Target branch results:"
+          cat baseline.txt
+          echo ""
+          
+          if diff -u baseline.txt current.txt; then
+            echo "✅ No regression detected! Diff outputs are identical."
+            exit 0
+          else
+            echo "❌ REGRESSION DETECTED!"
+            echo "The diff output has changed between target branch and PR branch."
+            echo "This means libvscode-diff changes have altered the diff algorithm behavior."
+            echo ""
+            echo "If this is intentional, please document why in the PR description."
+            echo "If not, please investigate and fix the regression."
+            exit 1
+          fi
