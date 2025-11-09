@@ -168,20 +168,33 @@ Download failed: [error details]
 
 ## Automatic Updates
 
-The installer automatically detects version mismatches between the installed library and the VERSION file:
+The installer automatically detects version mismatches using versioned library filenames:
 
-1. On plugin load, it checks if the library version matches the VERSION file
-2. If versions don't match, it automatically downloads the correct version
-3. A version marker file (`.libvscode_diff_version`) tracks the installed version
+### Version Management
+
+1. **VERSION Loading**: The VERSION file is read once in `init.lua` and used as the single source of truth
+2. **Versioned Filenames**: Libraries include version in filename (e.g., `libvscode_diff_0.8.0.so`)
+3. **Version Detection**: Scans plugin root for `libvscode_diff_*.{so|dll|dylib}` files to detect installed version
+4. **Auto-Update**: If versions don't match, downloads correct version and removes old file
 
 **Update Flow:**
 ```
-Plugin loads → Check .libvscode_diff_version → Compare with VERSION file
+Plugin loads → Read VERSION from file (in init.lua)
   ↓
-Version mismatch? → Download new version → Update .libvscode_diff_version
+Scan plugin root for libvscode_diff_*.{ext} files
+  ↓
+Extract version from filename → Compare with VERSION
+  ↓
+Version mismatch? → Download new version → Remove old version file
   ↓
 Version matches? → Use existing library
 ```
+
+**Benefits:**
+- No separate version marker file needed
+- Version is explicit in the filename
+- Easy to see installed version with `ls libvscode_diff*`
+- Old versions automatically cleaned up during updates
 
 This ensures users always have the correct library version without manual intervention when they update the plugin.
 
@@ -212,14 +225,16 @@ Forces reinstallation, even if library already exists and version matches.
 
 ## Supported Platforms
 
-| OS | Architecture | File Extension | Example Filename |
-|----|--------------|----------------|------------------|
-| Linux | x64 | .so | `libvscode_diff_linux_x64_0.8.0.so` |
-| Linux | arm64 | .so | `libvscode_diff_linux_arm64_0.8.0.so` |
-| macOS | x64 | .dylib | `libvscode_diff_macos_x64_0.8.0.dylib` |
-| macOS | arm64 | .dylib | `libvscode_diff_macos_arm64_0.8.0.dylib` |
-| Windows | x64 | .dll | `libvscode_diff_windows_x64_0.8.0.dll` |
-| Windows | arm64 | .dll | `libvscode_diff_windows_arm64_0.8.0.dll` |
+| OS | Architecture | Download Filename | Local Filename |
+|----|--------------|-------------------|----------------|
+| Linux | x64 | `libvscode_diff_linux_x64_0.8.0.so` | `libvscode_diff_0.8.0.so` |
+| Linux | arm64 | `libvscode_diff_linux_arm64_0.8.0.so` | `libvscode_diff_0.8.0.so` |
+| macOS | x64 | `libvscode_diff_macos_x64_0.8.0.dylib` | `libvscode_diff_0.8.0.dylib` |
+| macOS | arm64 | `libvscode_diff_macos_arm64_0.8.0.dylib` | `libvscode_diff_0.8.0.dylib` |
+| Windows | x64 | `libvscode_diff_windows_x64_0.8.0.dll` | `libvscode_diff_0.8.0.dll` |
+| Windows | arm64 | `libvscode_diff_windows_arm64_0.8.0.dll` | `libvscode_diff_0.8.0.dll` |
+
+**Note:** The download filename includes platform information (`{os}_{arch}`), but the local filename only includes the version. This allows FFI to load the library using just the version number.
 
 ## Testing
 
@@ -227,7 +242,7 @@ Forces reinstallation, even if library already exists and version matches.
 
 1. Remove existing library:
    ```bash
-   rm libvscode_diff.*
+   rm libvscode_diff_*.so libvscode_diff_*.dll libvscode_diff_*.dylib
    ```
 
 2. Load plugin (triggers auto-install):
@@ -238,7 +253,24 @@ Forces reinstallation, even if library already exists and version matches.
 
 3. Verify installation:
    ```bash
-   ls -lh libvscode_diff.*
+   ls -lh libvscode_diff_*
+   # Should show: libvscode_diff_0.8.0.so (or .dll/.dylib)
+   ```
+
+4. Test version update:
+   ```bash
+   # Simulate old version
+   touch libvscode_diff_0.7.0.so
+   
+   # Update VERSION file
+   echo "0.8.0" > VERSION
+   
+   # Load plugin - should auto-update
+   nvim -c "lua require('vscode-diff.diff')"
+   
+   # Verify old version removed
+   ls -lh libvscode_diff_*
+   # Should only show: libvscode_diff_0.8.0.so
    ```
 
 ### Automated Testing
