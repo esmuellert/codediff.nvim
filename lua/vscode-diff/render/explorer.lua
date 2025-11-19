@@ -24,7 +24,7 @@ local function get_file_icon(path)
 end
 
 -- Create tree nodes for file list
-local function create_file_nodes(files, git_root)
+local function create_file_nodes(files, git_root, group)
   local nodes = {}
   for _, file in ipairs(files) do
     local icon, icon_color = get_file_icon(file.path)
@@ -40,6 +40,7 @@ local function create_file_nodes(files, git_root)
         status_symbol = status_info.symbol,
         status_color = status_info.color,
         git_root = git_root,
+        group = group,
       }
     })
   end
@@ -48,8 +49,8 @@ end
 
 -- Create explorer tree structure
 local function create_tree_data(status_result, git_root)
-  local unstaged_nodes = create_file_nodes(status_result.unstaged, git_root)
-  local staged_nodes = create_file_nodes(status_result.staged, git_root)
+  local unstaged_nodes = create_file_nodes(status_result.unstaged, git_root, "unstaged")
+  local staged_nodes = create_file_nodes(status_result.staged, git_root, "staged")
 
   return {
     Tree.Node({
@@ -149,15 +150,24 @@ function M.create(status_result, git_root, tabpage, width)
     
     local file_path = file_data.path
     local abs_path = git_root .. "/" .. file_path
+    local group = file_data.group or "unstaged"
 
-    -- Check if this file is already being displayed
+    -- Check if this exact diff is already being displayed
+    -- Same file can have different diffs (staged vs HEAD, working vs staged)
     local session = lifecycle.get_session(tabpage)
     if session then
-      -- Compare paths (modified_path is the full path, original_path is relative)
-      if session.modified_path == abs_path or 
-         (session.git_root and session.original_path == file_path) then
-        -- Already showing this file, skip update
-        return
+      local is_same_file = (session.modified_path == abs_path or 
+                           (session.git_root and session.original_path == file_path))
+      
+      if is_same_file then
+        -- Check if it's the same diff comparison
+        local is_staged_diff = group == "staged"
+        local current_is_staged = session.modified_revision == ":0"
+        
+        if is_staged_diff == current_is_staged then
+          -- Same file AND same diff type, skip update
+          return
+        end
       end
     end
 
@@ -170,35 +180,48 @@ function M.create(status_result, git_root, tabpage, width)
         return
       end
 
-      -- Get file content from HEAD commit and working directory
-      git.get_file_content(commit_hash, git_root, file_path, function(err_head, lines_git)
+      if group == "staged" then
+        -- Staged changes: Compare staged (:0) vs HEAD (both virtual)
+        -- No pre-fetching needed, virtual files will load via BufReadCmd
         vim.schedule(function()
-          -- If file doesn't exist in HEAD (new file), use empty content
-          if err_head then
-            lines_git = {}
+          ---@type SessionConfig
+          local session_config = {
+            mode = "explorer",
+            git_root = git_root,
+            original_path = file_path,
+            modified_path = file_path,
+            original_revision = commit_hash,
+            modified_revision = ":0",
+          }
+          view.update(tabpage, session_config, true)
+        end)
+      else
+        -- Unstaged changes: Compare working tree vs staged (if exists) or HEAD
+        -- Check if file is in staged list
+        local is_staged = false
+        for _, staged_file in ipairs(status_result.staged) do
+          if staged_file.path == file_path then
+            is_staged = true
+            break
           end
+        end
 
-          -- Read current file content
-          local lines_current
-          if vim.fn.filereadable(abs_path) == 1 then
-            lines_current = vim.fn.readfile(abs_path)
-          else
-            lines_current = {}
-          end
-
-          -- Update diff view with auto-scroll to first hunk
+        local original_revision = is_staged and ":0" or commit_hash
+        
+        -- No pre-fetching needed, buffers will load content
+        vim.schedule(function()
           ---@type SessionConfig
           local session_config = {
             mode = "explorer",
             git_root = git_root,
             original_path = file_path,
             modified_path = abs_path,
-            original_revision = commit_hash,
+            original_revision = original_revision,
             modified_revision = nil,
           }
-          view.update(tabpage, lines_git, lines_current, session_config, true)
+          view.update(tabpage, session_config, true)
         end)
-      end)
+      end
     end)
   end
   
@@ -340,10 +363,13 @@ function M.create(status_result, git_root, tabpage, width)
 
   -- Select first file by default
   local first_file = nil
+  local first_file_group = nil
   if #status_result.unstaged > 0 then
     first_file = status_result.unstaged[1]
+    first_file_group = "unstaged"
   elseif #status_result.staged > 0 then
     first_file = status_result.staged[1]
+    first_file_group = "staged"
   end
 
   if first_file then
@@ -353,6 +379,7 @@ function M.create(status_result, git_root, tabpage, width)
         path = first_file.path,
         status = first_file.status,
         git_root = git_root,
+        group = first_file_group,
       })
     end, 100)
   end

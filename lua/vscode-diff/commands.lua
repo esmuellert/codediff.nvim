@@ -39,42 +39,29 @@ local function handle_git_diff(revision)
         return
       end
 
-      git.get_file_content(commit_hash, git_root, relative_path, function(err, lines_git)
-        vim.schedule(function()
-          if err then
-            vim.notify(err, vim.log.levels.ERROR)
-            return
-          end
-
-          -- Read fresh buffer content right before creating diff view
-          local lines_current = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-
-          -- Create diff view
-          local view = require('vscode-diff.render.view')
-          ---@type SessionConfig
-          local session_config = {
-            mode = "standalone",
-            git_root = git_root,
-            original_path = relative_path,
-            modified_path = relative_path,
-            original_revision = commit_hash,
-            modified_revision = "WORKING",
-          }
-          view.create(lines_git, lines_current, session_config, filetype)
-        end)
+      -- Create diff view (no pre-fetching needed, buffers will load content)
+      vim.schedule(function()
+        local view = require('vscode-diff.render.view')
+        ---@type SessionConfig
+        local session_config = {
+          mode = "standalone",
+          git_root = git_root,
+          original_path = relative_path,
+          modified_path = relative_path,
+          original_revision = commit_hash,
+          modified_revision = "WORKING",
+        }
+        view.create(session_config, filetype)
       end)
     end)
   end)
 end
 
 local function handle_file_diff(file_a, file_b)
-  local lines_a = vim.fn.readfile(file_a)
-  local lines_b = vim.fn.readfile(file_b)
-
   -- Determine filetype from first file
   local filetype = vim.filetype.match({ filename = file_a }) or ""
 
-  -- Create diff view
+  -- Create diff view (no pre-reading needed, :edit will load content)
   local view = require('vscode-diff.render.view')
   ---@type SessionConfig
   local session_config = {
@@ -85,7 +72,7 @@ local function handle_file_diff(file_a, file_b)
     original_revision = nil,
     modified_revision = nil,
   }
-  view.create(lines_a, lines_b, session_config, filetype)
+  view.create(session_config, filetype)
 end
 
 local function handle_explorer()
@@ -135,7 +122,7 @@ local function handle_explorer()
         
         -- view.create handles everything: tab, windows, explorer, and lifecycle
         -- Empty lines and paths - explorer will populate via first file selection
-        view.create({}, {}, session_config, "")
+        view.create(session_config, "")
       end)
     end)
   end)

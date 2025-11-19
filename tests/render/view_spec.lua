@@ -21,11 +21,11 @@ local function create_test_diff_view(original_lines, modified_lines, left_path, 
     git_root = nil,
     original_path = left_path,
     modified_path = right_path,
-    original_revision = "WORKING",
-    modified_revision = "WORKING",
+    original_revision = nil,  -- Real files, not virtual
+    modified_revision = nil,
   }
   
-  local result = view.create(original_lines, modified_lines, session_config)
+  local result = view.create(session_config)
   local tabpage = vim.api.nvim_get_current_tabpage()
   return result, tabpage
 end

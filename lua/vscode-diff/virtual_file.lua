@@ -8,6 +8,7 @@ local api = vim.api
 
 -- Create a fugitive-style URL for a git revision
 -- Format: vscodediff:///<git-root>///<commit>/<filepath>
+-- Supports commit hash or :0 (staged index)
 function M.create_url(git_root, commit, filepath)
   -- Normalize and encode components
   local encoded_root = vim.fn.fnamemodify(git_root, ':p')
@@ -26,10 +27,16 @@ end
 -- Parse a vscodediff:// URL
 -- Returns: git_root, commit, filepath
 function M.parse_url(url)
-  -- Pattern expects commit to be a SHA hash (hex chars, case-insensitive)
-  -- Safe since we always resolve branch names to commit hashes
+  -- Pattern accepts SHA hash (hex chars) or :0 for staged index
   local pattern = '^vscodediff:///(.-)///([a-fA-F0-9]+)/(.+)$'
   local git_root, commit, filepath = url:match(pattern)
+  if git_root and commit and filepath then
+    return git_root, commit, filepath
+  end
+  
+  -- Try :0 pattern for staged index
+  local pattern_staged = '^vscodediff:///(.-)///(:[0-9])/(.+)$'
+  git_root, commit, filepath = url:match(pattern_staged)
   return git_root, commit, filepath
 end
 

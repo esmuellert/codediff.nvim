@@ -135,12 +135,10 @@ local function setup_auto_refresh(original_buf, modified_buf, original_is_virtua
   end
 end
 
----@param original_lines string[] Lines from the original version
----@param modified_lines string[] Lines from the modified version
 ---@param session_config SessionConfig Session configuration
 ---@param filetype? string Optional filetype for syntax highlighting
 ---@return table|nil Result containing diff metadata, or nil if deferred
-function M.create(original_lines, modified_lines, session_config, filetype)
+function M.create(session_config, filetype)
   -- Create new tab (both modes create a tab)
   vim.cmd("tabnew")
 
@@ -251,6 +249,10 @@ function M.create(original_lines, modified_lines, session_config, filetype)
     
     -- Set up rendering after buffers are ready
     local render_everything = function()
+      -- Always read from buffers (single source of truth)
+      local original_lines = vim.api.nvim_buf_get_lines(original_info.bufnr, 0, -1, false)
+      local modified_lines = vim.api.nvim_buf_get_lines(modified_info.bufnr, 0, -1, false)
+      
       local lines_diff = compute_and_render(
         original_info.bufnr, modified_info.bufnr,
         original_lines, modified_lines,
@@ -357,12 +359,10 @@ end
 
 ---Update existing diff view with new files/revisions
 ---@param tabpage number Tabpage ID of the diff session
----@param original_lines string[] New lines for original buffer
----@param modified_lines string[] New lines for modified buffer
 ---@param session_config SessionConfig New session configuration (updates both sides)
 ---@param auto_scroll_to_first_hunk boolean? Whether to auto-scroll to first hunk (default: false)
 ---@return boolean success Whether update succeeded
-function M.update(tabpage, original_lines, modified_lines, session_config, auto_scroll_to_first_hunk)
+function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
 
   -- Get existing session
   local session = lifecycle.get_session(tabpage)
@@ -406,7 +406,37 @@ function M.update(tabpage, original_lines, modified_lines, session_config, auto_
     session_config.modified_path
   )
 
-  -- Set focus to original window and load buffer
+  -- CRITICAL: If the buffer we want to load already exists and is displayed in OTHER diff window,
+  -- we need to replace that window's buffer FIRST before :edit, otherwise :edit will reuse it
+  -- This fixes the bug where same file in staged+unstaged shows same buffer in both windows
+  
+  local buffers_to_delete = {}
+  
+  -- Check if original window's target buffer is currently in modified window
+  if original_info.needs_edit then
+    local existing = vim.fn.bufnr(original_info.target)
+    if existing ~= -1 and existing == old_modified_buf then
+      -- Replace modified window with empty buffer first
+      vim.api.nvim_set_current_win(modified_win)
+      vim.cmd("enew")
+      table.insert(buffers_to_delete, old_modified_buf)
+      old_modified_buf = vim.api.nvim_get_current_buf()  -- Update to new empty buffer
+    end
+  end
+  
+  -- Check if modified window's target buffer is currently in original window
+  if modified_info.needs_edit then
+    local existing = vim.fn.bufnr(modified_info.target)
+    if existing ~= -1 and existing == old_original_buf then
+      -- Replace original window with empty buffer first
+      vim.api.nvim_set_current_win(original_win)
+      vim.cmd("enew")
+      table.insert(buffers_to_delete, old_original_buf)
+      old_original_buf = vim.api.nvim_get_current_buf()  -- Update to new empty buffer
+    end
+  end
+
+  -- Now load buffers - :edit will create fresh buffers since we replaced conflicting ones
   vim.api.nvim_set_current_win(original_win)
   if original_info.needs_edit then
     vim.cmd("edit " .. vim.fn.fnameescape(original_info.target))
@@ -415,13 +445,17 @@ function M.update(tabpage, original_lines, modified_lines, session_config, auto_
     vim.api.nvim_win_set_buf(original_win, original_info.bufnr)
   end
 
-  -- Set focus to modified window and load buffer
   vim.api.nvim_set_current_win(modified_win)
   if modified_info.needs_edit then
     vim.cmd("edit " .. vim.fn.fnameescape(modified_info.target))
     modified_info.bufnr = vim.api.nvim_get_current_buf()
   else
     vim.api.nvim_win_set_buf(modified_win, modified_info.bufnr)
+  end
+  
+  -- Delete the old buffers we replaced (after windows have new content)
+  for _, buf in ipairs(buffers_to_delete) do
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
   end
 
   -- Update lifecycle session metadata
@@ -443,6 +477,10 @@ function M.update(tabpage, original_lines, modified_lines, session_config, auto_
   local has_virtual_buffer = original_is_virtual or modified_is_virtual
 
   local render_everything = function()
+    -- Always read from buffers (single source of truth)
+    local original_lines = vim.api.nvim_buf_get_lines(original_info.bufnr, 0, -1, false)
+    local modified_lines = vim.api.nvim_buf_get_lines(modified_info.bufnr, 0, -1, false)
+    
     -- Compute and render (scrollbind will be handled inside)
     -- Use the provided auto_scroll parameter, default to false if not specified
     local should_auto_scroll = auto_scroll_to_first_hunk == true
