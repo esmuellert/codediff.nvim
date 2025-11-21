@@ -135,6 +135,75 @@ local function setup_auto_refresh(original_buf, modified_buf, original_is_virtua
   end
 end
 
+-- Setup ]c and [c keymaps for hunk navigation
+local function setup_hunk_navigation_keymaps(tabpage, original_bufnr, modified_bufnr)
+  local function navigate_next_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.stored_diff_result then
+      return
+    end
+    
+    local diff_result = session.stored_diff_result
+    if #diff_result.changes == 0 then
+      return
+    end
+    
+    -- Get current cursor position
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local current_line = cursor[1]
+    
+    -- Find next hunk after current line
+    for _, mapping in ipairs(diff_result.changes) do
+      local target_line = mapping.original.start_line
+      if target_line > current_line then
+        pcall(vim.api.nvim_win_set_cursor, 0, {target_line, 0})
+        return
+      end
+    end
+    
+    -- Wrap around to first hunk
+    local first_hunk = diff_result.changes[1]
+    pcall(vim.api.nvim_win_set_cursor, 0, {first_hunk.original.start_line, 0})
+  end
+  
+  local function navigate_prev_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.stored_diff_result then
+      return
+    end
+    
+    local diff_result = session.stored_diff_result
+    if #diff_result.changes == 0 then
+      return
+    end
+    
+    -- Get current cursor position
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local current_line = cursor[1]
+    
+    -- Find previous hunk before current line (search backwards)
+    for i = #diff_result.changes, 1, -1 do
+      local mapping = diff_result.changes[i]
+      local target_line = mapping.original.start_line
+      if target_line < current_line then
+        pcall(vim.api.nvim_win_set_cursor, 0, {target_line, 0})
+        return
+      end
+    end
+    
+    -- Wrap around to last hunk
+    local last_hunk = diff_result.changes[#diff_result.changes]
+    pcall(vim.api.nvim_win_set_cursor, 0, {last_hunk.original.start_line, 0})
+  end
+  
+  local map_opts = { noremap = true, silent = true, nowait = true }
+  
+  vim.keymap.set('n', ']c', navigate_next_hunk, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Next hunk' }))
+  vim.keymap.set('n', '[c', navigate_prev_hunk, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Previous hunk' }))
+  vim.keymap.set('n', ']c', navigate_next_hunk, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Next hunk' }))
+  vim.keymap.set('n', '[c', navigate_prev_hunk, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Previous hunk' }))
+end
+
 -- Setup ]f and [f keymaps for explorer file navigation
 local function setup_explorer_navigation_keymaps(tabpage, original_bufnr, modified_bufnr)
   local function navigate_next()
@@ -311,6 +380,9 @@ function M.create(session_config, filetype)
 
         -- Enable auto-refresh for real file buffers only
         setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
+        
+        -- Setup hunk navigation keymaps (]c/[c)
+        setup_hunk_navigation_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
 
         -- Setup auto-sync on file switch (after session is complete!)
         lifecycle.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified_is_virtual)
@@ -542,6 +614,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
 
       -- Re-enable auto-refresh for real file buffers
       setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
+      
+      -- Setup hunk navigation keymaps (]c/[c)
+      setup_hunk_navigation_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
       
       -- Setup explorer navigation keymaps if in explorer mode
       if session.mode == "explorer" then
