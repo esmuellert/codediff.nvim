@@ -18,7 +18,6 @@ end
 
 describe("Full Integration Suite", function()
   local temp_dir
-  local original_cwd
   local commit_hash_1
   local commit_hash_2
 

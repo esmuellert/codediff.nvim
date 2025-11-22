@@ -371,7 +371,7 @@ function M.get_diff_revisions(rev1, rev2, git_root, callback)
         staged = {}
       }
 
-      -- For revision comparison, we treat everything as "staged" (or just one list)
+      -- For revision comparison, we treat everything as "unstaged" for explorer compatibility
       -- But to keep explorer compatible, we'll put them in 'staged' as they are committed changes
       -- relative to each other.
       

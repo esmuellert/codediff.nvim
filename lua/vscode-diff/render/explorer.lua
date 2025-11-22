@@ -128,7 +128,17 @@ local function prepare_node(node, max_width, selected_path)
         -- Show truncated directory (from the start, hide the end)
         local ellipsis = "..."
         local chars_to_keep = available_for_dir - vim.fn.strdisplaywidth(ellipsis)
-        directory = directory:sub(1, chars_to_keep) .. ellipsis
+        
+        -- Truncate directory by display width, not byte index
+        local byte_pos = 0
+        local accumulated_width = 0
+        for char in vim.gsplit(directory, "") do
+          local char_width = vim.fn.strdisplaywidth(char)
+          if accumulated_width + char_width > chars_to_keep then break end
+          accumulated_width = accumulated_width + char_width
+          byte_pos = byte_pos + #char
+        end
+        directory = directory:sub(1, byte_pos) .. ellipsis
       else
         -- Not enough space for directory, just show filename
         directory = ""

@@ -640,8 +640,11 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
 
   -- Determine if we need to wait for virtual file content
   -- Since we force reload virtual files, we always wait for the load event
-  local wait_for_original = original_is_virtual and original_info.needs_edit
-  local wait_for_modified = modified_is_virtual and modified_info.needs_edit
+  -- Use a state table to avoid closure capture issues in autocmd
+  local wait_state = {
+    original = original_is_virtual and original_info.needs_edit,
+    modified = modified_is_virtual and modified_info.needs_edit
+  }
 
   local render_everything = function()
     -- Always read from buffers (single source of truth)
@@ -685,7 +688,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   end
 
   -- Choose timing based on buffer types
-  if wait_for_original or wait_for_modified then
+  if wait_state.original or wait_state.modified then
     -- Virtual file(s): Wait for BufReadCmd to load content
     local group = vim.api.nvim_create_augroup('VscodeDiffVirtualFileUpdate_' .. tabpage, { clear = true })
 
@@ -698,15 +701,15 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         local loaded_buf = event.data.buf
 
         -- Mark buffers as loaded when event fires
-        if wait_for_original and loaded_buf == original_info.bufnr then
-          wait_for_original = false
+        if wait_state.original and loaded_buf == original_info.bufnr then
+          wait_state.original = false
         end
-        if wait_for_modified and loaded_buf == modified_info.bufnr then
-          wait_for_modified = false
+        if wait_state.modified and loaded_buf == modified_info.bufnr then
+          wait_state.modified = false
         end
 
         -- Render once all waited buffers are ready
-        if not wait_for_original and not wait_for_modified then
+        if not wait_state.original and not wait_state.modified then
           vim.schedule(render_everything)
           vim.api.nvim_del_augroup_by_id(group)
         end
