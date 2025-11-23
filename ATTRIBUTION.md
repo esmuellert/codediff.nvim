@@ -34,7 +34,7 @@ Full license text: [libvscode-diff/vendor/utf8proc_LICENSE.md](libvscode-diff/ve
 - Character-level refinement (`src/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts`)
 - Range mapping data structures (`src/vs/editor/common/diff/rangeMapping.ts`)
 
-**VSCode License**:
+**VSCode License**: MIT License (see [official license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt))
 
 ```
 MIT License
@@ -78,7 +78,7 @@ SOFTWARE.
 
 **Reason for Vendoring**: Neovim's LSP semantic token API is designed for regular buffers only. Virtual/scratch buffers need direct access to the parsing functions, which are not publicly exported.
 
-**Neovim License**:
+**Neovim License**: Apache License 2.0 (see [official license](https://github.com/neovim/neovim/blob/master/LICENSE.txt))
 
 ```
                                  Apache License
