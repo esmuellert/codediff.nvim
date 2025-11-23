@@ -200,53 +200,60 @@ Compare two arbitrary files side-by-side:
 ### Lua API
 
 ```lua
-local diff = require("vscode-diff")
+-- Primary user API - setup configuration
+require("vscode-diff").setup({
+  highlights = {
+    line_insert = "DiffAdd",
+    line_delete = "DiffDelete",
+    char_brightness = 1.4,
+  },
+})
+
+-- Advanced usage - direct access to internal modules
+local diff = require("vscode-diff.diff")
 local render = require("vscode-diff.render")
 local git = require("vscode-diff.git")
 
--- Example 1: Compare two files
-local lines_a = vim.fn.readfile("file_a.txt")
-local lines_b = vim.fn.readfile("file_b.txt")
-local plan = diff.compute_diff(lines_a, lines_b)
-render.setup_highlights()
-render.render_diff(lines_a, lines_b, plan)
+-- Example 1: Compute diff between two sets of lines
+local lines_a = {"line 1", "line 2"}
+local lines_b = {"line 1", "modified line 2"}
+local lines_diff = diff.compute_diff(lines_a, lines_b)
 
--- Example 2: Get file from git (async)
-git.get_file_at_revision("HEAD~1", "/path/to/file.lua", function(err, lines)
+-- Example 2: Get file content from git (async)
+git.get_file_content("HEAD~1", "/path/to/repo", "relative/path.lua", function(err, lines)
   if err then
     vim.notify(err, vim.log.levels.ERROR)
     return
   end
-  
   -- Use lines...
-  local current_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  local plan = diff.compute_diff(lines, current_lines)
-  render.render_diff(lines, current_lines, plan)
 end)
 
--- Example 3: Check if file is in git repo
-if git.is_in_git_repo("/path/to/file.lua") then
-  -- File is in a git repository
-end
+-- Example 3: Get git root for a file (async)
+git.get_git_root("/path/to/file.lua", function(err, git_root)
+  if not err then
+    -- File is in a git repository
+  end
+end)
 ```
 
 ## Architecture
 
 ### Components
 
-- **C Module** (`c-diff-core/`): Fast diff computation and render plan generation
-  - Myers diff algorithm (simplified for MVP)
-  - Character-level LCS for highlighting
+- **C Module** (`libvscode-diff/`): Fast diff computation and render plan generation
+  - Myers diff algorithm
+  - Character-level refinement for highlighting
   - Matches VSCode's `rangeMapping.ts` data structures
 
-- **Lua FFI Layer** (`lua/vscode-diff/init.lua`): Bridge between C and Lua
+- **Lua FFI Layer** (`lua/vscode-diff/diff.lua`): Bridge between C and Lua
   - FFI declarations matching C structs
   - Type conversions between C and Lua
 
-- **Render Module** (`lua/vscode-diff/render.lua`): Neovim buffer rendering
+- **Render Module** (`lua/vscode-diff/render/`): Neovim buffer rendering
   - VSCode-style highlight groups
   - Virtual line insertion for alignment
   - Side-by-side window management
+  - Git status explorer
 
 ### Highlight Groups
 
@@ -275,16 +282,13 @@ make clean && make
 
 Run all tests:
 ```bash
-make test              # Run all tests (C + Lua unit + E2E)
-make test-verbose      # Run all tests with verbose C core output
+make test              # Run all tests (C + Lua integration)
 ```
 
 Run specific test suites:
 ```bash
 make test-c            # C unit tests only
-make test-unit         # Lua unit tests only
-make test-e2e          # E2E tests only
-make test-e2e-verbose  # E2E tests with verbose output
+make test-lua          # Lua integration tests only
 ```
 
 For more details on the test structure, see [`tests/README.md`](tests/README.md).
@@ -293,19 +297,25 @@ For more details on the test structure, see [`tests/README.md`](tests/README.md)
 
 ```
 vscode-diff.nvim/
-├── c-diff-core/          # C diff engine
-│   ├── diff_core.c       # Implementation
-│   ├── diff_core.h       # Header
-│   └── test_diff_core.c  # C unit tests
+├── libvscode-diff/       # C diff engine
+│   ├── src/              # C implementation
+│   ├── include/          # C headers
+│   └── tests/            # C unit tests
 ├── lua/vscode-diff/      # Lua modules
-│   ├── init.lua          # Main FFI interface
+│   ├── init.lua          # Main API
 │   ├── config.lua        # Configuration
-│   └── render.lua        # Buffer rendering
+│   ├── diff.lua          # FFI interface
+│   ├── git.lua           # Git operations
+│   ├── commands.lua      # Command handlers
+│   ├── installer.lua     # Binary installer
+│   └── render/           # Rendering modules
+│       ├── core.lua      # Diff rendering
+│       ├── view.lua      # View management
+│       ├── explorer.lua  # Git status explorer
+│       └── highlights.lua # Highlight setup
 ├── plugin/               # Plugin entry point
 │   └── vscode-diff.lua   # Auto-loaded on startup
-├── tests/                # Test suite
-│   ├── unit/             # Lua unit tests
-│   ├── e2e/              # End-to-end tests
+├── tests/                # Test suite (plenary.nvim)
 │   └── README.md         # Test documentation
 ├── docs/                 # Production docs
 ├── dev-docs/             # Development docs
@@ -323,18 +333,16 @@ vscode-diff.nvim/
 - [x] Read-only buffers
 - [x] Line alignment with filler lines
 - [x] Lua FFI bindings
-- [x] Basic tests (C, Lua, E2E)
+- [x] Git integration (async operations, status explorer, revision comparison)
+- [x] Integration tests (C, Lua)
 
 ### Future Enhancements
 
-- [ ] Full Myers diff algorithm implementation
-- [ ] Advanced character-level LCS
 - [ ] Live diff updates on buffer changes
 - [ ] Inline diff mode (single buffer)
 - [ ] Syntax highlighting preservation
 - [ ] Fold support for large diffs
 - [ ] Performance optimization for large files
-- [ ] Git integration
 - [ ] Custom color schemes
 
 ## VSCode Reference
