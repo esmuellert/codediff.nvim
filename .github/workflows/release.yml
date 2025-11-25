@@ -70,9 +70,11 @@ jobs:
         id: bump_version
         if: steps.check_existing_tag.outputs.exists == 'true'
         run: |
-          NEW_VERSION=$(node scripts/bump_version.mjs patch | grep "→" | awk '{print $NF}')
+          NEW_VERSION=$(make bump-patch | grep "→" | awk '{print $NF}')
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Bumped version to: $NEW_VERSION"
+          # Reset the auto-commit made by bump_version.mjs so we can commit with [skip ci]
+          git reset --soft HEAD~1
 
       - name: Commit version bump
         if: steps.check_existing_tag.outputs.exists == 'true'
