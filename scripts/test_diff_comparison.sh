@@ -3,17 +3,19 @@
 # Test script to compare C diff tool and Node vscode-diff.mjs outputs
 # Dynamically tests top N most revised files from git history (origin/main)
 #
-# Usage: ./test_diff_comparison.sh [OPTIONS]
+# Usage: ./test_diff_comparison.sh [OPTIONS] [REPO_PATH]
 #   -q, --quiet      Quiet mode: only show summary (tests/mismatches)
 #   (no options)     Normal mode: show progress and summary
 #   -v, --verbose    Verbose mode: show detailed output
+#   REPO_PATH        Optional path to git repository to test (default: current repo)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-EXAMPLE_DIR="$REPO_ROOT/example"
-C_DIFF="$REPO_ROOT/build/libvscode-diff/diff"
-NODE_DIFF="$REPO_ROOT/vscode-diff.mjs"
+TOOL_REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+TARGET_REPO_ROOT=""
+C_DIFF="$TOOL_REPO_ROOT/build/libvscode-diff/diff"
+NODE_DIFF="$TOOL_REPO_ROOT/vscode-diff.mjs"
 TEMP_DIR="/tmp/diff_comparison_$$"
+EXAMPLE_DIR=""
 
 # Configuration: Number of top revised files to test
 NUM_TOP_FILES=10
@@ -24,8 +26,8 @@ BASE_REF="origin/main"
 VERBOSITY=1
 
 # Parse command line arguments
-for arg in "$@"; do
-    case $arg in
+while [[ $# -gt 0 ]]; do
+    case $1 in
         -q|--quiet)
             VERBOSITY=0
             shift
@@ -35,7 +37,7 @@ for arg in "$@"; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: $0 [OPTIONS] [REPO_PATH]"
             echo ""
             echo "Options:"
             echo "  -q, --quiet      Quiet mode: only show summary (tests/mismatches)"
@@ -43,15 +45,38 @@ for arg in "$@"; do
             echo "  (no options)     Normal mode: show progress and summary"
             echo "  -v, --verbose    Verbose mode: show all details and performance"
             echo "  -h, --help       Show this help message"
+            echo ""
+            echo "Arguments:"
+            echo "  REPO_PATH        Path to git repository to test (default: current repo)"
             exit 0
             ;;
-        *)
-            echo "Unknown option: $arg"
+        -*)
+            echo "Unknown option: $1"
             echo "Use -h or --help for usage information"
             exit 1
             ;;
+        *)
+            TARGET_REPO_ROOT="$1"
+            shift
+            ;;
     esac
 done
+
+# Set default repo path if not provided
+if [ -z "$TARGET_REPO_ROOT" ]; then
+    TARGET_REPO_ROOT="$TOOL_REPO_ROOT"
+else
+    # Resolve to absolute path
+    TARGET_REPO_ROOT="$(cd "$TARGET_REPO_ROOT" && pwd)"
+    if [ ! -d "$TARGET_REPO_ROOT/.git" ]; then
+        echo "Error: $TARGET_REPO_ROOT is not a git repository" >&2
+        exit 1
+    fi
+fi
+
+# Set example directory in /tmp with repo-specific name
+REPO_NAME=$(basename "$TARGET_REPO_ROOT")
+EXAMPLE_DIR="/tmp/diff_comparison_examples_${REPO_NAME}_$$"
 
 mkdir -p "$TEMP_DIR"
 
@@ -59,7 +84,7 @@ mkdir -p "$TEMP_DIR"
 if [ $VERBOSITY -ge 1 ]; then
     echo "Building C diff binary with clean build..."
 fi
-cd "$REPO_ROOT"
+cd "$TOOL_REPO_ROOT"
 # Remove old binary and object files to force rebuild
 rm -f build/libvscode-diff/diff
 find build/libvscode-diff/CMakeFiles/diff.dir -name "*.o" -delete 2>/dev/null || true
@@ -104,8 +129,8 @@ generate_example_files() {
     # Create temporary file to store file:revision pairs
     local temp_file=$(mktemp)
     
-    git -C "$REPO_ROOT" ls-tree -r --name-only "$BASE_REF" | while read file; do
-        local revisions=$(git -C "$REPO_ROOT" log "$BASE_REF" --follow --oneline -- "$file" 2>/dev/null | wc -l)
+    git -C "$TARGET_REPO_ROOT" ls-tree -r --name-only "$BASE_REF" | while read file; do
+        local revisions=$(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --follow --oneline -- "$file" 2>/dev/null | wc -l)
         if [ $revisions -gt 0 ]; then
             echo "$revisions $file" >> "$temp_file"
         fi
@@ -120,7 +145,7 @@ generate_example_files() {
         echo "Top $num_files most revised files (as of $BASE_REF, with rename tracking):"
         for i in "${!files[@]}"; do
             local file="${files[$i]}"
-            local revisions=$(git -C "$REPO_ROOT" log "$BASE_REF" --follow --oneline -- "$file" 2>/dev/null | wc -l)
+            local revisions=$(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --follow --oneline -- "$file" 2>/dev/null | wc -l)
             echo "  $((i+1)). $file ($revisions revisions)"
         done
         echo ""
@@ -133,7 +158,7 @@ generate_example_files() {
         fi
         
         # Check if file exists at BASE_REF
-        if ! git -C "$REPO_ROOT" cat-file -e "$BASE_REF:$file" 2>/dev/null; then
+        if ! git -C "$TARGET_REPO_ROOT" cat-file -e "$BASE_REF:$file" 2>/dev/null; then
             if [ $VERBOSITY -ge 2 ]; then
                 echo "  Warning: $file not found at $BASE_REF, skipping"
             fi
@@ -145,7 +170,7 @@ generate_example_files() {
         # Get all commits that modified this file up to BASE_REF
         # Note: --reverse doesn't work with --follow, so we get them in reverse-chronological order
         # and then reverse the array
-        local commits_reverse=($(git -C "$REPO_ROOT" log "$BASE_REF" --follow --format=%H -- "$file"))
+        local commits_reverse=($(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --follow --format=%H -- "$file"))
         
         # Reverse the array to get chronological order
         local commits=()
@@ -163,7 +188,7 @@ generate_example_files() {
         local current_path="$file"
         
         # Get all renames in chronological order
-        local rename_info=$(git -C "$REPO_ROOT" log "$BASE_REF" --follow --format='%H' --name-status --diff-filter=R -- "$file")
+        local rename_info=$(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --follow --format='%H' --name-status --diff-filter=R -- "$file")
         
         # Parse rename information to build a timeline
         local last_commit=""
@@ -191,20 +216,20 @@ generate_example_files() {
             local output_file="$EXAMPLE_DIR/${basename}_${seq}_${commit}"
             
             # Try to extract with current filename first
-            if git -C "$REPO_ROOT" show "$commit:$file" > "$output_file" 2>/dev/null; then
+            if git -C "$TARGET_REPO_ROOT" show "$commit:$file" > "$output_file" 2>/dev/null; then
                 count=$((count + 1))
             else
                 # If that fails, try to find the file by basename in the commit
                 local found=false
                 while IFS= read -r potential_path; do
                     if [[ "$(basename "$potential_path")" == "$basename" ]]; then
-                        if git -C "$REPO_ROOT" show "$commit:$potential_path" > "$output_file" 2>/dev/null; then
+                        if git -C "$TARGET_REPO_ROOT" show "$commit:$potential_path" > "$output_file" 2>/dev/null; then
                             count=$((count + 1))
                             found=true
                             break
                         fi
                     fi
-                done < <(git -C "$REPO_ROOT" ls-tree -r --name-only "$commit")
+                done < <(git -C "$TARGET_REPO_ROOT" ls-tree -r --name-only "$commit")
                 
                 if [ "$found" = false ]; then
                     rm -f "$output_file"
@@ -226,11 +251,12 @@ generate_example_files() {
 
 # Get top N most revised files from git history up to BASE_REF
 if [ $VERBOSITY -ge 1 ]; then
+    echo "Testing repository: $TARGET_REPO_ROOT"
     echo "Finding top $NUM_TOP_FILES most revised files from git history (up to $BASE_REF)..."
 fi
 # Note: Can't use --follow here as it requires a single pathspec
 # We'll use --follow when counting individual file revisions
-TOP_FILES=($(git -C "$REPO_ROOT" log "$BASE_REF" --pretty=format: --name-only | \
+TOP_FILES=($(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --pretty=format: --name-only | \
     grep -v '^$' | sort | uniq -c | sort -rn | head -$NUM_TOP_FILES | awk '{print $2}'))
 
 # Check if we need to regenerate example files
@@ -258,7 +284,7 @@ if [ $VERBOSITY -ge 2 ]; then
     echo "Top revised files (as of $BASE_REF, with rename tracking):"
     for i in "${!TOP_FILES[@]}"; do
         # Use --follow to track renames for each individual file
-        REVISIONS=$(git -C "$REPO_ROOT" log "$BASE_REF" --follow --oneline -- "${TOP_FILES[$i]}" | wc -l)
+        REVISIONS=$(git -C "$TARGET_REPO_ROOT" log "$BASE_REF" --follow --oneline -- "${TOP_FILES[$i]}" | wc -l)
         echo "  $((i+1)). ${TOP_FILES[$i]} ($REVISIONS revisions)"
     done
     echo ""
@@ -493,6 +519,7 @@ fi
 
 # Cleanup
 rm -rf "$TEMP_DIR"
+rm -rf "$EXAMPLE_DIR"
 
 # Always exit 0 - mismatches are reported in output, not exit code
 # The regression check compares outputs, not exit codes
