@@ -123,6 +123,9 @@ jobs:
             centos:7 \
             bash -c "
               set -e
+              # CentOS 7 is EOL, use vault archives
+              sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
+              sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
               yum install -y epel-release
               yum install -y centos-release-scl
               yum install -y devtoolset-11-gcc devtoolset-11-gcc-c++ cmake3 make
