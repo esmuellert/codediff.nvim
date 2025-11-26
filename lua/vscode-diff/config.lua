@@ -28,6 +28,7 @@ M.defaults = {
   -- Keymaps
   keymaps = {
     view = {
+      quit = "q",       -- Close diff tab
       next_hunk = "]c",
       prev_hunk = "[c",
       next_file = "]f",

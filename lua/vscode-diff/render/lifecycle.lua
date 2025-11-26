@@ -722,6 +722,41 @@ function M.get_explorer(tabpage)
   return session and session.explorer
 end
 
+--- Set a keymap on all buffers in the diff tab (both diff buffers + explorer)
+--- This is the unified API for setting tab-wide keymaps
+--- @param tabpage number Tab page ID
+--- @param mode string Keymap mode ('n', 'v', etc.)
+--- @param lhs string Left-hand side of the keymap
+--- @param rhs function|string Right-hand side (callback or command)
+--- @param opts? table Optional keymap options (will be merged with buffer-local defaults)
+--- @return boolean success True if keymaps were set
+function M.set_tab_keymap(tabpage, mode, lhs, rhs, opts)
+  local session = active_diffs[tabpage]
+  if not session then
+    return false
+  end
+
+  opts = opts or {}
+  local base_opts = { noremap = true, silent = true, nowait = true }
+
+  -- Set on both diff buffers
+  if vim.api.nvim_buf_is_valid(session.original_bufnr) then
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = session.original_bufnr }))
+  end
+
+  if vim.api.nvim_buf_is_valid(session.modified_bufnr) then
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = session.modified_bufnr }))
+  end
+
+  -- Set on explorer buffer if exists
+  local explorer = session.explorer
+  if explorer and explorer.bufnr and vim.api.nvim_buf_is_valid(explorer.bufnr) then
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = explorer.bufnr }))
+  end
+
+  return true
+end
+
 --- Setup auto-sync on file switch: automatically update diff when user edits a different file in working buffer
 --- Only activates when one side is virtual (git revision) and other is working file
 --- @param tabpage number Tabpage ID

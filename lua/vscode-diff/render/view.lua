@@ -150,24 +150,20 @@ local function setup_auto_refresh(original_buf, modified_buf, original_is_virtua
   end
 end
 
--- Setup ]c and [c keymaps for hunk navigation
-local function setup_hunk_navigation_keymaps(tabpage, original_bufnr, modified_bufnr)
+-- Centralized keymap setup for all diff view keymaps
+-- This function sets up ALL keymaps in one place for better maintainability
+local function setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explorer_mode)
+  local keymaps = config.options.keymaps.view
+
+  -- Helper: Navigate to next hunk
   local function navigate_next_hunk()
     local session = lifecycle.get_session(tabpage)
-    if not session or not session.stored_diff_result then
-      return
-    end
-
+    if not session or not session.stored_diff_result then return end
     local diff_result = session.stored_diff_result
-    if #diff_result.changes == 0 then
-      return
-    end
+    if #diff_result.changes == 0 then return end
 
-    -- Determine which buffer we're in
     local current_buf = vim.api.nvim_get_current_buf()
     local is_original = current_buf == original_bufnr
-
-    -- Get current cursor position
     local cursor = vim.api.nvim_win_get_cursor(0)
     local current_line = cursor[1]
 
@@ -187,23 +183,16 @@ local function setup_hunk_navigation_keymaps(tabpage, original_bufnr, modified_b
     pcall(vim.api.nvim_win_set_cursor, 0, {target_line, 0})
     vim.api.nvim_echo({{string.format('Hunk 1 of %d', #diff_result.changes), 'None'}}, false, {})
   end
-  
+
+  -- Helper: Navigate to previous hunk
   local function navigate_prev_hunk()
     local session = lifecycle.get_session(tabpage)
-    if not session or not session.stored_diff_result then
-      return
-    end
-
+    if not session or not session.stored_diff_result then return end
     local diff_result = session.stored_diff_result
-    if #diff_result.changes == 0 then
-      return
-    end
+    if #diff_result.changes == 0 then return end
 
-    -- Determine which buffer we're in
     local current_buf = vim.api.nvim_get_current_buf()
     local is_original = current_buf == original_bufnr
-
-    -- Get current cursor position
     local cursor = vim.api.nvim_win_get_cursor(0)
     local current_line = cursor[1]
 
@@ -224,23 +213,9 @@ local function setup_hunk_navigation_keymaps(tabpage, original_bufnr, modified_b
     pcall(vim.api.nvim_win_set_cursor, 0, {target_line, 0})
     vim.api.nvim_echo({{string.format('Hunk %d of %d', #diff_result.changes, #diff_result.changes), 'None'}}, false, {})
   end
-  
-  local map_opts = { noremap = true, silent = true, nowait = true }
-  
-  if config.options.keymaps.view.next_hunk then
-    vim.keymap.set('n', config.options.keymaps.view.next_hunk, navigate_next_hunk, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Next hunk' }))
-    vim.keymap.set('n', config.options.keymaps.view.next_hunk, navigate_next_hunk, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Next hunk' }))
-  end
-  
-  if config.options.keymaps.view.prev_hunk then
-    vim.keymap.set('n', config.options.keymaps.view.prev_hunk, navigate_prev_hunk, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Previous hunk' }))
-    vim.keymap.set('n', config.options.keymaps.view.prev_hunk, navigate_prev_hunk, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Previous hunk' }))
-  end
-end
 
--- Setup ]f and [f keymaps for explorer file navigation
-local function setup_explorer_navigation_keymaps(tabpage, original_bufnr, modified_bufnr)
-  local function navigate_next()
+  -- Helper: Navigate to next file (explorer mode only)
+  local function navigate_next_file()
     local explorer_obj = lifecycle.get_explorer(tabpage)
     if not explorer_obj then
       vim.notify("No explorer found for this tab", vim.log.levels.WARN)
@@ -249,8 +224,9 @@ local function setup_explorer_navigation_keymaps(tabpage, original_bufnr, modifi
     local explorer = require('vscode-diff.render.explorer')
     explorer.navigate_next(explorer_obj)
   end
-  
-  local function navigate_prev()
+
+  -- Helper: Navigate to previous file (explorer mode only)
+  local function navigate_prev_file()
     local explorer_obj = lifecycle.get_explorer(tabpage)
     if not explorer_obj then
       vim.notify("No explorer found for this tab", vim.log.levels.WARN)
@@ -259,18 +235,37 @@ local function setup_explorer_navigation_keymaps(tabpage, original_bufnr, modifi
     local explorer = require('vscode-diff.render.explorer')
     explorer.navigate_prev(explorer_obj)
   end
-  
-  -- Set keymaps on both diff buffers with proper opts
-  local map_opts = { noremap = true, silent = true, nowait = true }
-  
-  if config.options.keymaps.view.next_file then
-    vim.keymap.set('n', config.options.keymaps.view.next_file, navigate_next, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Next file in explorer' }))
-    vim.keymap.set('n', config.options.keymaps.view.next_file, navigate_next, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Next file in explorer' }))
+
+  -- Helper: Quit diff view
+  local function quit_diff()
+    vim.cmd('tabclose')
   end
-  
-  if config.options.keymaps.view.prev_file then
-    vim.keymap.set('n', config.options.keymaps.view.prev_file, navigate_prev, vim.tbl_extend('force', map_opts, { buffer = original_bufnr, desc = 'Previous file in explorer' }))
-    vim.keymap.set('n', config.options.keymaps.view.prev_file, navigate_prev, vim.tbl_extend('force', map_opts, { buffer = modified_bufnr, desc = 'Previous file in explorer' }))
+
+  -- ========================================================================
+  -- Bind all keymaps using unified API (one place for all keymaps!)
+  -- ========================================================================
+
+  -- Quit keymap (q)
+  if keymaps.quit then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.quit, quit_diff, { desc = 'Close diff view' })
+  end
+
+  -- Hunk navigation (]c, [c)
+  if keymaps.next_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.next_hunk, navigate_next_hunk, { desc = 'Next hunk' })
+  end
+  if keymaps.prev_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.prev_hunk, navigate_prev_hunk, { desc = 'Previous hunk' })
+  end
+
+  -- File navigation (]f, [f) - only in explorer mode
+  if is_explorer_mode then
+    if keymaps.next_file then
+      lifecycle.set_tab_keymap(tabpage, 'n', keymaps.next_file, navigate_next_file, { desc = 'Next file in explorer' })
+    end
+    if keymaps.prev_file then
+      lifecycle.set_tab_keymap(tabpage, 'n', keymaps.prev_file, navigate_prev_file, { desc = 'Previous file in explorer' })
+    end
   end
 end
 
@@ -421,9 +416,9 @@ function M.create(session_config, filetype)
 
         -- Enable auto-refresh for real file buffers only
         setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
-        
-        -- Setup hunk navigation keymaps (]c/[c)
-        setup_hunk_navigation_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
+
+        -- Setup all keymaps in one place (centralized)
+        setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, false)
 
         -- Setup auto-sync on file switch (after session is complete!)
         lifecycle.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified_is_virtual)
@@ -694,14 +689,10 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
 
       -- Re-enable auto-refresh for real file buffers
       setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
-      
-      -- Setup hunk navigation keymaps (]c/[c)
-      setup_hunk_navigation_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
-      
-      -- Setup explorer navigation keymaps if in explorer mode
-      if session.mode == "explorer" then
-        setup_explorer_navigation_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
-      end
+
+      -- Setup all keymaps in one place (centralized)
+      local is_explorer_mode = session.mode == "explorer"
+      setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, is_explorer_mode)
     end
   end
 
