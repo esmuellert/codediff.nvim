@@ -120,6 +120,8 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e HOST_UID=$(id -u) \
+            -e HOST_GID=$(id -g) \
             centos:7 \
             bash -c "
               set -e
@@ -135,6 +137,8 @@ jobs:
               source /opt/rh/devtoolset-11/enable
               ln -s /usr/bin/cmake3 /usr/local/bin/cmake
               make build
+              # Fix ownership of build artifacts for host user
+              chown -R \$HOST_UID:\$HOST_GID build/ libvscode_diff.so 2>/dev/null || true
             "
 
       - name: Build library (macOS)
