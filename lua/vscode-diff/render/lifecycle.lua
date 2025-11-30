@@ -387,6 +387,31 @@ local function cleanup_diff(tabpage)
   restore_buffer_state(diff.original_bufnr, diff.original_state)
   restore_buffer_state(diff.modified_bufnr, diff.modified_state)
 
+  -- Clean view keymaps from diff buffers
+  for _, bufnr in ipairs({ diff.original_bufnr, diff.modified_bufnr }) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      for _, key in pairs(config.options.keymaps.view) do
+        if key then
+          pcall(vim.keymap.del, 'n', key, { buffer = bufnr })
+        end
+      end
+    end
+  end
+
+  -- Clean view and explorer keymaps from explorer buffer 
+  if diff.explorer and diff.explorer.bufnr and vim.api.nvim_buf_is_valid(diff.explorer.bufnr) then
+    for _, key in pairs(config.options.keymaps.view) do
+      if key then
+        pcall(vim.keymap.del, 'n', key, { buffer = diff.explorer.bufnr })
+      end
+    end
+    for _, key in pairs(config.options.keymaps.explorer) do
+      if key then
+        pcall(vim.keymap.del, 'n', key, { buffer = diff.explorer.bufnr })
+      end
+    end
+  end
+
   -- Send didClose notifications for virtual buffers
   -- Compute URIs on-demand since we don't store them anymore
   local original_virtual_uri = compute_virtual_uri(diff.git_root, diff.original_revision, diff.original_path)
