@@ -45,6 +45,7 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 {
   "esmuellert/vscode-diff.nvim",
   dependencies = { "MunifTanjim/nui.nvim" },
+  cmd = "CodeDiff",
 }
 ```
 
@@ -55,6 +56,7 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 {
   "esmuellert/vscode-diff.nvim",
   dependencies = { "MunifTanjim/nui.nvim" },
+  cmd = "CodeDiff",
   config = function()
     require("vscode-diff").setup({
       -- Highlight configuration
