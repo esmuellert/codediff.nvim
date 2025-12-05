@@ -179,12 +179,16 @@ local function compute_and_render_conflict(original_buf, modified_buf, base_line
   semantic.apply_semantic_tokens(original_buf, modified_buf)
   semantic.apply_semantic_tokens(modified_buf, original_buf)
 
-  -- Setup window options (no scrollbind for conflict mode - buffers don't align)
+  -- Setup window options (scrollbind for conflict mode - both are same file, scroll together)
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
-    vim.wo[original_win].scrollbind = false
-    vim.wo[modified_win].scrollbind = false
     vim.wo[original_win].wrap = false
     vim.wo[modified_win].wrap = false
+    
+    -- Enable scrollbind - input1 and input2 are same file, scroll 1:1
+    vim.api.nvim_win_set_cursor(original_win, {1, 0})
+    vim.api.nvim_win_set_cursor(modified_win, {1, 0})
+    vim.wo[original_win].scrollbind = true
+    vim.wo[modified_win].scrollbind = true
 
     -- Scroll to first change in either buffer
     if auto_scroll_to_first_hunk then
