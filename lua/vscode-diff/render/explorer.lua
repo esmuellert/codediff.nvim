@@ -320,6 +320,21 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           }
           view.update(tabpage, session_config, true)
         end)
+      elseif group == "conflicts" then
+        -- Merge conflict: Show incoming (:3:) vs current (:2:), both diffed against base (:1:)
+        vim.schedule(function()
+          ---@type SessionConfig
+          local session_config = {
+            mode = "explorer",
+            git_root = git_root,
+            original_path = file_path,
+            modified_path = file_path,
+            original_revision = ":3:",  -- Theirs/Incoming (left buffer)
+            modified_revision = ":2:",  -- Ours/Current (right buffer)
+            conflict = true,
+          }
+          view.update(tabpage, session_config, true)
+        end)
       elseif group == "staged" then
         -- Staged changes: Compare staged (:0) vs HEAD (both virtual)
         -- For renames: old_path in HEAD, new path in staging
