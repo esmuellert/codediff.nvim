@@ -25,8 +25,8 @@ describe("Installer Module", function()
     assert.is_not_nil(version.VERSION, "VERSION should be loaded")
     assert.equal("string", type(version.VERSION), "VERSION should be a string")
     assert.is_true(#version.VERSION > 0, "VERSION should not be empty")
-    -- Check version format (e.g., "0.8.0")
-    assert.is_true(version.VERSION:match("^%d+%.%d+%.%d+$") ~= nil, "VERSION should match semantic version format")
+    -- Check version format (e.g., "0.8.0" or "2.0.0-next.0")
+    assert.is_true(version.VERSION:match("^%d+%.%d+%.%d+") ~= nil, "VERSION should match semantic version format")
   end)
 
   -- Test 4: get_lib_path returns correct format
