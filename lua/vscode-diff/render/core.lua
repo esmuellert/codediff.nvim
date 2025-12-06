@@ -452,14 +452,21 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
   local left_lines = vim.api.nvim_buf_get_lines(left_bufnr, 0, -1, false)
   local right_lines = vim.api.nvim_buf_get_lines(right_bufnr, 0, -1, false)
 
-  -- Render highlights for left buffer (modified side = green)
-  for _, mapping in ipairs(base_to_left_diff.changes) do
-    local range = mapping.modified
+  -- Compute alignments to identify conflict regions (where both sides have changes)
+  local alignments, conflict_left_changes, conflict_right_changes = merge_alignment.compute_merge_fillers_and_conflicts(
+    base_to_left_diff, base_to_right_diff,
+    base_lines, left_lines_content, right_lines_content
+  )
+
+  -- Render highlights ONLY for conflict regions (where both left and right modified the same base region)
+  -- This matches VSCode's behavior of only highlighting conflicting changes
+  for _, change in ipairs(conflict_left_changes) do
+    local range = change.modified
     if range and range.end_line > range.start_line then
       apply_line_highlights(left_bufnr, range, "CodeDiffLineInsert")
     end
-    if mapping.inner_changes then
-      for _, inner in ipairs(mapping.inner_changes) do
+    if change.inner_changes then
+      for _, inner in ipairs(change.inner_changes) do
         local inner_range = inner.modified
         if inner_range and not is_empty_range(inner_range) then
           apply_char_highlight(left_bufnr, inner_range, "CodeDiffCharInsert", left_lines)
@@ -468,14 +475,13 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
     end
   end
 
-  -- Render highlights for right buffer (modified side = green)
-  for _, mapping in ipairs(base_to_right_diff.changes) do
-    local range = mapping.modified
+  for _, change in ipairs(conflict_right_changes) do
+    local range = change.modified
     if range and range.end_line > range.start_line then
       apply_line_highlights(right_bufnr, range, "CodeDiffLineInsert")
     end
-    if mapping.inner_changes then
-      for _, inner in ipairs(mapping.inner_changes) do
+    if change.inner_changes then
+      for _, inner in ipairs(change.inner_changes) do
         local inner_range = inner.modified
         if inner_range and not is_empty_range(inner_range) then
           apply_char_highlight(right_bufnr, inner_range, "CodeDiffCharInsert", right_lines)
@@ -484,11 +490,8 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
     end
   end
 
-  -- Compute fillers using VSCode's alignment algorithm with content comparison
-  local left_fillers, right_fillers = merge_alignment.compute_merge_fillers(
-    base_to_left_diff, base_to_right_diff,
-    base_lines, left_lines_content, right_lines_content
-  )
+  -- Extract fillers from alignments
+  local left_fillers, right_fillers = alignments.left_fillers, alignments.right_fillers
 
   local total_left_fillers = 0
   local total_right_fillers = 0
