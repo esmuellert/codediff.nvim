@@ -35,6 +35,7 @@ SPEC_FILES=(
   "tests/render/core_spec.lua"
   "tests/render/lifecycle_spec.lua"
   "tests/render/view_spec.lua"
+  "tests/render/merge_alignment_spec.lua"
   "tests/integration_diagnostics_spec.lua"
   "tests/full_integration_spec.lua"
 )

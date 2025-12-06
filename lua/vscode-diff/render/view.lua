@@ -140,9 +140,10 @@ local function compute_and_render(original_buf, modified_buf, original_lines, mo
   return lines_diff
 end
 
--- Conflict mode rendering: Both buffers show diff against base
+-- Conflict mode rendering: Both buffers show diff against base with alignment
 -- Left buffer (:3: theirs/incoming) and Right buffer (:2: ours/current)
 -- Both show green highlights indicating changes from base (:1:)
+-- Filler lines are inserted to align corresponding changes
 -- @param original_buf number: Left buffer (incoming :3:)
 -- @param modified_buf number: Right buffer (current :2:)
 -- @param base_lines table: Base content (:1:)
@@ -171,20 +172,23 @@ local function compute_and_render_conflict(original_buf, modified_buf, base_line
     return nil
   end
 
-  -- Render each buffer independently showing "modified" side (green highlights)
-  core.render_single_buffer(original_buf, base_to_original_diff, "modified")
-  core.render_single_buffer(modified_buf, base_to_modified_diff, "modified")
+  -- Render merge view with alignment and filler lines
+  core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines)
 
   -- Apply semantic tokens (both are virtual buffers in conflict mode)
   semantic.apply_semantic_tokens(original_buf, modified_buf)
   semantic.apply_semantic_tokens(modified_buf, original_buf)
 
-  -- Setup window options (no scrollbind for conflict mode - buffers don't align)
+  -- Setup window options with scrollbind (filler lines enable proper alignment)
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
-    vim.wo[original_win].scrollbind = false
-    vim.wo[modified_win].scrollbind = false
     vim.wo[original_win].wrap = false
     vim.wo[modified_win].wrap = false
+
+    -- Reset scroll position and enable scrollbind
+    vim.api.nvim_win_set_cursor(original_win, {1, 0})
+    vim.api.nvim_win_set_cursor(modified_win, {1, 0})
+    vim.wo[original_win].scrollbind = true
+    vim.wo[modified_win].scrollbind = true
 
     -- Scroll to first change in either buffer
     if auto_scroll_to_first_hunk then

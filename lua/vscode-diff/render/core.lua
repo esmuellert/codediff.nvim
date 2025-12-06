@@ -426,4 +426,87 @@ function M.render_single_buffer(bufnr, diff, side)
   end
 end
 
+-- ============================================================================
+-- Merge View Rendering (3-way merge with alignment)
+-- ============================================================================
+
+-- Render merge view with proper alignment between left and right buffers
+-- Both buffers show diff against base, with filler lines to align corresponding changes
+-- left_bufnr: buffer showing input1 (incoming/theirs :3)
+-- right_bufnr: buffer showing input2 (current/ours :2)
+-- base_to_left_diff: diff from base to input1
+-- base_to_right_diff: diff from base to input2
+-- base_lines: array of base content lines
+-- left_lines_content: array of input1 content lines
+-- right_lines_content: array of input2 content lines
+function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
+  local merge_alignment = require('vscode-diff.render.merge_alignment')
+
+  -- Clear existing highlights and fillers
+  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_highlight, 0, -1)
+  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_filler, 0, -1)
+  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_highlight, 0, -1)
+  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_filler, 0, -1)
+
+  -- Get buffer lines for character highlight calculations
+  local left_lines = vim.api.nvim_buf_get_lines(left_bufnr, 0, -1, false)
+  local right_lines = vim.api.nvim_buf_get_lines(right_bufnr, 0, -1, false)
+
+  -- Render highlights for left buffer (modified side = green)
+  for _, mapping in ipairs(base_to_left_diff.changes) do
+    local range = mapping.modified
+    if range and range.end_line > range.start_line then
+      apply_line_highlights(left_bufnr, range, "CodeDiffLineInsert")
+    end
+    if mapping.inner_changes then
+      for _, inner in ipairs(mapping.inner_changes) do
+        local inner_range = inner.modified
+        if inner_range and not is_empty_range(inner_range) then
+          apply_char_highlight(left_bufnr, inner_range, "CodeDiffCharInsert", left_lines)
+        end
+      end
+    end
+  end
+
+  -- Render highlights for right buffer (modified side = green)
+  for _, mapping in ipairs(base_to_right_diff.changes) do
+    local range = mapping.modified
+    if range and range.end_line > range.start_line then
+      apply_line_highlights(right_bufnr, range, "CodeDiffLineInsert")
+    end
+    if mapping.inner_changes then
+      for _, inner in ipairs(mapping.inner_changes) do
+        local inner_range = inner.modified
+        if inner_range and not is_empty_range(inner_range) then
+          apply_char_highlight(right_bufnr, inner_range, "CodeDiffCharInsert", right_lines)
+        end
+      end
+    end
+  end
+
+  -- Compute fillers using VSCode's alignment algorithm with content comparison
+  local left_fillers, right_fillers = merge_alignment.compute_merge_fillers(
+    base_to_left_diff, base_to_right_diff,
+    base_lines, left_lines_content, right_lines_content
+  )
+
+  local total_left_fillers = 0
+  local total_right_fillers = 0
+
+  for _, filler in ipairs(left_fillers) do
+    insert_filler_lines(left_bufnr, filler.after_line - 1, filler.count)
+    total_left_fillers = total_left_fillers + filler.count
+  end
+
+  for _, filler in ipairs(right_fillers) do
+    insert_filler_lines(right_bufnr, filler.after_line - 1, filler.count)
+    total_right_fillers = total_right_fillers + filler.count
+  end
+
+  return {
+    left_fillers = total_left_fillers,
+    right_fillers = total_right_fillers,
+  }
+end
+
 return M
