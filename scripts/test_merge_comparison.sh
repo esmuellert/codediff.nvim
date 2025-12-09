@@ -237,6 +237,34 @@ else
 fi
 
 echo ""
+echo -e "${CYAN}Comparing inner_changes (character-level highlights):${NC}"
+jq -S '.diffs.base_to_input1[].inner_changes' "$VSCODE_OUTPUT" > "$TEMP_DIR/vscode_inner1.json" 2>/dev/null
+jq -S '.diffs.base_to_input1[].inner_changes' "$LUA_OUTPUT" > "$TEMP_DIR/lua_inner1.json" 2>/dev/null
+jq -S '.diffs.base_to_input2[].inner_changes' "$VSCODE_OUTPUT" > "$TEMP_DIR/vscode_inner2.json" 2>/dev/null
+jq -S '.diffs.base_to_input2[].inner_changes' "$LUA_OUTPUT" > "$TEMP_DIR/lua_inner2.json" 2>/dev/null
+
+INNER1_MATCH=true
+INNER2_MATCH=true
+
+if ! diff -q "$TEMP_DIR/vscode_inner1.json" "$TEMP_DIR/lua_inner1.json" > /dev/null 2>&1; then
+    INNER1_MATCH=false
+fi
+if ! diff -q "$TEMP_DIR/vscode_inner2.json" "$TEMP_DIR/lua_inner2.json" > /dev/null 2>&1; then
+    INNER2_MATCH=false
+fi
+
+if $INNER1_MATCH && $INNER2_MATCH; then
+    echo -e "${GREEN}✓ Inner changes (highlights) are IDENTICAL${NC}"
+else
+    if ! $INNER1_MATCH; then
+        echo -e "${YELLOW}✗ Inner changes (base->input1) DIFFER${NC}"
+    fi
+    if ! $INNER2_MATCH; then
+        echo -e "${YELLOW}✗ Inner changes (base->input2) DIFFER${NC}"
+    fi
+fi
+
+echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "                         OUTPUT FILES"
 echo "═══════════════════════════════════════════════════════════════"

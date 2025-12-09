@@ -113,18 +113,32 @@ local function main()
   
   -- Convert diff changes to serializable format
   for _, c in ipairs(diff1.changes or {}) do
+    local inner = {}
+    for _, ic in ipairs(c.inner_changes or {}) do
+      table.insert(inner, {
+        original = { start_line = ic.original.start_line, start_col = ic.original.start_col, end_line = ic.original.end_line, end_col = ic.original.end_col },
+        modified = { start_line = ic.modified.start_line, start_col = ic.modified.start_col, end_line = ic.modified.end_line, end_col = ic.modified.end_col },
+      })
+    end
     table.insert(output.diffs.base_to_input1, {
       original = { start_line = c.original.start_line, end_line = c.original.end_line },
       modified = { start_line = c.modified.start_line, end_line = c.modified.end_line },
-      inner_changes_count = #(c.inner_changes or {}),
+      inner_changes = inner,
     })
   end
   
   for _, c in ipairs(diff2.changes or {}) do
+    local inner = {}
+    for _, ic in ipairs(c.inner_changes or {}) do
+      table.insert(inner, {
+        original = { start_line = ic.original.start_line, start_col = ic.original.start_col, end_line = ic.original.end_line, end_col = ic.original.end_col },
+        modified = { start_line = ic.modified.start_line, start_col = ic.modified.start_col, end_line = ic.modified.end_line, end_col = ic.modified.end_col },
+      })
+    end
     table.insert(output.diffs.base_to_input2, {
       original = { start_line = c.original.start_line, end_line = c.original.end_line },
       modified = { start_line = c.modified.start_line, end_line = c.modified.end_line },
-      inner_changes_count = #(c.inner_changes or {}),
+      inner_changes = inner,
     })
   end
   

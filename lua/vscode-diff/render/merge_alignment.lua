@@ -98,7 +98,15 @@ local function split_up_common_equal_range_mappings(equal_ranges_1, equal_ranges
     table.insert(events, { input = 2, start = false, input_pos = rm.input_end, output_pos = rm.output_end })
   end
   
-  table.sort(events, function(a, b) return pos_compare(a.input_pos, b.input_pos) < 0 end)
+  -- Sort by position, with end events before start events at the same position
+  -- This ensures continuous coverage when an equal range ends and another starts at the same point
+  table.sort(events, function(a, b)
+    local cmp = pos_compare(a.input_pos, b.input_pos)
+    if cmp ~= 0 then return cmp < 0 end
+    -- At same position, end events (start=false) come before start events (start=true)
+    if a.start ~= b.start then return not a.start end
+    return false
+  end)
   
   local starts = { nil, nil }
   local last_input_pos = nil
@@ -228,19 +236,29 @@ local function compute_mapping_alignments(changes1, changes2)
   local function push_and_reset()
     if not current_base_range then return end
     
-    -- Calculate output ranges for each input
-    -- For input with changes: use the actual change ranges
-    -- For input without changes: use base range shifted by accumulated delta
+    -- Calculate output ranges for each input using VSCode's extendInputRange approach
+    -- This ensures we cover the full base range even if the actual diffs only cover part of it
     
     local output1_start, output1_end
     local output2_start, output2_end
     
     if #current_diffs[1] > 0 then
-      -- Join all changes for input1
+      -- Join all changes for input1, then extend to cover full base range
       local first = current_diffs[1][1]
       local last = current_diffs[1][#current_diffs[1]]
-      output1_start = first.modified.start_line
-      output1_end = last.modified.end_line + (current_base_range.end_line - last.original.end_line)
+      
+      -- Calculate the joined mapping's input/output ranges
+      local joined_input_start = first.original.start_line
+      local joined_input_end = last.original.end_line
+      local joined_output_start = first.modified.start_line
+      local joined_output_end = last.modified.end_line
+      
+      -- Extend to cover current_base_range (VSCode's extendInputRange)
+      local start_delta = current_base_range.start_line - joined_input_start
+      local end_delta = current_base_range.end_line - joined_input_end
+      
+      output1_start = joined_output_start + start_delta
+      output1_end = joined_output_end + end_delta
     else
       -- No changes for input1, use base range with delta
       output1_start = current_base_range.start_line + delta_from_base[1]
@@ -248,10 +266,21 @@ local function compute_mapping_alignments(changes1, changes2)
     end
     
     if #current_diffs[2] > 0 then
+      -- Join all changes for input2, then extend to cover full base range
       local first = current_diffs[2][1]
       local last = current_diffs[2][#current_diffs[2]]
-      output2_start = first.modified.start_line
-      output2_end = last.modified.end_line + (current_base_range.end_line - last.original.end_line)
+      
+      local joined_input_start = first.original.start_line
+      local joined_input_end = last.original.end_line
+      local joined_output_start = first.modified.start_line
+      local joined_output_end = last.modified.end_line
+      
+      -- Extend to cover current_base_range
+      local start_delta = current_base_range.start_line - joined_input_start
+      local end_delta = current_base_range.end_line - joined_input_end
+      
+      output2_start = joined_output_start + start_delta
+      output2_end = joined_output_end + end_delta
     else
       output2_start = current_base_range.start_line + delta_from_base[2]
       output2_end = current_base_range.end_line + delta_from_base[2]
