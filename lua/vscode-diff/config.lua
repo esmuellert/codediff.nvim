@@ -40,6 +40,13 @@ M.defaults = {
       hover = "K",
       refresh = "R",
     },
+    -- Conflict mode keymaps (only active in merge conflict views)
+    conflict = {
+      accept_incoming = "<leader>ct",  -- Accept incoming (theirs/left) change
+      accept_current = "<leader>co",   -- Accept current (ours/right) change
+      accept_both = "<leader>cb",      -- Accept both changes (incoming first)
+      discard = "<leader>cx",          -- Discard both, keep base
+    },
   },
 }
 

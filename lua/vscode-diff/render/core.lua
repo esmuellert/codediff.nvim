@@ -509,6 +509,7 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
   return {
     left_fillers = total_left_fillers,
     right_fillers = total_right_fillers,
+    conflict_blocks = alignments.conflict_blocks,
   }
 end
 

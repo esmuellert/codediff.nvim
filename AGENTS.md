@@ -26,6 +26,8 @@
 
 5. **Pull Requests**: When asked to create a PR, push the branch, create PR with comprehensive description (summary, changes, benefits, testing), and enable auto-merge.
 
+6. **Commits**: Only commit when explicitly asked to commit, using proper conventional commit messages.
+
 ## Path-Specific Instructions
 
 Path-specific instructions are defined in `.github/copilot-instructions.md` files within respective directories.

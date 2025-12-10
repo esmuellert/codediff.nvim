@@ -26,7 +26,11 @@ local virtual_file = require('vscode-diff.virtual_file')
 --     suspended = bool,
 --     stored_diff_result = table,
 --     changedtick = { original = number, modified = number },
---     mtime = { original = number?, modified = number? }
+--     mtime = { original = number?, modified = number? },
+--     -- Conflict mode result buffer (3-way merge)
+--     result_bufnr = number?,  -- Real file buffer reset to BASE
+--     result_win = number?,    -- Bottom window for result
+--     conflict_files = table?, -- { [file_path] = true } tracks files opened in conflict mode
 --   } 
 -- }
 local active_diffs = {}
@@ -122,10 +126,16 @@ local function suspend_diff(tabpage)
   local auto_refresh = require('vscode-diff.auto_refresh')
   auto_refresh.disable(diff.original_bufnr)
   auto_refresh.disable(diff.modified_bufnr)
+  if diff.result_bufnr then
+    auto_refresh.disable_result(diff.result_bufnr)
+  end
 
   -- Clear highlights from both buffers
   clear_buffer_highlights(diff.original_bufnr)
   clear_buffer_highlights(diff.modified_bufnr)
+  if diff.result_bufnr then
+    clear_buffer_highlights(diff.result_bufnr)
+  end
 
   -- Mark as suspended
   diff.suspended = true
@@ -200,28 +210,44 @@ local function resume_diff(tabpage)
     -- Re-sync scrollbind ONLY if diff was recomputed (fillers may have changed)
     if diff_was_recomputed and vim.api.nvim_win_is_valid(diff.original_win) and vim.api.nvim_win_is_valid(diff.modified_win) then
       local current_win = vim.api.nvim_get_current_win()
+      local result_win = diff.result_win and vim.api.nvim_win_is_valid(diff.result_win) and diff.result_win or nil
 
-      if current_win == diff.original_win or current_win == diff.modified_win then
+      if current_win == diff.original_win or current_win == diff.modified_win or current_win == result_win then
         -- Step 1: Remember cursor position (line AND column)
         local saved_cursor = vim.api.nvim_win_get_cursor(current_win)
 
-        -- Step 2: Reset both to line 1 (baseline)
+        -- Step 2: Reset all to line 1 (baseline)
         vim.api.nvim_win_set_cursor(diff.original_win, {1, 0})
         vim.api.nvim_win_set_cursor(diff.modified_win, {1, 0})
+        if result_win then
+          vim.api.nvim_win_set_cursor(result_win, {1, 0})
+        end
 
         -- Step 3: Re-establish scrollbind (reset sync state)
         vim.wo[diff.original_win].scrollbind = false
         vim.wo[diff.modified_win].scrollbind = false
+        if result_win then
+          vim.wo[result_win].scrollbind = false
+        end
         vim.wo[diff.original_win].scrollbind = true
         vim.wo[diff.modified_win].scrollbind = true
-        
+        if result_win then
+          vim.wo[result_win].scrollbind = true
+        end
+
         -- Re-apply critical window options that might have been reset
         vim.wo[diff.original_win].wrap = false
         vim.wo[diff.modified_win].wrap = false
+        if result_win then
+          vim.wo[result_win].wrap = false
+        end
 
         -- Step 4: Restore cursor position with both line and column
         pcall(vim.api.nvim_win_set_cursor, diff.original_win, saved_cursor)
         pcall(vim.api.nvim_win_set_cursor, diff.modified_win, saved_cursor)
+        if result_win then
+          pcall(vim.api.nvim_win_set_cursor, result_win, saved_cursor)
+        end
       end
     end
   end
@@ -239,6 +265,11 @@ local function resume_diff(tabpage)
 
   if modified_is_real then
     auto_refresh.enable(diff.modified_bufnr)
+  end
+
+  -- Re-enable auto-refresh for result buffer if in conflict mode
+  if diff.result_bufnr and vim.api.nvim_buf_is_valid(diff.result_bufnr) and diff.result_base_lines then
+    auto_refresh.enable_for_result(diff.result_bufnr)
   end
 
   -- Mark as active
@@ -305,6 +336,11 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
 
     -- Explorer reference (only for explorer mode)
     explorer = nil,
+
+    -- Conflict mode result buffer (3-way merge)
+    result_bufnr = nil,
+    result_win = nil,
+    conflict_files = {},  -- Tracks files opened in conflict mode for unsaved warning
   }
 
   -- Mark windows with restore flag
@@ -456,6 +492,14 @@ local function cleanup_diff(tabpage)
   if vim.api.nvim_win_is_valid(diff.modified_win) then
     vim.w[diff.modified_win].vscode_diff_restore = nil
   end
+
+  -- Clear result window variable if exists (conflict mode)
+  if diff.result_win and vim.api.nvim_win_is_valid(diff.result_win) then
+    vim.w[diff.result_win].vscode_diff_restore = nil
+  end
+
+  -- Clear conflict file tracking (buffers remain, just not tracked)
+  diff.conflict_files = {}
 
   -- Clear tab-specific autocmd groups
   pcall(vim.api.nvim_del_augroup_by_name, 'vscode_diff_lifecycle_tab_' .. tabpage)
@@ -618,7 +662,7 @@ end
 --- Find tabpage containing a buffer
 function M.find_tabpage_by_buffer(bufnr)
   for tabpage, session in pairs(active_diffs) do
-    if session.original_bufnr == bufnr or session.modified_bufnr == bufnr then
+    if session.original_bufnr == bufnr or session.modified_bufnr == bufnr or session.result_bufnr == bufnr then
       return tabpage
     end
   end
@@ -747,7 +791,136 @@ function M.get_explorer(tabpage)
   return session and session.explorer
 end
 
---- Set a keymap on all buffers in the diff tab (both diff buffers + explorer)
+--- Set result buffer and window (for conflict mode)
+function M.set_result(tabpage, result_bufnr, result_win)
+  local session = active_diffs[tabpage]
+  if not session then return false end
+
+  session.result_bufnr = result_bufnr
+  session.result_win = result_win
+
+  -- Mark result window with restore flag
+  if result_win and vim.api.nvim_win_is_valid(result_win) then
+    vim.w[result_win].vscode_diff_restore = 1
+  end
+
+  return true
+end
+
+--- Store BASE lines for result buffer diff (for conflict mode)
+function M.set_result_base_lines(tabpage, base_lines)
+  local session = active_diffs[tabpage]
+  if not session then return false end
+  session.result_base_lines = base_lines
+  return true
+end
+
+--- Get BASE lines for result buffer diff
+function M.get_result_base_lines(tabpage)
+  local session = active_diffs[tabpage]
+  return session and session.result_base_lines
+end
+
+--- Get result buffer and window
+function M.get_result(tabpage)
+  local session = active_diffs[tabpage]
+  if not session then return nil, nil end
+  return session.result_bufnr, session.result_win
+end
+
+--- Store conflict blocks (mapping alignments) for a session
+--- @param tabpage number
+--- @param blocks table List of conflict blocks from compute_mapping_alignments
+function M.set_conflict_blocks(tabpage, blocks)
+  local session = active_diffs[tabpage]
+  if not session then return false end
+  session.conflict_blocks = blocks
+  return true
+end
+
+--- Get conflict blocks for a session
+--- @param tabpage number
+--- @return table|nil List of conflict blocks
+function M.get_conflict_blocks(tabpage)
+  local session = active_diffs[tabpage]
+  return session and session.conflict_blocks
+end
+
+--- Track a file opened in conflict mode (for unsaved warning)
+function M.track_conflict_file(tabpage, file_path)
+  local session = active_diffs[tabpage]
+  if not session then return false end
+
+  session.conflict_files = session.conflict_files or {}
+  session.conflict_files[file_path] = true
+  return true
+end
+
+--- Get all conflict files for a session
+function M.get_conflict_files(tabpage)
+  local session = active_diffs[tabpage]
+  if not session then return {} end
+  return session.conflict_files or {}
+end
+
+--- Check if any conflict files have unsaved changes
+--- Returns list of unsaved file paths
+function M.get_unsaved_conflict_files(tabpage)
+  local session = active_diffs[tabpage]
+  if not session or not session.conflict_files then return {} end
+
+  local unsaved = {}
+  for file_path, _ in pairs(session.conflict_files) do
+    -- Find buffer for this file
+    local bufnr = vim.fn.bufnr(file_path)
+    if bufnr ~= -1 and vim.api.nvim_buf_is_valid(bufnr) then
+      if vim.bo[bufnr].modified then
+        table.insert(unsaved, file_path)
+      end
+    end
+  end
+  return unsaved
+end
+
+--- Prompt user about unsaved conflict files before closing
+--- Returns true if user confirms close, false if cancelled
+function M.confirm_close_with_unsaved(tabpage)
+  local unsaved = M.get_unsaved_conflict_files(tabpage)
+  if #unsaved == 0 then
+    return true  -- No unsaved files, proceed
+  end
+
+  -- Build message
+  local msg = "The following merge result files have unsaved changes:\n\n"
+  for _, path in ipairs(unsaved) do
+    -- Show just filename for readability
+    local filename = vim.fn.fnamemodify(path, ":t")
+    msg = msg .. "  • " .. filename .. "\n"
+  end
+  msg = msg .. "\nDiscard changes and close?"
+
+  -- Show confirmation dialog
+  local choice = vim.fn.confirm(msg, "&Discard\n&Cancel", 2, "Warning")
+
+  if choice == 1 then
+    -- Discard: reload buffers from disk to restore original content (with conflict markers)
+    for _, path in ipairs(unsaved) do
+      local bufnr = vim.fn.bufnr(path)
+      if bufnr ~= -1 and vim.api.nvim_buf_is_valid(bufnr) then
+        -- Reload from disk to restore original file content
+        vim.api.nvim_buf_call(bufnr, function()
+          vim.cmd('edit!')
+        end)
+      end
+    end
+    return true
+  else
+    -- Cancel
+    return false
+  end
+end
+
+--- Set a keymap on all buffers in the diff tab (both diff buffers + explorer + result)
 --- This is the unified API for setting tab-wide keymaps
 --- @param tabpage number Tab page ID
 --- @param mode string Keymap mode ('n', 'v', etc.)
@@ -777,6 +950,11 @@ function M.set_tab_keymap(tabpage, mode, lhs, rhs, opts)
   local explorer = session.explorer
   if explorer and explorer.bufnr and vim.api.nvim_buf_is_valid(explorer.bufnr) then
     vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = explorer.bufnr }))
+  end
+
+  -- Set on result buffer if exists (conflict mode)
+  if session.result_bufnr and vim.api.nvim_buf_is_valid(session.result_bufnr) then
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = session.result_bufnr }))
   end
 
   return true

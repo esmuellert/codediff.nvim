@@ -206,6 +206,10 @@ function M.vscode_diff(opts)
   -- Check if current tab is a diff view and toggle (close) it if so
   local current_tab = vim.api.nvim_get_current_tabpage()
   if lifecycle.get_session(current_tab) then
+    -- Check for unsaved conflict files before closing
+    if not lifecycle.confirm_close_with_unsaved(current_tab) then
+      return  -- User cancelled
+    end
     vim.cmd("tabclose")
     return
   end
