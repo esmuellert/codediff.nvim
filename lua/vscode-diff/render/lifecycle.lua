@@ -903,11 +903,14 @@ function M.confirm_close_with_unsaved(tabpage)
   local choice = vim.fn.confirm(msg, "&Discard\n&Cancel", 2, "Warning")
 
   if choice == 1 then
-    -- Discard: mark all unsaved buffers as not modified so they close cleanly
+    -- Discard: reload buffers from disk to restore original content (with conflict markers)
     for _, path in ipairs(unsaved) do
       local bufnr = vim.fn.bufnr(path)
       if bufnr ~= -1 and vim.api.nvim_buf_is_valid(bufnr) then
-        vim.bo[bufnr].modified = false
+        -- Reload from disk to restore original file content
+        vim.api.nvim_buf_call(bufnr, function()
+          vim.cmd('edit!')
+        end)
       end
     end
     return true
