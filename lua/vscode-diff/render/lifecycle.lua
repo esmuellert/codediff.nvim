@@ -26,7 +26,8 @@ local virtual_file = require('vscode-diff.virtual_file')
 --     suspended = bool,
 --     stored_diff_result = table,
 --     changedtick = { original = number, modified = number },
---     mtime = { original = number?, modified = number? }
+--     mtime = { original = number?, modified = number? },
+--     temp_buffers = { number } -- Track temporary buffers created during update
 --   } 
 -- }
 local active_diffs = {}
@@ -305,6 +306,8 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
 
     -- Explorer reference (only for explorer mode)
     explorer = nil,
+    -- Track temporary buffers created during update (e.g., from enew)
+    temp_buffers = {},
   }
 
   -- Mark windows with restore flag
@@ -449,6 +452,15 @@ local function cleanup_diff(tabpage)
     end
   end
 
+  -- Delete all temporary buffers (e.g., created by enew during update)
+  if diff.temp_buffers then
+    for _, buf in ipairs(diff.temp_buffers) do
+      if vim.api.nvim_buf_is_valid(buf) then
+        pcall(vim.api.nvim_buf_delete, buf, { force = true })
+      end
+    end
+  end
+
   -- Clear window variables if windows still exist
   if vim.api.nvim_win_is_valid(diff.original_win) then
     vim.w[diff.original_win].vscode_diff_restore = nil
@@ -460,6 +472,27 @@ local function cleanup_diff(tabpage)
   -- Clear tab-specific autocmd groups
   pcall(vim.api.nvim_del_augroup_by_name, 'vscode_diff_lifecycle_tab_' .. tabpage)
   pcall(vim.api.nvim_del_augroup_by_name, 'vscode_diff_working_sync_' .. tabpage)
+
+  -- FINAL SAFETY: Mark any unnamed/temporary buffers as nobuflisted
+  -- This prevents them from showing in bufferline even if deletion fails
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      -- Skip the main diff buffers
+      if buf == diff.original_bufnr or buf == diff.modified_bufnr then
+        goto continue
+      end
+
+      local bufname = vim.api.nvim_buf_get_name(buf)
+      local buf_listed = vim.api.nvim_buf_get_option(buf, 'buflisted')
+
+      -- Hide unnamed buffers and vscodediff temp buffers
+      if buf_listed and (bufname == "" or bufname:match("^vscodediff://")) then
+        pcall(vim.api.nvim_buf_set_option, buf, 'buflisted', false)
+      end
+
+      ::continue::
+    end
+  end
 
   -- Remove from tracking
   active_diffs[tabpage] = nil
@@ -745,6 +778,22 @@ end
 function M.get_explorer(tabpage)
   local session = active_diffs[tabpage]
   return session and session.explorer
+end
+
+--- Add temporary buffers created during update (e.g., from enew)
+--- These will be cleaned up when the diff session ends
+function M.add_temp_buffers(tabpage, temp_buffers)
+  local session = active_diffs[tabpage]
+  if not session then return false end
+
+  if type(temp_buffers) == "table" then
+    for _, buf in ipairs(temp_buffers) do
+      table.insert(session.temp_buffers, buf)
+    end
+  else
+    table.insert(session.temp_buffers, temp_buffers)
+  end
+  return true
 end
 
 --- Set a keymap on all buffers in the diff tab (both diff buffers + explorer)

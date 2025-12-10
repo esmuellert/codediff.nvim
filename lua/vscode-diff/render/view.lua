@@ -354,9 +354,18 @@ function M.create(session_config, filetype)
     end
   end
 
-  -- Clean up initial buffer
+  -- Clean up initial buffer created by tabnew
   if vim.api.nvim_buf_is_valid(initial_buf) and initial_buf ~= original_info.bufnr and initial_buf ~= modified_info.bufnr then
-    pcall(vim.api.nvim_buf_delete, initial_buf, { force = true })
+    -- Make sure no window is showing this buffer before deleting
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_buf(win) == initial_buf then
+        vim.api.nvim_win_set_buf(win, original_info.bufnr)
+      end
+    end
+    -- First mark as nobuflisted
+    vim.api.nvim_buf_set_option(initial_buf, 'buflisted', false)
+    -- Then delete
+    vim.api.nvim_buf_delete(initial_buf, { force = true })
   end
 
   -- Window options (scrollbind will be set by compute_and_render)
@@ -587,6 +596,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   -- This fixes the bug where same file in staged+unstaged shows same buffer in both windows
   
   local buffers_to_delete = {}
+  local temp_buffers_created = {}  -- Track temporary buffers created by enew
   
   -- Check if original window's target buffer is currently in modified window
   if original_info.needs_edit then
@@ -596,8 +606,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
       if vim.api.nvim_win_is_valid(modified_win) then
         vim.api.nvim_set_current_win(modified_win)
         vim.cmd("enew")
+        local temp_buf = vim.api.nvim_get_current_buf()
+        -- Mark as nobuflisted so it doesn't show in bufferline
+        vim.api.nvim_buf_set_option(temp_buf, 'buflisted', false)
+        table.insert(temp_buffers_created, temp_buf)  -- Track the temporary buffer
         table.insert(buffers_to_delete, old_modified_buf)
-        old_modified_buf = vim.api.nvim_get_current_buf()  -- Update to new empty buffer
+        old_modified_buf = temp_buf
       end
     end
   end
@@ -610,8 +624,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
       if vim.api.nvim_win_is_valid(original_win) then
         vim.api.nvim_set_current_win(original_win)
         vim.cmd("enew")
+        local temp_buf = vim.api.nvim_get_current_buf()
+        -- Mark as nobuflisted so it doesn't show in bufferline
+        vim.api.nvim_buf_set_option(temp_buf, 'buflisted', false)
+        table.insert(temp_buffers_created, temp_buf)  -- Track the temporary buffer
         table.insert(buffers_to_delete, old_original_buf)
-        old_original_buf = vim.api.nvim_get_current_buf()  -- Update to new empty buffer
+        old_original_buf = temp_buf
       end
     end
   end
@@ -644,6 +662,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   -- Delete the old buffers we replaced (after windows have new content)
   for _, buf in ipairs(buffers_to_delete) do
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end
+  
+  -- Track temporary buffers for later cleanup during diff session end
+  -- This ensures they don't show up as orphan buffers in bufferline
+  if #temp_buffers_created > 0 then
+    lifecycle.add_temp_buffers(tabpage, temp_buffers_created)
   end
 
   -- Update lifecycle session metadata
