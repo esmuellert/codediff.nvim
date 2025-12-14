@@ -8,6 +8,28 @@ local auto_refresh = require('vscode-diff.auto_refresh')
 
 local tracking_ns = vim.api.nvim_create_namespace("vscode-diff-conflict-tracking")
 
+-- State for dot-repeat
+local _pending_action = nil
+
+--- Operatorfunc callback for dot-repeat
+--- @param type string Motion type (ignored)
+function M.run_repeatable_action(type)
+  if _pending_action then
+    _pending_action()
+  end
+end
+
+--- Wrap a function to be dot-repeatable via operatorfunc
+--- @param fn function The action to perform
+--- @return function The wrapper that sets operatorfunc and returns 'g@l'
+local function make_repeatable(fn)
+  return function()
+    _pending_action = fn
+    vim.go.operatorfunc = "v:lua.require'vscode-diff.render.conflict_actions'.run_repeatable_action"
+    return "g@l"
+  end
+end
+
 --- Check if a conflict block is currently active (content matches base)
 --- @param session table The diff session
 --- @param block table The conflict block
@@ -581,30 +603,30 @@ function M.setup_keymaps(tabpage)
     if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
       -- Accept incoming
       if keymaps.accept_incoming then
-        vim.keymap.set("n", keymaps.accept_incoming, function()
+        vim.keymap.set("n", keymaps.accept_incoming, make_repeatable(function()
           M.accept_incoming(tabpage)
-        end, vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept incoming change" }))
+        end), vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept incoming change", expr = true }))
       end
 
       -- Accept current
       if keymaps.accept_current then
-        vim.keymap.set("n", keymaps.accept_current, function()
+        vim.keymap.set("n", keymaps.accept_current, make_repeatable(function()
           M.accept_current(tabpage)
-        end, vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept current change" }))
+        end), vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept current change", expr = true }))
       end
 
       -- Accept both
       if keymaps.accept_both then
-        vim.keymap.set("n", keymaps.accept_both, function()
+        vim.keymap.set("n", keymaps.accept_both, make_repeatable(function()
           M.accept_both(tabpage)
-        end, vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept both changes" }))
+        end), vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Accept both changes", expr = true }))
       end
 
       -- Discard
       if keymaps.discard then
-        vim.keymap.set("n", keymaps.discard, function()
+        vim.keymap.set("n", keymaps.discard, make_repeatable(function()
           M.discard(tabpage)
-        end, vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Discard changes (keep base)" }))
+        end), vim.tbl_extend('force', base_opts, { buffer = bufnr, desc = "Discard changes (keep base)", expr = true }))
       end
       
       -- Navigation
