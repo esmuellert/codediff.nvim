@@ -438,4 +438,74 @@ function M.get_diff_revisions(rev1, rev2, git_root, callback)
   )
 end
 
+-- Run a git command synchronously
+-- Returns output string or nil on error
+local function run_git_sync(args, opts)
+  opts = opts or {}
+  local cmd = vim.list_extend({ "git" }, args)
+
+  local result = vim.fn.systemlist(cmd)
+  if vim.v.shell_error ~= 0 then
+    return nil
+  end
+
+  return result
+end
+
+-- Get git root directory synchronously (for completion)
+-- Returns git_root or nil if not in a git repo
+function M.get_git_root_sync(file_path)
+  local dir
+  if vim.fn.isdirectory(file_path) == 1 then
+    dir = file_path
+  else
+    dir = vim.fn.fnamemodify(file_path, ":h")
+  end
+
+  local cmd = { "git", "-C", dir, "rev-parse", "--show-toplevel" }
+  local result = vim.fn.systemlist(cmd)
+
+  if vim.v.shell_error ~= 0 or #result == 0 then
+    return nil
+  end
+
+  local git_root = vim.trim(result[1])
+  git_root = git_root:gsub("\\", "/")
+  return git_root
+end
+
+-- Get revision candidates for command completion (sync)
+-- Returns list of branches, tags, remotes, and special refs
+function M.get_rev_candidates(git_root)
+  if not git_root then
+    return {}
+  end
+
+  local candidates = {}
+
+  -- Special HEAD refs
+  local head_refs = { "HEAD", "HEAD~1", "HEAD~2", "HEAD~3" }
+  vim.list_extend(candidates, head_refs)
+
+  -- Get branches, tags, and remotes
+  local refs = run_git_sync({
+    "-C", git_root,
+    "rev-parse", "--symbolic", "--branches", "--tags", "--remotes"
+  })
+  if refs then
+    vim.list_extend(candidates, refs)
+  end
+
+  -- Get stashes
+  local stashes = run_git_sync({
+    "-C", git_root,
+    "stash", "list", "--pretty=format:%gd"
+  })
+  if stashes then
+    vim.list_extend(candidates, stashes)
+  end
+
+  return candidates
+end
+
 return M

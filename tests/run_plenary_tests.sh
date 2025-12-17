@@ -29,6 +29,7 @@ SPEC_FILES=(
   "tests/installer_spec.lua"
   "tests/timeout_spec.lua"
   "tests/git_integration_spec.lua"
+  "tests/completion_spec.lua"
   "tests/autoscroll_spec.lua"
   "tests/explorer_spec.lua"
   "tests/explorer_staging_spec.lua"

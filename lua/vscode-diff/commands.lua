@@ -1,6 +1,9 @@
 -- Command implementations for vscode-diff
 local M = {}
 
+-- Subcommands available for :CodeDiff
+M.SUBCOMMANDS = { "file", "install" }
+
 local git = require("vscode-diff.git")
 local lifecycle = require("vscode-diff.render.lifecycle")
 
