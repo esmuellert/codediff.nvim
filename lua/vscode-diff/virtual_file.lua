@@ -100,9 +100,16 @@ end
 -- Parse a vscodediff:// URL
 -- Returns: git_root, commit, filepath
 function M.parse_url(url)
-  -- Pattern accepts SHA hash (hex chars) or :N: for staged index (including merge stages :1:, :2:, :3:)
+  -- Pattern accepts SHA hash (hex chars)
   local pattern = '^vscodediff:///(.-)///([a-fA-F0-9]+)/(.+)$'
   local git_root, commit, filepath = url:match(pattern)
+  if git_root and commit and filepath then
+    return git_root, commit, filepath
+  end
+
+  -- Try symbolic ref pattern (HEAD, branch names, etc.)
+  local pattern_symbolic = '^vscodediff:///(.-)///([A-Za-z][A-Za-z0-9_~^%-]*)/(.+)$'
+  git_root, commit, filepath = url:match(pattern_symbolic)
   if git_root and commit and filepath then
     return git_root, commit, filepath
   end

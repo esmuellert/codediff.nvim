@@ -2,7 +2,7 @@
 local M = {}
 
 -- Subcommands available for :CodeDiff
-M.SUBCOMMANDS = { "file", "install" }
+M.SUBCOMMANDS = { "merge", "file", "install" }
 
 local git = require("vscode-diff.git")
 local lifecycle = require("vscode-diff.render.lifecycle")
