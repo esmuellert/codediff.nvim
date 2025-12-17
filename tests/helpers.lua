@@ -72,15 +72,14 @@ function M.create_temp_git_repo()
   -- Set default branch name to avoid warnings
   M.git_cmd(temp_dir, "branch -m main")
   
-  -- On Windows, get the canonical path from git to match what get_git_root() returns
-  -- This avoids 8.3 short name vs long name mismatches
-  if M.is_windows then
-    local output = M.git_cmd(temp_dir, "rev-parse --show-toplevel")
-    if output then
-      local canonical = vim.trim(output)
-      if canonical and canonical ~= '' then
-        temp_dir = canonical
-      end
+  -- Get the canonical path from git to match what get_git_root() returns
+  -- On Windows: avoids 8.3 short name vs long name mismatches
+  -- On macOS: avoids /var vs /private/var symlink issues
+  local output = M.git_cmd(temp_dir, "rev-parse --show-toplevel")
+  if output then
+    local canonical = vim.trim(output)
+    if canonical and canonical ~= '' then
+      temp_dir = canonical
     end
   end
   
