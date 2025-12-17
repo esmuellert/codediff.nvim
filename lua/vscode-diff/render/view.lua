@@ -541,6 +541,16 @@ function M.create(session_config, filetype)
     
     -- Set up rendering after buffers are ready
     local render_everything = function()
+      -- Guard: Check if windows are still valid (they may have been closed during async wait)
+      if not vim.api.nvim_win_is_valid(original_win) or not vim.api.nvim_win_is_valid(modified_win) then
+        return
+      end
+      
+      -- Guard: Check if buffers are still valid
+      if not vim.api.nvim_buf_is_valid(original_info.bufnr) or not vim.api.nvim_buf_is_valid(modified_info.bufnr) then
+        return
+      end
+      
       -- Always read from buffers (single source of truth)
       local original_lines = vim.api.nvim_buf_get_lines(original_info.bufnr, 0, -1, false)
       local modified_lines = vim.api.nvim_buf_get_lines(modified_info.bufnr, 0, -1, false)
@@ -736,6 +746,16 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   }
 
   local render_everything = function()
+    -- Guard: Check if windows are still valid (they may have been closed during async wait)
+    if not vim.api.nvim_win_is_valid(original_win) or not vim.api.nvim_win_is_valid(modified_win) then
+      return
+    end
+    
+    -- Guard: Check if buffers are still valid
+    if not vim.api.nvim_buf_is_valid(original_info.bufnr) or not vim.api.nvim_buf_is_valid(modified_info.bufnr) then
+      return
+    end
+    
     -- Always read from buffers (single source of truth)
     local original_lines = vim.api.nvim_buf_get_lines(original_info.bufnr, 0, -1, false)
     local modified_lines = vim.api.nvim_buf_get_lines(modified_info.bufnr, 0, -1, false)
