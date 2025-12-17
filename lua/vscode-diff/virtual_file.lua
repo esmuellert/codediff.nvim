@@ -6,6 +6,79 @@ local M = {}
 
 local api = vim.api
 
+-- Helper function to load content into a virtual buffer and fire the loaded event
+local function load_virtual_buffer_content(buf, git_root, commit, filepath)
+  local git = require('vscode-diff.git')
+  
+  git.get_file_content(commit, git_root, filepath, function(err, lines)
+    vim.schedule(function()
+      -- Check buffer is still valid (might have been deleted during async fetch)
+      if not api.nvim_buf_is_valid(buf) then
+        return
+      end
+      
+      if err then
+        -- File doesn't exist in this revision (added/deleted file)
+        -- Show empty buffer so diff can highlight the change
+        vim.bo[buf].modifiable = true
+        vim.bo[buf].readonly = false
+        api.nvim_buf_set_lines(buf, 0, -1, false, {""})
+        vim.bo[buf].modifiable = false
+        vim.bo[buf].readonly = true
+        vim.bo[buf].filetype = ""
+        vim.diagnostic.enable(false, { bufnr = buf })
+        
+        -- Fire loaded event so diff rendering proceeds
+        api.nvim_exec_autocmds('User', {
+          pattern = 'VscodeDiffVirtualFileLoaded',
+          data = { buf = buf }
+        })
+        return
+      end
+
+      -- Set the content
+      if not api.nvim_buf_is_valid(buf) then
+        -- Buffer was deleted while we were fetching, skip
+        return
+      end
+      vim.bo[buf].modifiable = true
+      vim.bo[buf].readonly = false
+      api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      
+      -- Make it read-only
+      vim.bo[buf].modifiable = false
+      vim.bo[buf].readonly = true
+      
+      -- Detect filetype from the original file path (for TreeSitter only)
+      local ft = vim.filetype.match({ filename = filepath })
+      if ft then
+        vim.bo[buf].filetype = ft
+      end
+      
+      -- Disable diagnostics for this buffer completely
+      vim.diagnostic.enable(false, { bufnr = buf })
+      
+      api.nvim_exec_autocmds('User', {
+        pattern = 'VscodeDiffVirtualFileLoaded',
+        data = { buf = buf }
+      })
+    end)
+  end)
+end
+
+-- Refresh a virtual buffer's content (for mutable revisions like :0)
+function M.refresh_buffer(buf)
+  local bufname = api.nvim_buf_get_name(buf)
+  local git_root, commit, filepath = M.parse_url(bufname)
+  
+  if not git_root or not commit or not filepath then
+    return false
+  end
+  
+  load_virtual_buffer_content(buf, git_root, commit, filepath)
+  return true
+end
+
 -- Create a fugitive-style URL for a git revision
 -- Format: vscodediff:///<git-root>///<commit>/<filepath>
 -- Supports commit hash or :0 (staged index)
@@ -71,58 +144,8 @@ function M.setup()
       vim.bo[buf].buftype = 'nowrite'
       vim.bo[buf].bufhidden = 'wipe'
 
-      -- Get the file content from git using the new async API
-      local git = require('vscode-diff.git')
-
-      git.get_file_content(commit, git_root, filepath, function(err, lines)
-        vim.schedule(function()
-          if err then
-            -- File doesn't exist in this revision (added/deleted file)
-            -- Show empty buffer so diff can highlight the change
-            vim.bo[buf].modifiable = true
-            vim.bo[buf].readonly = false
-            api.nvim_buf_set_lines(buf, 0, -1, false, {""})
-            vim.bo[buf].modifiable = false
-            vim.bo[buf].readonly = true
-            vim.bo[buf].filetype = ""
-            vim.diagnostic.enable(false, { bufnr = buf })
-            
-            -- Fire loaded event so diff rendering proceeds
-            api.nvim_exec_autocmds('User', {
-              pattern = 'VscodeDiffVirtualFileLoaded',
-              data = { buf = buf }
-            })
-            return
-          end
-
-          -- Set the content
-          vim.bo[buf].modifiable = true
-          vim.bo[buf].readonly = false
-          api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-          
-          -- Make it read-only
-          vim.bo[buf].modifiable = false
-          vim.bo[buf].readonly = true
-          
-          -- Detect filetype from the original file path (for TreeSitter only)
-          local ft = vim.filetype.match({ filename = filepath })
-          if ft then
-            vim.bo[buf].filetype = ft
-          end
-          
-          -- Disable diagnostics for this buffer completely
-          -- This prevents LSP diagnostics from showing even though LSP might attach
-          vim.diagnostic.enable(false, { bufnr = buf })
-          
-          api.nvim_exec_autocmds('User', {
-            pattern = 'VscodeDiffVirtualFileLoaded',
-            data = { buf = buf }
-          })
-          
-          -- DO NOT trigger BufRead - we don't want LSP to attach
-          -- TreeSitter will work from filetype alone
-        end)
-      end)
+      -- Load content using the shared helper
+      load_virtual_buffer_content(buf, git_root, commit, filepath)
     end,
   })
   

@@ -26,16 +26,22 @@ local function prepare_buffer(is_virtual, git_root, revision, path)
     -- Check if buffer already exists
     local existing_buf = vim.fn.bufnr(virtual_url)
     
-    if existing_buf ~= -1 then
-       -- Buffer exists, content already loaded - just reuse it
+    -- For :0 (staged index), always force reload because index can change
+    -- when user runs git add/reset. For commits (immutable), we can cache.
+    local is_mutable_revision = revision == ":0" or revision == ":1" or revision == ":2" or revision == ":3"
+    
+    if existing_buf ~= -1 and not is_mutable_revision then
+       -- Buffer exists for immutable revision, reuse it
        return {
          bufnr = existing_buf,
          target = virtual_url,
-         needs_edit = false  -- No need to :edit, just set buffer to window
+         needs_edit = false
        }
     else
+       -- Either buffer doesn't exist, or it's a mutable revision that needs refresh
+       -- Don't delete here - let the :edit! handle it (will trigger BufReadCmd)
        return {
-         bufnr = nil,
+         bufnr = existing_buf ~= -1 and existing_buf or nil,
          target = virtual_url,
          needs_edit = true,
        }
@@ -725,10 +731,18 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   if vim.api.nvim_win_is_valid(original_win) then
     if original_info.needs_edit then
       if original_is_virtual then
-        -- New virtual file: need :edit! to trigger BufReadCmd
-        vim.api.nvim_set_current_win(original_win)
-        vim.cmd("edit! " .. vim.fn.fnameescape(original_info.target))
-        original_info.bufnr = vim.api.nvim_get_current_buf()
+        -- For virtual files with mutable revisions (:0, :1, :2, :3)
+        -- Check if buffer already exists and just needs content refresh
+        if original_info.bufnr and vim.api.nvim_buf_is_valid(original_info.bufnr) then
+          -- Buffer exists, just refresh its content (for mutable revisions)
+          vim.api.nvim_win_set_buf(original_win, original_info.bufnr)
+          virtual_file.refresh_buffer(original_info.bufnr)
+        else
+          -- Buffer doesn't exist, create it with :edit!
+          vim.api.nvim_set_current_win(original_win)
+          vim.cmd("edit! " .. vim.fn.fnameescape(original_info.target))
+          original_info.bufnr = vim.api.nvim_get_current_buf()
+        end
       else
         -- New real file: create and load buffer
         local bufnr = vim.fn.bufadd(original_info.target)
@@ -740,6 +754,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
       -- Existing buffer: verify it's still valid (might have been deleted by rapid updates)
       if vim.api.nvim_buf_is_valid(original_info.bufnr) then
         vim.api.nvim_win_set_buf(original_win, original_info.bufnr)
+        -- For real files, reload from disk in case it changed
+        if not original_is_virtual then
+          vim.api.nvim_buf_call(original_info.bufnr, function()
+            vim.cmd("silent! edit!")
+          end)
+        end
       else
         -- Buffer was deleted, need to recreate
         if original_is_virtual then
@@ -759,10 +779,18 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   if vim.api.nvim_win_is_valid(modified_win) then
     if modified_info.needs_edit then
       if modified_is_virtual then
-        -- New virtual file: need :edit! to trigger BufReadCmd
-        vim.api.nvim_set_current_win(modified_win)
-        vim.cmd("edit! " .. vim.fn.fnameescape(modified_info.target))
-        modified_info.bufnr = vim.api.nvim_get_current_buf()
+        -- For virtual files with mutable revisions (:0, :1, :2, :3)
+        -- Check if buffer already exists and just needs content refresh
+        if modified_info.bufnr and vim.api.nvim_buf_is_valid(modified_info.bufnr) then
+          -- Buffer exists, just refresh its content (for mutable revisions)
+          vim.api.nvim_win_set_buf(modified_win, modified_info.bufnr)
+          virtual_file.refresh_buffer(modified_info.bufnr)
+        else
+          -- Buffer doesn't exist, create it with :edit!
+          vim.api.nvim_set_current_win(modified_win)
+          vim.cmd("edit! " .. vim.fn.fnameescape(modified_info.target))
+          modified_info.bufnr = vim.api.nvim_get_current_buf()
+        end
       else
         -- New real file: create and load buffer
         local bufnr = vim.fn.bufadd(modified_info.target)
@@ -774,6 +802,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
       -- Existing buffer: verify it's still valid (might have been deleted by rapid updates)
       if vim.api.nvim_buf_is_valid(modified_info.bufnr) then
         vim.api.nvim_win_set_buf(modified_win, modified_info.bufnr)
+        -- For real files, reload from disk in case it changed
+        if not modified_is_virtual then
+          vim.api.nvim_buf_call(modified_info.bufnr, function()
+            vim.cmd("silent! edit!")
+          end)
+        end
       else
         -- Buffer was deleted, need to recreate
         if modified_is_virtual then

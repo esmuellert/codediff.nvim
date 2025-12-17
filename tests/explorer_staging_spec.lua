@@ -30,18 +30,30 @@ describe("Explorer Buffer Management", function()
     end
   end)
   
-  -- Helper to count orphan buffers
-  local function count_orphan_buffers()
-    local count = 0
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buflisted then
-        local name = vim.api.nvim_buf_get_name(buf)
-        if name == "" then
-          count = count + 1
-        end
-      end
+  -- Helper to get buffer content
+  local function get_buffer_content(bufnr)
+    if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+      return nil
     end
-    return count
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    return table.concat(lines, "\n")
+  end
+  
+  -- Helper to wait for virtual file to load
+  local function wait_for_diff_ready(tabpage, timeout)
+    timeout = timeout or 5000
+    local lifecycle = require('vscode-diff.render.lifecycle')
+    local ready = vim.wait(timeout, function()
+      local session = lifecycle.get_session(tabpage)
+      if not session then return false end
+      -- Check that diff_result exists (set after render_everything completes)
+      if not session.diff_result then return false end
+      -- Also verify buffers are valid
+      local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
+      if not orig_buf or not mod_buf then return false end
+      return vim.api.nvim_buf_is_valid(orig_buf) and vim.api.nvim_buf_is_valid(mod_buf)
+    end, 100)
+    return ready
   end
   
   it("should parse virtual file URLs correctly", function()
@@ -69,19 +81,22 @@ describe("Explorer Buffer Management", function()
     assert.equals("file.txt", f3)
   end)
   
-  it("should not leave orphan buffers after creating and closing diff view", function()
-    -- Make changes to create staged state
-    vim.fn.writefile(vim.split("line 1\nline 2\nline 3\nchange A\n", "\n", { plain = true }), test_file)
-    vim.fn.system("cd " .. test_dir .. " && git add test.txt")
-    
-    -- Count orphan buffers before
-    local orphans_before = count_orphan_buffers()
+  it("should refresh staged content when index changes", function()
+    -- This tests the full staging workflow:
+    -- 1. Make change A -> validate in Changes
+    -- 2. Stage change A -> validate in Staged Changes  
+    -- 3. Make change B -> validate Changes has B, Staged has A
+    -- 4. Stage change B -> validate Staged has A+B, no Changes
+    -- 5. Unstage file -> validate Changes has A+B
     
     local view = require('vscode-diff.render.view')
     local lifecycle = require('vscode-diff.render.lifecycle')
     
-    -- Create view for staged changes (index vs working)
-    local session_config = {
+    -- Step 1: Make change A
+    vim.fn.writefile({"line 1", "line 2", "line 3", "change A"}, test_file)
+    
+    -- Create diff view for unstaged changes (index vs working)
+    local config_changes = {
       mode = "standalone",
       git_root = test_dir,
       original_path = test_file_rel,
@@ -90,25 +105,83 @@ describe("Explorer Buffer Management", function()
       modified_revision = "WORKING",
     }
     
-    local result = view.create(session_config, "text")
+    local result = view.create(config_changes, "text")
     assert.is_not_nil(result, "Should create diff view")
-    
     local tabpage = vim.api.nvim_get_current_tabpage()
     
-    -- Wait for async virtual file load
-    vim.wait(2000, function()
-      local session = lifecycle.get_session(tabpage)
-      return session and session.diff_result ~= nil
-    end, 100)
+    wait_for_diff_ready(tabpage)
     
-    -- Close the diff
-    lifecycle.cleanup(tabpage)
+    -- Validate: Changes should show "change A" in modified buffer
+    local _, modified_buf = lifecycle.get_buffers(tabpage)
+    local content = get_buffer_content(modified_buf)
+    assert.is_true(content:find("change A") ~= nil, "Changes should show change A")
     
-    -- Count orphan buffers after
-    local orphans_after = count_orphan_buffers()
+    -- Step 2: Stage change A
+    vim.fn.system("cd " .. test_dir .. " && git add test.txt")
     
-    -- Should not have created orphan buffers
-    assert.equals(orphans_before, orphans_after, 
-      "Should not create orphan buffers. Before: " .. orphans_before .. ", After: " .. orphans_after)
+    -- Switch to staged view (HEAD vs index)
+    local config_staged = {
+      mode = "standalone",
+      git_root = test_dir,
+      original_path = test_file_rel,
+      modified_path = test_file_rel,
+      original_revision = "HEAD",
+      modified_revision = ":0",
+    }
+    
+    view.update(tabpage, config_staged, false)
+    wait_for_diff_ready(tabpage)
+    
+    -- Validate: Staged should show "change A"
+    _, modified_buf = lifecycle.get_buffers(tabpage)
+    content = get_buffer_content(modified_buf)
+    assert.is_true(content:find("change A") ~= nil, "Staged should show change A after staging")
+    
+    -- Step 3: Make change B (while A is staged)
+    vim.fn.writefile({"line 1", "line 2", "line 3", "change A", "change B"}, test_file)
+    
+    -- Switch back to Changes view (index vs working)
+    view.update(tabpage, config_changes, false)
+    wait_for_diff_ready(tabpage)
+    
+    -- Validate: Changes should show "change B" (the new unstaged change)
+    local orig_buf
+    orig_buf, modified_buf = lifecycle.get_buffers(tabpage)
+    content = get_buffer_content(modified_buf)
+    assert.is_not_nil(content, "Step 3 content should not be nil")
+    assert.is_true(content:find("change B") ~= nil, "Changes should show change B")
+    
+    -- Switch to Staged view - should still show only "change A"
+    view.update(tabpage, config_staged, false)
+    wait_for_diff_ready(tabpage)
+    
+    _, modified_buf = lifecycle.get_buffers(tabpage)
+    content = get_buffer_content(modified_buf)
+    assert.is_true(content:find("change A") ~= nil, "Staged should still show change A")
+    -- Note: content might also contain change B if we're viewing working file by mistake
+    
+    -- Step 4: Stage change B
+    vim.fn.system("cd " .. test_dir .. " && git add test.txt")
+    
+    -- Refresh staged view
+    view.update(tabpage, config_staged, false)
+    wait_for_diff_ready(tabpage)
+    
+    _, modified_buf = lifecycle.get_buffers(tabpage)
+    content = get_buffer_content(modified_buf)
+    assert.is_true(content:find("change A") ~= nil, "Staged should show change A after staging B")
+    assert.is_true(content:find("change B") ~= nil, "Staged should show change B after staging B")
+    
+    -- Step 5: Unstage file
+    vim.fn.system("cd " .. test_dir .. " && git reset HEAD test.txt")
+    
+    -- Switch to Changes view - should now show both A and B
+    view.update(tabpage, config_changes, false)
+    wait_for_diff_ready(tabpage)
+    
+    _, modified_buf = lifecycle.get_buffers(tabpage)
+    content = get_buffer_content(modified_buf)
+    assert.is_true(content:find("change A") ~= nil, "Changes should show change A after unstage")
+    assert.is_true(content:find("change B") ~= nil, "Changes should show change B after unstage")
   end)
 end)

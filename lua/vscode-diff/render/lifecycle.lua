@@ -826,6 +826,11 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
 
       local new_path = vim.api.nvim_buf_get_name(args.buf)
 
+      -- Skip virtual files - they're programmatic, not user navigation
+      if new_path:match('^vscodediff://') then
+        return
+      end
+
       -- Check if file changed
       if new_path == "" or new_path == current_path then
         return

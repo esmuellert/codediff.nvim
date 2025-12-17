@@ -238,14 +238,19 @@ end
 -- rel_path: relative path from git root (with forward slashes)
 -- callback: function(err, lines) where lines is a table of strings
 function M.get_file_content(revision, git_root, rel_path, callback)
-  -- Check cache first
-  local cached_lines = file_content_cache:get(revision, git_root, rel_path)
-  if cached_lines then
-    callback(nil, cached_lines)
-    return
+  -- Don't cache mutable revisions (staged index can change with git add/reset)
+  local is_mutable = revision:match("^:[0-3]$")
+  
+  -- Check cache first (only for immutable revisions)
+  if not is_mutable then
+    local cached_lines = file_content_cache:get(revision, git_root, rel_path)
+    if cached_lines then
+      callback(nil, cached_lines)
+      return
+    end
   end
 
-  -- Cache miss - fetch from git
+  -- Cache miss or mutable revision - fetch from git
   local git_object = revision .. ":" .. rel_path
 
   run_git_async(
@@ -266,8 +271,10 @@ function M.get_file_content(revision, git_root, rel_path, callback)
         table.remove(lines, #lines)
       end
 
-      -- Store in cache
-      file_content_cache:put(revision, git_root, rel_path, lines)
+      -- Store in cache (only for immutable revisions)
+      if not is_mutable then
+        file_content_cache:put(revision, git_root, rel_path, lines)
+      end
 
       callback(nil, lines)
     end
