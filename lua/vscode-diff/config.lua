@@ -45,6 +45,9 @@ M.defaults = {
       folder_closed = "\u{e5ff}",  -- Nerd Font: folder
       folder_open = "\u{e5fe}",    -- Nerd Font: folder-open
     },
+    file_filter = {
+      ignore = {},  -- Glob patterns to hide (e.g., {"*.lock", "dist/*"})
+    },
   },
 
   -- Keymaps

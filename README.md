@@ -1,6 +1,6 @@
 # vscode-diff.nvim
 
-[![Pre-release](https://img.shields.io/github/v/release/esmuellert/vscode-diff.nvim?include_prereleases&sort=semver&label=🚀%20pre-release&color=orange)](https://github.com/esmuellert/vscode-diff.nvim/issues/97)
+[![Pre-release](https://img.shields.io/github/v/release/esmuellert/vscode-diff.nvim?include_prereleases&sort=semver&label=🚀%20pre-release&color=orange)](https://github.com/esmuellert/vscode-diff.nvim/issues/97) [![Downloads](https://img.shields.io/github/downloads/esmuellert/vscode-diff.nvim/total?label=⬇%20downloads&color=blue)](https://github.com/esmuellert/vscode-diff.nvim/releases)
 
 > **🧪 v2.0.0 Pre-release Available!** The `next` branch includes new features like **Git Merge Tool support**. [Help us test it!](https://github.com/esmuellert/vscode-diff.nvim/issues/97)
 
@@ -103,6 +103,10 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
         icons = {
           folder_closed = "",  -- Nerd Font folder icon (customize as needed)
           folder_open = "",    -- Nerd Font folder-open icon
+        },
+        view_mode = "list",    -- "list" or "tree"
+        file_filter = {
+          ignore = {},  -- Glob patterns to hide (e.g., {"*.lock", "dist/*"})
         },
       },
 

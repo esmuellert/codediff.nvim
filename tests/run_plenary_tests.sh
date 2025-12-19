@@ -33,6 +33,7 @@ SPEC_FILES=(
   "tests/autoscroll_spec.lua"
   "tests/explorer_spec.lua"
   "tests/explorer_staging_spec.lua"
+  "tests/explorer_file_filter_spec.lua"
   "tests/render/semantic_tokens_spec.lua"
   "tests/render/core_spec.lua"
   "tests/render/lifecycle_spec.lua"

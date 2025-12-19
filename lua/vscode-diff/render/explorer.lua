@@ -5,6 +5,7 @@ local Tree = require("nui.tree")
 local NuiLine = require("nui.line")
 local Split = require("nui.split")
 local config = require("vscode-diff.config")
+local filter = require("vscode-diff.render.explorer.filter")
 
 -- Merge artifact patterns (created by git mergetool)
 local MERGE_ARTIFACT_PATTERNS = {
@@ -69,6 +70,16 @@ local function get_folder_icon(is_open)
   else
     return icons.folder_closed or defaults.folder_closed, "Directory"
   end
+end
+
+-- Filter files based on explorer.file_filter config
+-- Returns files that should be shown (not ignored)
+local function filter_files(files)
+  local explorer_config = config.options.explorer or {}
+  local file_filter = explorer_config.file_filter or {}
+  local ignore_patterns = file_filter.ignore or {}
+
+  return filter.apply(files, ignore_patterns)
 end
 
 -- Create flat file nodes (list mode)
@@ -212,10 +223,10 @@ local function create_tree_data(status_result, git_root, base_revision)
   local explorer_config = config.options.explorer or {}
   local view_mode = explorer_config.view_mode or "list"
 
-  -- Filter merge artifacts from file lists
-  local unstaged = filter_merge_artifacts(status_result.unstaged)
-  local staged = filter_merge_artifacts(status_result.staged)
-  local conflicts = status_result.conflicts and filter_merge_artifacts(status_result.conflicts) or {}
+  -- Filter merge artifacts and apply file filter
+  local unstaged = filter_merge_artifacts(filter_files(status_result.unstaged))
+  local staged = filter_merge_artifacts(filter_files(status_result.staged))
+  local conflicts = status_result.conflicts and filter_merge_artifacts(filter_files(status_result.conflicts)) or {}
 
   local create_nodes = (view_mode == "tree") and create_tree_file_nodes or create_file_nodes
   local unstaged_nodes = create_nodes(unstaged, git_root, "unstaged")
