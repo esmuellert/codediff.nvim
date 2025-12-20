@@ -864,8 +864,10 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         vim.api.nvim_win_set_buf(original_win, original_info.bufnr)
         -- For real files, reload from disk in case it changed
         if not original_is_virtual then
+          -- Use checktime instead of edit! to avoid triggering autocmds
+          -- that can cause treesitter yield errors in scheduled callbacks
           vim.api.nvim_buf_call(original_info.bufnr, function()
-            vim.cmd("silent! edit!")
+            vim.cmd("checktime")
           end)
         end
       else
@@ -912,8 +914,10 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         vim.api.nvim_win_set_buf(modified_win, modified_info.bufnr)
         -- For real files, reload from disk in case it changed
         if not modified_is_virtual then
+          -- Use checktime instead of edit! to avoid triggering autocmds
+          -- that can cause treesitter yield errors in scheduled callbacks
           vim.api.nvim_buf_call(modified_info.bufnr, function()
-            vim.cmd("silent! edit!")
+            vim.cmd("checktime")
           end)
         end
       else
