@@ -209,113 +209,142 @@ end
 
 -- Prepare node for rendering (format display)
 function M.prepare_node(node, max_width, selected_path, selected_group)
-  local data = node.data
   local line = NuiLine()
+  local data = node.data or {}
+  local explorer_config = config.options.explorer or {}
+  local use_indent_markers = explorer_config.indent_markers ~= false  -- default true
 
-  -- Group headers
-  if data and data.type == "group" then
-    local prefix = node:is_expanded() and "▾ " or "▸ "
-    line:append(prefix, "Comment")
-    line:append(data.label, "Title")
-    line:append(string.format(" (%d)", data.count), "Comment")
-    return line
-  end
+  -- Helper to build indent string with markers (for tree mode)
+  local function build_indent_markers(indent_state)
+    if not indent_state or #indent_state == 0 then
+      return ""
+    end
 
-  -- Directory nodes (tree mode only)
-  if data and data.type == "directory" then
-    -- Build indent guides
-    local indent_state = data.indent_state or {}
-    local indent = ""
+    if not use_indent_markers then
+      -- Plain space indentation
+      return string.rep("  ", #indent_state)
+    end
+
+    local indent_parts = {}
+    -- All levels except the last one: show edge or space
     for i = 1, #indent_state - 1 do
       if indent_state[i] then
-        indent = indent .. INDENT_MARKERS.none .. "  "
+        -- Ancestor was last child, show space
+        indent_parts[#indent_parts + 1] = INDENT_MARKERS.none .. " "
       else
-        indent = indent .. INDENT_MARKERS.edge .. "  "
+        -- Ancestor was not last, show edge
+        indent_parts[#indent_parts + 1] = INDENT_MARKERS.edge .. " "
       end
     end
-
-    -- Add branch marker for current level
-    if #indent_state > 0 then
-      if indent_state[#indent_state] then
-        indent = indent .. INDENT_MARKERS.last .. "─"
-      else
-        indent = indent .. INDENT_MARKERS.item .. "─"
-      end
-    end
-
-    line:append(indent, "Comment")
-
-    -- Folder icon
-    local folder_icon, folder_color = M.get_folder_icon(node:is_expanded())
-    line:append(folder_icon .. " ", folder_color)
-
-    -- Directory name
-    line:append(data.name, "Directory")
-    return line
-  end
-
-  -- File nodes
-  if data and data.path then
-    local is_selected = (data.path == selected_path and data.group == selected_group)
-
-    -- Build indent guides (tree mode)
-    if data.indent_state then
-      local indent = ""
-      for i = 1, #data.indent_state - 1 do
-        if data.indent_state[i] then
-          indent = indent .. INDENT_MARKERS.none .. "  "
-        else
-          indent = indent .. INDENT_MARKERS.edge .. "  "
-        end
-      end
-
-      if #data.indent_state > 0 then
-        if data.indent_state[#data.indent_state] then
-          indent = indent .. INDENT_MARKERS.last .. "─"
-        else
-          indent = indent .. INDENT_MARKERS.item .. "─"
-        end
-      end
-      line:append(indent, "Comment")
-    end
-
-    -- Status symbol
-    line:append(" " .. data.status_symbol .. " ", is_selected and "Visual" or data.status_color)
-
-    -- File icon
-    if data.icon and data.icon ~= "" then
-      line:append(data.icon .. " ", is_selected and "Visual" or data.icon_color or "Normal")
-    end
-
-    -- File name (or relative path for list mode)
-    local display_text
-    if data.indent_state then
-      -- Tree mode: show just filename
-      display_text = node.text
+    -- Last level: show item or last marker
+    if indent_state[#indent_state] then
+      indent_parts[#indent_parts + 1] = INDENT_MARKERS.last .. " "
     else
-      -- List mode: show full relative path
-      display_text = data.path
+      indent_parts[#indent_parts + 1] = INDENT_MARKERS.item .. " "
     end
-
-    -- Handle renamed files (show old -> new)
-    if data.old_path then
-      display_text = data.old_path .. " → " .. display_text
-    end
-
-    -- Truncate if needed (prevent line wrapping)
-    local current_len = line:width()
-    local remaining = max_width - current_len - 2  -- -2 for safety margin
-    if #display_text > remaining and remaining > 10 then
-      display_text = display_text:sub(1, remaining - 3) .. "..."
-    end
-
-    line:append(display_text, is_selected and "Visual" or "Normal")
-
-    return line
+    return table.concat(indent_parts)
   end
 
-  -- Fallback
-  line:append(node.text or "", "Normal")
+  if data.type == "group" then
+    -- Group header
+    line:append(" ", "Directory")
+    line:append(node.text, "Directory")
+  elseif data.type == "directory" then
+    -- Directory node (tree view mode) - with indent markers
+    local indent = build_indent_markers(data.indent_state)
+    local folder_icon, folder_color = M.get_folder_icon(node:is_expanded())
+    if #indent > 0 then
+      line:append(indent, use_indent_markers and "NeoTreeIndentMarker" or "Normal")
+    end
+    line:append(folder_icon .. " ", folder_color or "Directory")
+    line:append(data.name, "Directory")
+  else
+    -- Match both path AND group to handle files in both staged and unstaged
+    local is_selected = data.path and data.path == selected_path and data.group == selected_group
+    local function get_hl(default)
+      return is_selected and "CodeDiffExplorerSelected" or (default or "Normal")
+    end
+
+    -- Check if we're in tree mode (directory is already shown in hierarchy)
+    local view_mode = explorer_config.view_mode or "list"
+
+    -- File entry - VSCode style: filename (bold) + directory (dimmed) + status (right-aligned)
+    local indent
+    if view_mode == "tree" and data.indent_state then
+      indent = build_indent_markers(data.indent_state)
+      if #indent > 0 then
+        line:append(indent, use_indent_markers and "NeoTreeIndentMarker" or get_hl("Normal"))
+      end
+    else
+      indent = string.rep("  ", node:get_depth() - 1)
+      line:append(indent, get_hl("Normal"))
+    end
+
+    local icon_part = ""
+    if data.icon then
+      icon_part = data.icon .. " "
+      line:append(icon_part, get_hl(data.icon_color))
+    end
+
+    -- Status symbol at the end (e.g., "M", "D", "??")
+    local status_symbol = data.status_symbol or ""
+
+    -- Split path into filename and directory
+    local full_path = data.path or node.text
+    local filename = full_path:match("([^/]+)$") or full_path
+    -- In tree mode, don't show directory (it's in the hierarchy)
+    local directory = (view_mode == "tree") and "" or full_path:sub(1, -(#filename + 1))
+
+    -- Calculate how much width we've used and reserve for status
+    local used_width = vim.fn.strdisplaywidth(indent) + vim.fn.strdisplaywidth(icon_part)
+    local status_reserve = vim.fn.strdisplaywidth(status_symbol) + 2  -- 2 spaces padding before status
+    local available_for_content = max_width - used_width - status_reserve
+
+    -- Show: filename + full directory path, truncate directory from left if needed
+    local filename_len = vim.fn.strdisplaywidth(filename)
+    local directory_len = vim.fn.strdisplaywidth(directory)
+    local space_len = (directory_len > 0) and 1 or 0
+
+    if filename_len + space_len + directory_len > available_for_content then
+      -- Truncate directory from the right (keep the start)
+      local available_for_dir = available_for_content - filename_len - space_len
+      if available_for_dir > 3 then
+        local ellipsis = "..."
+        local chars_to_keep = available_for_dir - vim.fn.strdisplaywidth(ellipsis)
+
+        -- Truncate directory by display width, not byte index
+        local byte_pos = 0
+        local accumulated_width = 0
+        for char in vim.gsplit(directory, "") do
+          local char_width = vim.fn.strdisplaywidth(char)
+          if accumulated_width + char_width > chars_to_keep then break end
+          accumulated_width = accumulated_width + char_width
+          byte_pos = byte_pos + #char
+        end
+        directory = directory:sub(1, byte_pos) .. ellipsis
+      else
+        -- Not enough space for directory, just show filename
+        directory = ""
+        space_len = 0
+      end
+    end
+
+    -- Append filename (normal weight) and directory (dimmed)
+    line:append(filename, get_hl("Normal"))
+    if #directory > 0 then
+      line:append(" ", get_hl("Normal"))
+      line:append(directory, get_hl("ExplorerDirectorySmall"))
+    end
+
+    -- Add padding to push status symbol to the right edge
+    local content_len = vim.fn.strdisplaywidth(filename) + space_len + vim.fn.strdisplaywidth(directory)
+    local padding_needed = available_for_content - content_len + 2
+    if padding_needed > 0 then
+      line:append(string.rep(" ", padding_needed), get_hl("Normal"))
+    end
+    line:append(status_symbol, get_hl(data.status_color))
+  end
+
   return line
 end
 
