@@ -2,7 +2,7 @@
 local M = {}
 
 -- Subcommands available for :CodeDiff
-M.SUBCOMMANDS = { "merge", "file", "install" }
+M.SUBCOMMANDS = { "merge", "file", "dir", "install" }
 
 local git = require('codediff.core.git')
 local lifecycle = require("codediff.ui.lifecycle")
@@ -104,6 +104,46 @@ local function handle_file_diff(file_a, file_b)
     modified_revision = nil,
   }
   view.create(session_config, filetype)
+end
+
+local function handle_dir_diff(dir1, dir2)
+  local dir_mod = require("codediff.core.dir")
+
+  if vim.fn.isdirectory(dir1) == 0 then
+    vim.notify("Not a directory: " .. dir1, vim.log.levels.ERROR)
+    return
+  end
+  if vim.fn.isdirectory(dir2) == 0 then
+    vim.notify("Not a directory: " .. dir2, vim.log.levels.ERROR)
+    return
+  end
+
+  local diff = dir_mod.diff_directories(dir1, dir2)
+  local status_result = diff.status_result
+
+  if #status_result.unstaged == 0 and #status_result.staged == 0 then
+    vim.notify("No differences between directories", vim.log.levels.INFO)
+    return
+  end
+
+  local view = require('codediff.ui.view')
+
+  ---@type SessionConfig
+  local session_config = {
+    mode = "explorer",
+    git_root = diff.root1,  -- In dir mode, left directory root (used for path display)
+    original_path = "",
+    modified_path = "",
+    original_revision = nil,
+    modified_revision = nil,
+    explorer_data = {
+      status_result = status_result,
+      dir1 = diff.root1,
+      dir2 = diff.root2,
+    },
+  }
+
+  view.create(session_config, "")
 end
 
 local function handle_explorer(revision, revision2)
@@ -294,6 +334,14 @@ function M.vscode_diff(opts)
     return
   end
 
+  -- Auto-detect two directory arguments: :CodeDiff dir1 dir2
+  if #args == 2
+     and vim.fn.isdirectory(args[1]) == 1
+     and vim.fn.isdirectory(args[2]) == 1 then
+    handle_dir_diff(args[1], args[2])
+    return
+  end
+
   local subcommand = args[1]
 
   if subcommand == "merge" then
@@ -323,6 +371,13 @@ function M.vscode_diff(opts)
     else
       vim.notify("Usage: :CodeDiff file <revision> [revision2] OR :CodeDiff file <file_a> <file_b>", vim.log.levels.ERROR)
     end
+  elseif subcommand == "dir" then
+    -- :CodeDiff dir dir1 dir2
+    if #args ~= 3 then
+      vim.notify("Usage: :CodeDiff dir <dir1> <dir2>", vim.log.levels.ERROR)
+      return
+    end
+    handle_dir_diff(args[2], args[3])
   elseif subcommand == "install" or subcommand == "install!" then
     -- :CodeDiff install or :CodeDiff install!
     -- Handle both :CodeDiff! install and :CodeDiff install!

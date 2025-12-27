@@ -15,7 +15,10 @@ M._set_tree_module = function(t) tree_module = t end
 M._set_refresh_module = function(r) refresh_module = r end
 M._set_actions_module = function(a) actions_module = a end
 
-function M.create(status_result, git_root, tabpage, width, base_revision, target_revision)
+function M.create(status_result, git_root, tabpage, width, base_revision, target_revision, opts)
+  opts = opts or {}
+  local explorer_mode = opts.mode or "git"
+
   -- Get explorer position and size from config
   local explorer_config = config.options.explorer or {}
   local position = explorer_config.position or "left"
@@ -60,7 +63,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   local selected_group = nil
 
   -- Create tree with buffer number
-  local tree_data = tree_module.create_tree_data(status_result, git_root, base_revision)
+  local tree_data = tree_module.create_tree_data(status_result, git_root, base_revision, explorer_mode)
   local tree = Tree({
     bufnr = split.bufnr,
     nodes = tree_data,
@@ -122,7 +125,10 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     tree = tree,
     bufnr = split.bufnr,
     winid = split.winid,
+    mode = explorer_mode,
     git_root = git_root,
+    dir1 = opts.dir1,
+    dir2 = opts.dir2,
     base_revision = base_revision,
     target_revision = target_revision,
     status_result = status_result, -- Store initial status result
@@ -140,8 +146,35 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     
     local file_path = file_data.path
     local old_path = file_data.old_path  -- For renames: path in original revision
-    local abs_path = git_root .. "/" .. file_path
     local group = file_data.group or "unstaged"
+
+    -- Dir mode: Compare files from dir1 vs dir2 (no git)
+    if explorer_mode == "dir" then
+      local original_path = explorer.dir1 .. "/" .. file_path
+      local modified_path = explorer.dir2 .. "/" .. file_path
+
+      -- Check if already displaying same file
+      local session = lifecycle.get_session(tabpage)
+      if session and session.original_path == original_path and session.modified_path == modified_path then
+        return
+      end
+
+      vim.schedule(function()
+        ---@type SessionConfig
+        local session_config = {
+          mode = "explorer",
+          git_root = nil,
+          original_path = original_path,
+          modified_path = modified_path,
+          original_revision = nil,
+          modified_revision = nil,
+        }
+        view.update(tabpage, session_config, true)
+      end)
+      return
+    end
+
+    local abs_path = git_root .. "/" .. file_path
 
     -- Check if this exact diff is already being displayed
     -- Same file can have different diffs (staged vs HEAD, working vs staged)

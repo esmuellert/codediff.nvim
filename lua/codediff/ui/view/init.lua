@@ -326,7 +326,17 @@ function M.create(session_config, filetype, on_ready)
     local explorer = require('codediff.ui.explorer')
     local status_result = session_config.explorer_data.status_result
 
-    local explorer_obj = explorer.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision)
+    -- Build explorer options for dir mode (detected by presence of dir1/dir2)
+    local explorer_opts = nil
+    if session_config.explorer_data.dir1 and session_config.explorer_data.dir2 then
+      explorer_opts = {
+        mode = "dir",
+        dir1 = session_config.explorer_data.dir1,
+        dir2 = session_config.explorer_data.dir2,
+      }
+    end
+
+    local explorer_obj = explorer.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)
 
     -- Store explorer reference in lifecycle
     lifecycle.set_explorer(tabpage, explorer_obj)
