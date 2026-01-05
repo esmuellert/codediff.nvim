@@ -45,7 +45,7 @@ local function resolve_color(value, default_fallback)
       return { bg = r * 65536 + g * 256 + b }
     else
       -- Assume it's a highlight group name
-      local hl = vim.api.nvim_get_hl(0, { name = value })
+      local hl = vim.api.nvim_get_hl(0, { name = value, link = false })
       return { bg = hl.bg or default_fallback }
     end
   elseif type(value) == "number" then
