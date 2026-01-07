@@ -277,24 +277,24 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           local orig_win, mod_win = lifecycle.get_windows(tabpage)
           local highlights = require('codediff.ui.highlights')
 
-          -- Clear highlights from both windows first
-          local orig_buf = orig_win and vim.api.nvim_win_is_valid(orig_win) and vim.api.nvim_win_get_buf(orig_win)
-          local mod_buf = mod_win and vim.api.nvim_win_is_valid(mod_win) and vim.api.nvim_win_get_buf(mod_win)
-
-          if orig_buf and vim.api.nvim_buf_is_valid(orig_buf) then
-            vim.api.nvim_buf_clear_namespace(orig_buf, highlights.ns_highlight, 0, -1)
-            vim.api.nvim_buf_clear_namespace(orig_buf, highlights.ns_filler, 0, -1)
+          -- Clear highlights from current session buffers
+          local old_orig_buf, old_mod_buf = lifecycle.get_buffers(tabpage)
+          if old_orig_buf and vim.api.nvim_buf_is_valid(old_orig_buf) then
+            vim.api.nvim_buf_clear_namespace(old_orig_buf, highlights.ns_highlight, 0, -1)
+            vim.api.nvim_buf_clear_namespace(old_orig_buf, highlights.ns_filler, 0, -1)
           end
-          if mod_buf and vim.api.nvim_buf_is_valid(mod_buf) then
-            vim.api.nvim_buf_clear_namespace(mod_buf, highlights.ns_highlight, 0, -1)
-            vim.api.nvim_buf_clear_namespace(mod_buf, highlights.ns_filler, 0, -1)
+          if old_mod_buf and vim.api.nvim_buf_is_valid(old_mod_buf) then
+            vim.api.nvim_buf_clear_namespace(old_mod_buf, highlights.ns_highlight, 0, -1)
+            vim.api.nvim_buf_clear_namespace(old_mod_buf, highlights.ns_filler, 0, -1)
           end
 
-          -- Create empty scratch buffer for original window and hide it
+          -- Create empty scratch buffer for original window
+          local empty_buf = vim.api.nvim_create_buf(false, true)
+          vim.bo[empty_buf].modifiable = false
+          vim.bo[empty_buf].buftype = 'nofile'
+
+          -- Set up the hidden left pane
           if orig_win and vim.api.nvim_win_is_valid(orig_win) then
-            local empty_buf = vim.api.nvim_create_buf(false, true)
-            vim.bo[empty_buf].modifiable = false
-            vim.bo[empty_buf].buftype = 'nofile'
             vim.api.nvim_win_set_buf(orig_win, empty_buf)
 
             -- Shrink window to minimum width (effectively hidden)
@@ -323,10 +323,19 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
             })
           end
 
-          -- Open the untracked file in the modified window
+          -- Load the untracked file into modified window (reuse buffer pattern)
           if mod_win and vim.api.nvim_win_is_valid(mod_win) then
+            -- Use bufadd/bufload instead of :edit to reuse existing buffer if available
+            local file_bufnr = vim.fn.bufadd(abs_path)
+            vim.fn.bufload(file_bufnr)
+            vim.api.nvim_win_set_buf(mod_win, file_bufnr)
             vim.api.nvim_set_current_win(mod_win)
-            vim.cmd('edit ' .. vim.fn.fnameescape(abs_path))
+
+            -- Update session state to keep it consistent
+            lifecycle.update_buffers(tabpage, empty_buf, file_bufnr)
+            lifecycle.update_paths(tabpage, "", abs_path)
+            lifecycle.update_revisions(tabpage, nil, nil)
+            lifecycle.update_diff_result(tabpage, {})  -- Empty diff for untracked
           end
         end
       end)
