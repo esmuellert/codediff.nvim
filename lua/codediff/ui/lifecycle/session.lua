@@ -178,4 +178,30 @@ function M.create_session(
   })
 end
 
+--- Update window references (for single-pane mode when hiding original window)
+--- @param tabpage number
+--- @param original_win number|nil New original window ID (or nil to mark as hidden)
+--- @param modified_win number|nil New modified window ID (optional)
+function M.update_windows(tabpage, original_win, modified_win)
+  local sess = active_diffs[tabpage]
+  if not sess then return false end
+
+  if original_win ~= nil then
+    sess.original_win = original_win
+  end
+  if modified_win ~= nil then
+    sess.modified_win = modified_win
+  end
+  return true
+end
+
+--- Check if session is in single-pane mode (original window hidden/closed)
+--- @param tabpage number
+--- @return boolean
+function M.is_single_pane_mode(tabpage)
+  local sess = active_diffs[tabpage]
+  if not sess then return false end
+  return sess.original_win == nil or not vim.api.nvim_win_is_valid(sess.original_win)
+end
+
 return M

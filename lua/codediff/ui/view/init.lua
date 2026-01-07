@@ -482,6 +482,18 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   local old_original_buf, old_modified_buf = lifecycle.get_buffers(tabpage)
   local original_win, modified_win = lifecycle.get_windows(tabpage)
 
+  -- Handle single-pane mode recovery (coming from untracked file view)
+  local was_single_pane = lifecycle.is_single_pane_mode(tabpage)
+  if was_single_pane and modified_win and vim.api.nvim_win_is_valid(modified_win) then
+    -- Recreate the original window by splitting from the modified window
+    vim.api.nvim_set_current_win(modified_win)
+    vim.cmd('leftabove vsplit')
+    original_win = vim.api.nvim_get_current_win()
+    -- Update session with new window reference
+    lifecycle.update_windows(tabpage, original_win, nil)
+    vim.cmd('wincmd =')
+  end
+
   if not old_original_buf or not old_modified_buf or not original_win or not modified_win then
     vim.notify("Invalid diff session state", vim.log.levels.ERROR)
     return false
