@@ -185,41 +185,72 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
 
     local abs_path = git_root .. "/" .. file_path
 
-    -- Handle untracked files: show in single pane without diff
+    -- Dir mode: Compare files from dir1 vs dir2 (no git)
+    if is_dir_mode then
+      local original_path = explorer.dir1 .. "/" .. file_path
+      local modified_path = explorer.dir2 .. "/" .. file_path
+
+      -- Check if already displaying same file
+      local session = lifecycle.get_session(tabpage)
+      if session and session.original_path == original_path and session.modified_path == modified_path then
+        return
+      end
+
+      vim.schedule(function()
+        ---@type SessionConfig
+        local session_config = {
+          mode = "explorer",
+          git_root = nil,
+          original_path = original_path,
+          modified_path = modified_path,
+          original_revision = nil,
+          modified_revision = nil,
+        }
+        view.update(tabpage, session_config, true)
+      end)
+      return
+    end
+
+    local abs_path = git_root .. "/" .. file_path
+
+    -- Handle untracked files: show file without diff (empty left pane)
     if file_data.status == "??" then
       vim.schedule(function()
         local sess = lifecycle.get_session(tabpage)
         if sess then
           local orig_win, mod_win = lifecycle.get_windows(tabpage)
+          local highlights = require('codediff.ui.highlights')
 
-          -- Open the file in the modified window
-          if mod_win and vim.api.nvim_win_is_valid(mod_win) then
-            vim.api.nvim_set_current_win(mod_win)
-            vim.cmd('edit ' .. vim.fn.fnameescape(abs_path))
+          -- Clear highlights from both windows first
+          local orig_buf = orig_win and vim.api.nvim_win_is_valid(orig_win) and vim.api.nvim_win_get_buf(orig_win)
+          local mod_buf = mod_win and vim.api.nvim_win_is_valid(mod_win) and vim.api.nvim_win_get_buf(mod_win)
 
-            -- Clear any diff highlights from the buffer
-            local mod_buf = vim.api.nvim_win_get_buf(mod_win)
-            local highlights = require('codediff.ui.highlights')
+          if orig_buf and vim.api.nvim_buf_is_valid(orig_buf) then
+            vim.api.nvim_buf_clear_namespace(orig_buf, highlights.ns_highlight, 0, -1)
+            vim.api.nvim_buf_clear_namespace(orig_buf, highlights.ns_filler, 0, -1)
+          end
+          if mod_buf and vim.api.nvim_buf_is_valid(mod_buf) then
             vim.api.nvim_buf_clear_namespace(mod_buf, highlights.ns_highlight, 0, -1)
             vim.api.nvim_buf_clear_namespace(mod_buf, highlights.ns_filler, 0, -1)
           end
 
-          -- Close the original window completely
+          -- Create empty scratch buffer for original window (no file to compare against)
           if orig_win and vim.api.nvim_win_is_valid(orig_win) then
-            vim.api.nvim_win_close(orig_win, true)
-            -- Mark session as single-pane mode by setting original_win to nil
-            lifecycle.update_windows(tabpage, -1, nil)  -- Use -1 as sentinel for "closed"
+            local empty_buf = vim.api.nvim_create_buf(false, true)
+            vim.api.nvim_buf_set_lines(empty_buf, 0, -1, false, {"", "  (New untracked file - nothing to compare)", ""})
+            vim.bo[empty_buf].modifiable = false
+            vim.bo[empty_buf].buftype = 'nofile'
+            vim.api.nvim_win_set_buf(orig_win, empty_buf)
           end
 
-          vim.cmd('wincmd =')
+          -- Open the untracked file in the modified window
+          if mod_win and vim.api.nvim_win_is_valid(mod_win) then
+            vim.api.nvim_set_current_win(mod_win)
+            vim.cmd('edit ' .. vim.fn.fnameescape(abs_path))
+          end
         end
       end)
       return
-    end
-
-    -- For tracked files, check if we need to restore two-pane mode
-    if lifecycle.is_single_pane_mode(tabpage) then
-      -- Will be handled by view.update which will recreate the layout
     end
 
     -- Check if this exact diff is already being displayed
