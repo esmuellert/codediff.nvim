@@ -528,13 +528,6 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     lifecycle.set_result(tabpage, nil, nil)
   end
 
-  -- Detect placeholder mode BEFORE loading buffers (so we can capture the scratch buffer)
-  local restoring_from_placeholder = vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder
-  local scratch_buf_to_delete = nil
-  if restoring_from_placeholder then
-    scratch_buf_to_delete = vim.api.nvim_win_get_buf(original_win)
-  end
-
   -- Determine if new buffers are virtual
   local original_is_virtual = is_virtual_revision(session_config.original_revision)
   local modified_is_virtual = is_virtual_revision(session_config.modified_revision)
@@ -798,42 +791,29 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   -- Update lifecycle session metadata
   lifecycle.update_paths(tabpage, session_config.original_path, session_config.modified_path)
 
-  -- Delete old buffers if they were virtual OR scratch buffers (not reused in new windows)
-  local function should_delete_old_buffer(bufnr, is_virtual)
-    if not vim.api.nvim_buf_is_valid(bufnr) then return false end
-    if bufnr == original_info.bufnr or bufnr == modified_info.bufnr then return false end
-    -- Delete if virtual OR scratch buffer (buftype='nofile')
-    return is_virtual or vim.bo[bufnr].buftype == 'nofile'
-  end
-
-  if should_delete_old_buffer(old_original_buf, lifecycle.is_original_virtual(tabpage)) then
+  -- Delete old virtual buffers if they were virtual AND are not reused in either new window
+  if lifecycle.is_original_virtual(tabpage) and
+     old_original_buf ~= original_info.bufnr and
+     old_original_buf ~= modified_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_original_buf, { force = true })
   end
 
-  if old_modified_buf ~= old_original_buf and should_delete_old_buffer(old_modified_buf, lifecycle.is_modified_virtual(tabpage)) then
+  if lifecycle.is_modified_virtual(tabpage) and
+     old_modified_buf ~= modified_info.bufnr and
+     old_modified_buf ~= original_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_modified_buf, { force = true })
   end
 
   -- Restore window widths if coming from untracked file view (placeholder mode)
-  if restoring_from_placeholder then
+  if vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder then
     vim.w[original_win].codediff_placeholder = nil
     -- Clear the skip autocmd group
     pcall(vim.api.nvim_del_augroup_by_name, 'codediff_skip_placeholder_' .. tabpage)
-
     -- Equalize diff window widths
     local total_width = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
     local half_width = math.floor(total_width / 2)
     vim.api.nvim_win_set_width(original_win, half_width)
     vim.api.nvim_win_set_width(modified_win, half_width)
-
-    -- Schedule cleanup of the scratch buffer (captured earlier before buffer loading)
-    if scratch_buf_to_delete and vim.api.nvim_buf_is_valid(scratch_buf_to_delete) and vim.bo[scratch_buf_to_delete].buftype == 'nofile' then
-      vim.schedule(function()
-        if vim.api.nvim_buf_is_valid(scratch_buf_to_delete) then
-          pcall(vim.api.nvim_buf_delete, scratch_buf_to_delete, { force = true })
-        end
-      end)
-    end
   end
 
   -- Update session with new buffer/window IDs
