@@ -213,7 +213,63 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
 
     local abs_path = git_root .. "/" .. file_path
 
-    -- Handle untracked files: show file without diff (empty left pane)
+    -- Dir mode: Compare files from dir1 vs dir2 (no git)
+    if is_dir_mode then
+      local original_path = explorer.dir1 .. "/" .. file_path
+      local modified_path = explorer.dir2 .. "/" .. file_path
+
+      -- Check if already displaying same file
+      local session = lifecycle.get_session(tabpage)
+      if session and session.original_path == original_path and session.modified_path == modified_path then
+        return
+      end
+
+      vim.schedule(function()
+        ---@type SessionConfig
+        local session_config = {
+          mode = "explorer",
+          git_root = nil,
+          original_path = original_path,
+          modified_path = modified_path,
+          original_revision = nil,
+          modified_revision = nil,
+        }
+        view.update(tabpage, session_config, true)
+      end)
+      return
+    end
+
+    local abs_path = git_root .. "/" .. file_path
+
+    -- Dir mode: Compare files from dir1 vs dir2 (no git)
+    if is_dir_mode then
+      local original_path = explorer.dir1 .. "/" .. file_path
+      local modified_path = explorer.dir2 .. "/" .. file_path
+
+      -- Check if already displaying same file
+      local session = lifecycle.get_session(tabpage)
+      if session and session.original_path == original_path and session.modified_path == modified_path then
+        return
+      end
+
+      vim.schedule(function()
+        ---@type SessionConfig
+        local session_config = {
+          mode = "explorer",
+          git_root = nil,
+          original_path = original_path,
+          modified_path = modified_path,
+          original_revision = nil,
+          modified_revision = nil,
+        }
+        view.update(tabpage, session_config, true)
+      end)
+      return
+    end
+
+    local abs_path = git_root .. "/" .. file_path
+
+    -- Handle untracked files: show file without diff (hide left pane)
     if file_data.status == "??" then
       vim.schedule(function()
         local sess = lifecycle.get_session(tabpage)
@@ -234,13 +290,37 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
             vim.api.nvim_buf_clear_namespace(mod_buf, highlights.ns_filler, 0, -1)
           end
 
-          -- Create empty scratch buffer for original window (no file to compare against)
+          -- Create empty scratch buffer for original window and hide it
           if orig_win and vim.api.nvim_win_is_valid(orig_win) then
             local empty_buf = vim.api.nvim_create_buf(false, true)
-            vim.api.nvim_buf_set_lines(empty_buf, 0, -1, false, {"", "  (New untracked file - nothing to compare)", ""})
             vim.bo[empty_buf].modifiable = false
             vim.bo[empty_buf].buftype = 'nofile'
             vim.api.nvim_win_set_buf(orig_win, empty_buf)
+
+            -- Shrink window to minimum width (effectively hidden)
+            vim.api.nvim_win_set_width(orig_win, 1)
+
+            -- Mark this window as a placeholder for later restoration
+            vim.w[orig_win].codediff_placeholder = true
+
+            -- Set up auto-skip: when entering this window, redirect based on where we came from
+            local skip_group = vim.api.nvim_create_augroup('codediff_skip_placeholder_' .. tabpage, { clear = true })
+            vim.api.nvim_create_autocmd('WinEnter', {
+              group = skip_group,
+              buffer = empty_buf,
+              callback = function()
+                -- Get previous window
+                local prev_win = vim.fn.win_getid(vim.fn.winnr('#'))
+
+                -- If came from file window (right), go left to explorer
+                -- If came from explorer (left), go right to file
+                if prev_win == mod_win then
+                  vim.cmd('wincmd h')
+                else
+                  vim.cmd('wincmd l')
+                end
+              end,
+            })
           end
 
           -- Open the untracked file in the modified window
