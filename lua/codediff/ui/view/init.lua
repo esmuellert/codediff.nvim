@@ -528,6 +528,19 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     lifecycle.set_result(tabpage, nil, nil)
   end
 
+  -- IMPORTANT: Restore window widths BEFORE loading buffers
+  -- Loading virtual files with :edit! in a 1-column window can fail
+  if vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder then
+    vim.w[original_win].codediff_placeholder = nil
+    -- Clear the skip autocmd group
+    pcall(vim.api.nvim_del_augroup_by_name, 'codediff_skip_placeholder_' .. tabpage)
+    -- Equalize diff window widths BEFORE loading buffers
+    local total_width = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
+    local half_width = math.floor(total_width / 2)
+    vim.api.nvim_win_set_width(original_win, half_width)
+    vim.api.nvim_win_set_width(modified_win, half_width)
+  end
+
   -- Determine if new buffers are virtual
   local original_is_virtual = is_virtual_revision(session_config.original_revision)
   local modified_is_virtual = is_virtual_revision(session_config.modified_revision)
@@ -802,18 +815,6 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
      old_modified_buf ~= modified_info.bufnr and
      old_modified_buf ~= original_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_modified_buf, { force = true })
-  end
-
-  -- Restore window widths if coming from untracked file view (placeholder mode)
-  if vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder then
-    vim.w[original_win].codediff_placeholder = nil
-    -- Clear the skip autocmd group
-    pcall(vim.api.nvim_del_augroup_by_name, 'codediff_skip_placeholder_' .. tabpage)
-    -- Equalize diff window widths
-    local total_width = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
-    local half_width = math.floor(total_width / 2)
-    vim.api.nvim_win_set_width(original_win, half_width)
-    vim.api.nvim_win_set_width(modified_win, half_width)
   end
 
   -- Update session with new buffer/window IDs
