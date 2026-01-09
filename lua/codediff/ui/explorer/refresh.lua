@@ -28,19 +28,7 @@ function M.setup_auto_refresh(explorer, tabpage)
     end)
   end
   
-  -- Auto-refresh on BufWritePost (file save)
   local group = vim.api.nvim_create_augroup('CodeDiffExplorerRefresh_' .. tabpage, { clear = true })
-  
-  vim.api.nvim_create_autocmd('BufWritePost', {
-    group = group,
-    callback = function(args)
-      -- Only refresh if file is in the same git repo
-      local buf_path = vim.api.nvim_buf_get_name(args.buf)
-      if buf_path:find(explorer.git_root, 1, true) == 1 then
-        debounced_refresh()
-      end
-    end,
-  })
   
   -- Auto-refresh when explorer buffer is entered (user focuses explorer window)
   vim.api.nvim_create_autocmd('BufEnter', {
