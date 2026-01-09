@@ -13,6 +13,14 @@ local MERGE_ARTIFACT_PATTERNS = {
   "%.BASE%.",          -- file.BASE.xxxxx
   "%.LOCAL%.",         -- file.LOCAL.xxxxx
   "%.REMOTE%.",        -- file.REMOTE.xxxxx
+  "_BACKUP_%d+%.",     -- file_BACKUP_xxxxx.ext
+  "_BASE_%d+%.",       -- file_BASE_xxxxx.ext
+  "_LOCAL_%d+%.",      -- file_LOCAL_xxxxx.ext
+  "_REMOTE_%d+%.",     -- file_REMOTE_xxxxx.ext
+  "_BACKUP_%d+$",      -- file_BACKUP_xxxxx
+  "_BASE_%d+$",        -- file_BASE_xxxxx
+  "_LOCAL_%d+$",       -- file_LOCAL_xxxxx
+  "_REMOTE_%d+$",      -- file_REMOTE_xxxxx
 }
 
 -- Status symbols and colors
