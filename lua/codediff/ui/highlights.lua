@@ -67,10 +67,12 @@ function M.setup()
 
   vim.api.nvim_set_hl(0, "CodeDiffLineInsert", {
     bg = line_insert_color.bg,
+    default = true,
   })
 
   vim.api.nvim_set_hl(0, "CodeDiffLineDelete", {
     bg = line_delete_color.bg,
+    default = true,
   })
 
   -- Character-level highlights: use explicit values if provided, otherwise derive from line highlights
@@ -98,10 +100,12 @@ function M.setup()
 
   vim.api.nvim_set_hl(0, "CodeDiffCharInsert", {
     bg = char_insert_bg,
+    default = true,
   })
 
   vim.api.nvim_set_hl(0, "CodeDiffCharDelete", {
     bg = char_delete_bg,
+    default = true,
   })
 
   -- Filler lines (no highlight, inherits editor default background)
