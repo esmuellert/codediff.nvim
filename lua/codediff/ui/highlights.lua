@@ -24,9 +24,9 @@ end
 
 -- Resolve color from config value (supports highlight group name or direct color)
 -- Returns a table suitable for nvim_set_hl (e.g., { bg = 0x2ea043 })
-local function resolve_color(value, default_fallback)
+local function resolve_color(value, fallback_gui, fallback_cterm)
   if not value then
-    return { bg = default_fallback }
+    return { bg = fallback_gui, ctermbg = fallback_cterm }
   end
 
   -- If it's a string, check if it's a hex color or highlight group name
@@ -37,24 +37,37 @@ local function resolve_color(value, default_fallback)
       local r = tonumber(value:sub(2, 3), 16)
       local g = tonumber(value:sub(4, 5), 16)
       local b = tonumber(value:sub(6, 7), 16)
-      return { bg = r * 65536 + g * 256 + b }
+      return { bg = r * 65536 + g * 256 + b, ctermbg = fallback_cterm }
     elseif value:match("^#%x%x%x$") then
       -- #RGB format - expand to #RRGGBB
       local r = tonumber(value:sub(2, 2), 16) * 17
       local g = tonumber(value:sub(3, 3), 16) * 17
       local b = tonumber(value:sub(4, 4), 16) * 17
-      return { bg = r * 65536 + g * 256 + b }
+      return { bg = r * 65536 + g * 256 + b, ctermbg = fallback_cterm }
     else
       -- Assume it's a highlight group name
       local hl = vim.api.nvim_get_hl(0, { name = value, link = false })
-      return { bg = hl.bg or default_fallback }
+      return {
+        bg = hl.bg or fallback_gui,
+        ctermbg = hl.ctermbg or fallback_cterm,
+      }
     end
   elseif type(value) == "number" then
-    -- Direct color number (e.g., 0x2ea043)
-    return { bg = value }
+    -- Direct color number (e.g., 0x2ea043 or a base256 index)
+    return { bg = value, ctermbg = value }
   end
 
-  return { bg = default_fallback }
+  return { bg = fallback_gui, ctermbg = fallback_cterm }
+end
+
+-- Returns the base 256 color palette index of rgb color cube where r, g, b are 0-5 inclusive.
+local function base256_color(r, g, b)
+  return 16 + r * 36 + g * 6 + b
+end
+
+-- Returns the base 256 color palette index of greyscale shade where the shade is 0-23 inclusive.
+local function base256_greyscale(shade)
+  return 232 + shade
 end
 
 -- Setup VSCode-style highlight groups
@@ -62,54 +75,51 @@ function M.setup()
   local opts = config.options.highlights
 
   -- Line-level highlights
-  local line_insert_color = resolve_color(opts.line_insert, 0x1d3042)
-  local line_delete_color = resolve_color(opts.line_delete, 0x351d2b)
+  local line_insert_color = resolve_color(opts.line_insert, 0x1d3042, base256_color(0, 1, 0))
+  local line_delete_color = resolve_color(opts.line_delete, 0x351d2b, base256_color(1, 0, 0))
 
-  vim.api.nvim_set_hl(0, "CodeDiffLineInsert", {
-    bg = line_insert_color.bg,
-  })
-
-  vim.api.nvim_set_hl(0, "CodeDiffLineDelete", {
-    bg = line_delete_color.bg,
-  })
+  vim.api.nvim_set_hl(0, "CodeDiffLineInsert", line_insert_color)
+  vim.api.nvim_set_hl(0, "CodeDiffLineDelete", line_delete_color)
 
   -- Character-level highlights: use explicit values if provided, otherwise derive from line highlights
-  local char_insert_bg
-  local char_delete_bg
-  
+  local char_insert_color
+  local char_delete_color
+
   -- Auto-detect brightness based on background if not explicitly set
   local brightness = opts.char_brightness or (vim.o.background == "light" and 0.92 or 1.4)
 
   if opts.char_insert then
     -- Explicit char_insert provided - use it directly
-    char_insert_bg = resolve_color(opts.char_insert, 0x2a4556).bg
+    char_insert_color = resolve_color(opts.char_insert, 0x2a4556, base256_color(0, 2, 0))
   else
     -- Derive from line_insert with brightness adjustment
-    char_insert_bg = adjust_brightness(line_insert_color.bg, brightness) or 0x2a4556
+    char_insert_color = {
+      bg = adjust_brightness(line_insert_color.bg, brightness) or 0x2a4556,
+      ctermbg = base256_color(0, 2, 0)
+    }
   end
 
   if opts.char_delete then
     -- Explicit char_delete provided - use it directly
-    char_delete_bg = resolve_color(opts.char_delete, 0x4b2a3d).bg
+    char_delete_color = resolve_color(opts.char_delete, 0x4b2a3d, base256_color(2, 0, 0))
   else
     -- Derive from line_delete with brightness adjustment
-    char_delete_bg = adjust_brightness(line_delete_color.bg, brightness) or 0x4b2a3d
+    char_delete_color = {
+      bg = adjust_brightness(line_delete_color.bg, brightness) or 0x4b2a3d,
+      ctermbg = base256_color(2, 0, 0)
+    }
   end
 
-  vim.api.nvim_set_hl(0, "CodeDiffCharInsert", {
-    bg = char_insert_bg,
-  })
-
-  vim.api.nvim_set_hl(0, "CodeDiffCharDelete", {
-    bg = char_delete_bg,
-  })
+  vim.api.nvim_set_hl(0, "CodeDiffCharInsert", char_insert_color)
+  vim.api.nvim_set_hl(0, "CodeDiffCharDelete", char_delete_color)
 
   -- Filler lines (no highlight, inherits editor default background)
   vim.api.nvim_set_hl(0, "CodeDiffFiller", {
     fg = "#444444",  -- Subtle gray for the slash character
+    ctermfg = base256_greyscale(8),
     default = true,
   })
-  
+
   -- Explorer directory text (smaller and dimmed)
   vim.api.nvim_set_hl(0, "ExplorerDirectorySmall", {
     link = "Comment",
