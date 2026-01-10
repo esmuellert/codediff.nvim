@@ -90,6 +90,7 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
         disable_inlay_hints = true,         -- Disable inlay hints in diff windows for cleaner view
         max_computation_time_ms = 5000,     -- Maximum time for diff computation (VSCode default)
         hide_merge_artifacts = false,       -- Hide merge tool temp files (*.orig, *.BACKUP.*, *.BASE.*, *.LOCAL.*, *.REMOTE.*)
+        original_position = "left",         -- Position of original (old) content: "left" or "right"
       },
 
       -- Explorer panel configuration

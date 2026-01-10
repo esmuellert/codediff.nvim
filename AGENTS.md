@@ -24,7 +24,7 @@
 
 4. **Trailing Spaces**: NEVER add trailing spaces to any line in any file. Always ensure lines end cleanly without whitespace.
 
-5. **Pull Requests**: When asked to create a PR, push the branch, create PR with comprehensive description (summary, changes, benefits, testing), and enable auto-merge.
+5. **Pull Requests**: When asked to create a PR, push the branch as is (do not create a new branch), create PR with comprehensive description (summary, changes, benefits, testing), and enable auto-merge.
 
 6. **Commits**: NEVER commit code unless explicitly requested by the user. Each request authorizes only a single commit operation. Use proper conventional commit messages.
 

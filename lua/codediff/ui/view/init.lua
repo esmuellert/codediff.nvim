@@ -48,12 +48,15 @@ function M.create(session_config, filetype, on_ready)
 
   local original_win, modified_win, original_info, modified_info, initial_buf
 
+  -- Split command: "vsplit" puts new window right, "leftabove vsplit" puts it left
+  local split_cmd = config.options.diff.original_position == "right" and "leftabove vsplit" or "vsplit"
+
   if is_explorer_placeholder then
     -- Explorer mode: Create empty split panes, skip buffer loading
     -- Explorer will populate via first file selection
     initial_buf = vim.api.nvim_get_current_buf()
     original_win = vim.api.nvim_get_current_win()
-    vim.cmd("vsplit")
+    vim.cmd(split_cmd)
     modified_win = vim.api.nvim_get_current_win()
 
     -- Create placeholder buffer info (will be updated by explorer)
@@ -79,7 +82,7 @@ function M.create(session_config, filetype, on_ready)
       vim.api.nvim_win_set_buf(original_win, original_info.bufnr)
     end
 
-    vim.cmd("vsplit")
+    vim.cmd(split_cmd)
     modified_win = vim.api.nvim_get_current_win()
 
     -- Load modified buffer
