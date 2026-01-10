@@ -6,6 +6,7 @@ M.SUBCOMMANDS = { "merge", "file", "dir", "install" }
 
 local git = require("codediff.core.git")
 local lifecycle = require("codediff.ui.lifecycle")
+local view = require("codediff.ui.view")
 
 --- Handles diffing the current buffer against a given git revision.
 -- @param revision string: The git revision (e.g., "HEAD", commit hash, branch name) to compare the current file against.
@@ -55,7 +56,6 @@ local function handle_git_diff(revision, revision2)
           end
 
           vim.schedule(function()
-            local view = require("codediff.ui.view")
             ---@type SessionConfig
             local session_config = {
               mode = "standalone",
@@ -71,7 +71,6 @@ local function handle_git_diff(revision, revision2)
       else
         -- Compare revision vs working tree
         vim.schedule(function()
-          local view = require("codediff.ui.view")
           ---@type SessionConfig
           local session_config = {
             mode = "standalone",
@@ -93,7 +92,6 @@ local function handle_file_diff(file_a, file_b)
   local filetype = vim.filetype.match({ filename = file_a }) or ""
 
   -- Create diff view (no pre-reading needed, :edit will load content)
-  local view = require("codediff.ui.view")
   ---@type SessionConfig
   local session_config = {
     mode = "standalone",
@@ -130,7 +128,6 @@ local function handle_dir_diff(dir1, dir2)
     return
   end
 
-  local view = require("codediff.ui.view")
 
   ---@type SessionConfig
   local session_config = {
@@ -149,10 +146,10 @@ local function handle_dir_diff(dir1, dir2)
 end
 
 local function handle_explorer(revision, revision2)
-  -- Use current buffer's directory if available, otherwise use cwd
-  local current_buf = vim.api.nvim_get_current_buf()
-  local current_file = vim.api.nvim_buf_get_name(current_buf)
-  local check_path = current_file ~= "" and current_file or vim.fn.getcwd()
+  -- Use current working directory for explorer mode
+  -- (user expects to see status of the repo they're working in, not the buffer's repo)
+  -- Allow override via environment variable for testing
+  local check_path = vim.env.CODEDIFF_TEST_CWD or vim.fn.getcwd()
 
   -- Check if in git repository
   git.get_git_root(check_path, function(err_root, git_root)
@@ -178,7 +175,6 @@ local function handle_explorer(revision, revision2)
         end
 
         -- Create explorer view with empty diff panes initially
-        local view = require("codediff.ui.view")
 
         ---@type SessionConfig
         local session_config = {
@@ -268,7 +264,6 @@ function M.vscode_merge(opts)
 
   -- Ensure all required modules are loaded before we start vim.wait
   -- This prevents issues with lazy-loading during the wait loop
-  local view = require("codediff.ui.view")
 
   -- For synchronous execution (required by git mergetool), we need to block
   -- until the view is ready. Use vim.wait which processes the event loop.
