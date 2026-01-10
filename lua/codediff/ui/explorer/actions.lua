@@ -2,6 +2,7 @@
 local M = {}
 
 local config = require("codediff.config")
+local git = require("codediff.core.git")
 
 -- Will be injected by init.lua
 local refresh_module = nil
@@ -162,6 +163,142 @@ function M.toggle_view_mode(explorer)
   refresh_module.refresh(explorer)
 
   vim.notify("Explorer view: " .. new_mode, vim.log.levels.INFO)
+end
+
+-- Stage/unstage toggle for the selected file
+function M.toggle_stage_entry(explorer, tree)
+  if not explorer or not explorer.git_root then
+    vim.notify("Stage/unstage only available in git mode", vim.log.levels.WARN)
+    return
+  end
+
+  local node = tree:get_node()
+  if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then
+    return
+  end
+
+  local file_path = node.data.path
+  local group = node.data.group
+
+  if group == "staged" then
+    -- Unstage file
+    git.unstage_file(explorer.git_root, file_path, function(err)
+      if err then
+        vim.schedule(function()
+          vim.notify(err, vim.log.levels.ERROR)
+        end)
+      end
+    end)
+  elseif group == "unstaged" then
+    -- Stage file
+    git.stage_file(explorer.git_root, file_path, function(err)
+      if err then
+        vim.schedule(function()
+          vim.notify(err, vim.log.levels.ERROR)
+        end)
+      end
+    end)
+  elseif group == "conflicts" then
+    -- Stage conflict file (marks as resolved)
+    git.stage_file(explorer.git_root, file_path, function(err)
+      if err then
+        vim.schedule(function()
+          vim.notify(err, vim.log.levels.ERROR)
+        end)
+      end
+    end)
+  end
+end
+
+-- Stage all files
+function M.stage_all(explorer)
+  if not explorer or not explorer.git_root then
+    vim.notify("Stage all only available in git mode", vim.log.levels.WARN)
+    return
+  end
+
+  git.stage_all(explorer.git_root, function(err)
+    if err then
+      vim.schedule(function()
+        vim.notify(err, vim.log.levels.ERROR)
+      end)
+    end
+  end)
+end
+
+-- Unstage all files
+function M.unstage_all(explorer)
+  if not explorer or not explorer.git_root then
+    vim.notify("Unstage all only available in git mode", vim.log.levels.WARN)
+    return
+  end
+
+  git.unstage_all(explorer.git_root, function(err)
+    if err then
+      vim.schedule(function()
+        vim.notify(err, vim.log.levels.ERROR)
+      end)
+    end
+  end)
+end
+
+-- Restore/discard changes to the selected file
+function M.restore_entry(explorer, tree)
+  if not explorer or not explorer.git_root then
+    vim.notify("Restore only available in git mode", vim.log.levels.WARN)
+    return
+  end
+
+  local node = tree:get_node()
+  if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then
+    return
+  end
+
+  local file_path = node.data.path
+  local group = node.data.group
+  local status = node.data.status
+
+  -- Only restore unstaged changes (working tree changes)
+  if group ~= "unstaged" then
+    vim.notify("Can only restore unstaged changes", vim.log.levels.WARN)
+    return
+  end
+
+  local is_untracked = status == "??"
+
+  -- Two-line confirmation prompt
+  vim.api.nvim_echo({
+    { is_untracked and "Delete " or "Discard changes to ", "WarningMsg" },
+    { file_path, "WarningMsg" },
+    { "?\n", "WarningMsg" },
+    { "(D)", "WarningMsg" },
+    { is_untracked and "elete, " or "iscard, ", "WarningMsg" },
+    { "[C]", "WarningMsg" },
+    { "ancel: ", "WarningMsg" },
+  }, false, {})
+
+  local char = vim.fn.getcharstr():lower()
+
+  if char == "d" then
+    if is_untracked then
+      git.delete_untracked(explorer.git_root, file_path, function(err)
+        if err then
+          vim.schedule(function()
+            vim.notify(err, vim.log.levels.ERROR)
+          end)
+        end
+      end)
+    else
+      git.restore_file(explorer.git_root, file_path, function(err)
+        if err then
+          vim.schedule(function()
+            vim.notify(err, vim.log.levels.ERROR)
+          end)
+        end
+      end)
+    end
+  end
+  vim.cmd("echo ''") -- Clear prompt
 end
 
 return M

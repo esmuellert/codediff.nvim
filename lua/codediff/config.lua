@@ -67,6 +67,10 @@ M.defaults = {
       hover = "K",
       refresh = "R",
       toggle_view_mode = "i", -- Toggle between 'list' and 'tree' views
+      toggle_stage = "-", -- Stage/unstage selected file (like diffview)
+      stage_all = "S", -- Stage all files
+      unstage_all = "U", -- Unstage all files
+      restore = "X", -- Discard changes to file (restore to index/HEAD)
     },
     -- Conflict mode keymaps (only active in merge conflict views)
     conflict = {

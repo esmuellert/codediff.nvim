@@ -125,6 +125,10 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
           hover = "K",        -- Show file diff preview
           refresh = "R",      -- Refresh git status
           toggle_view_mode = "i",  -- Toggle between 'list' and 'tree' views
+          toggle_stage = "-", -- Stage/unstage selected file
+          stage_all = "S",    -- Stage all files
+          unstage_all = "U",  -- Unstage all files
+          restore = "X",      -- Discard changes (restore file)
         },
         conflict = {
           accept_incoming = "<leader>ct",  -- Accept incoming (theirs/left) change

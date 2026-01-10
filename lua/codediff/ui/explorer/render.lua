@@ -436,6 +436,34 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
   end
 
+  -- Toggle stage/unstage (- key, like diffview)
+  if config.options.keymaps.explorer.toggle_stage then
+    vim.keymap.set("n", config.options.keymaps.explorer.toggle_stage, function()
+      actions_module.toggle_stage_entry(explorer, tree)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Stage all files (S key)
+  if config.options.keymaps.explorer.stage_all then
+    vim.keymap.set("n", config.options.keymaps.explorer.stage_all, function()
+      actions_module.stage_all(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Unstage all files (U key)
+  if config.options.keymaps.explorer.unstage_all then
+    vim.keymap.set("n", config.options.keymaps.explorer.unstage_all, function()
+      actions_module.unstage_all(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Restore/discard changes (X key)
+  if config.options.keymaps.explorer.restore then
+    vim.keymap.set("n", config.options.keymaps.explorer.restore, function()
+      actions_module.restore_entry(explorer, tree)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
   -- Navigate to next file
   if config.options.keymaps.view.next_file then
     vim.keymap.set("n", config.options.keymaps.view.next_file, function()

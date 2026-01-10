@@ -508,6 +508,96 @@ function M.get_git_root_sync(file_path)
   return git_root
 end
 
+-- Stage a file (git add)
+-- git_root: absolute path to git repository root
+-- rel_path: relative path from git root
+-- callback: function(err)
+function M.stage_file(git_root, rel_path, callback)
+  run_git_async({ "add", "--", rel_path }, { cwd = git_root }, function(err, _)
+    if err then
+      callback("Failed to stage file: " .. err)
+    else
+      callback(nil)
+    end
+  end)
+end
+
+-- Unstage a file (git reset HEAD)
+-- git_root: absolute path to git repository root
+-- rel_path: relative path from git root
+-- callback: function(err)
+function M.unstage_file(git_root, rel_path, callback)
+  run_git_async({ "reset", "HEAD", "--", rel_path }, { cwd = git_root }, function(err, _)
+    if err then
+      callback("Failed to unstage file: " .. err)
+    else
+      callback(nil)
+    end
+  end)
+end
+
+-- Stage all files (git add -A)
+-- git_root: absolute path to git repository root
+-- callback: function(err)
+function M.stage_all(git_root, callback)
+  run_git_async({ "add", "-A" }, { cwd = git_root }, function(err, _)
+    if err then
+      callback("Failed to stage all files: " .. err)
+    else
+      callback(nil)
+    end
+  end)
+end
+
+-- Unstage all files (git reset HEAD)
+-- git_root: absolute path to git repository root
+-- callback: function(err)
+function M.unstage_all(git_root, callback)
+  run_git_async({ "reset", "HEAD" }, { cwd = git_root }, function(err, _)
+    if err then
+      callback("Failed to unstage all files: " .. err)
+    else
+      callback(nil)
+    end
+  end)
+end
+
+-- Restore/discard changes to a file (git checkout -- or git restore)
+-- git_root: absolute path to git repository root
+-- rel_path: relative path from git root
+-- callback: function(err)
+function M.restore_file(git_root, rel_path, callback)
+  -- git restore is preferred (Git 2.23+), fallback to checkout
+  run_git_async({ "restore", "--", rel_path }, { cwd = git_root }, function(err, _)
+    if err then
+      -- Fallback to git checkout for older git versions
+      run_git_async({ "checkout", "--", rel_path }, { cwd = git_root }, function(err2, _)
+        if err2 then
+          callback("Failed to restore file: " .. err2)
+        else
+          callback(nil)
+        end
+      end)
+    else
+      callback(nil)
+    end
+  end)
+end
+
+-- Delete untracked file (git clean -f)
+-- git_root: absolute path to git repository root
+-- rel_path: relative path from git root
+-- callback: function(err)
+function M.delete_untracked(git_root, rel_path, callback)
+  run_git_async({ "clean", "-f", "--", rel_path }, { cwd = git_root }, function(err, _)
+    if err then
+      callback("Failed to delete untracked file: " .. err)
+    else
+      callback(nil)
+    end
+  end)
+end
+
 -- Get revision candidates for command completion (sync)
 -- Returns list of branches, tags, remotes, and special refs
 function M.get_rev_candidates(git_root)
