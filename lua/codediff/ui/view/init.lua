@@ -41,9 +41,11 @@ function M.create(session_config, filetype, on_ready)
 
   local tabpage = vim.api.nvim_get_current_tabpage()
 
-  -- For explorer mode with empty paths, create empty panes and skip buffer setup
+  -- For explorer mode with empty paths OR dir mode (git_root == nil with explorer_data),
+  -- create empty panes and skip buffer setup
   local is_explorer_placeholder = session_config.mode == "explorer" and
-                                   (session_config.original_path == "" or session_config.original_path == nil)
+                                   ((session_config.original_path == "" or session_config.original_path == nil) or
+                                    (not session_config.git_root and session_config.explorer_data))
 
   local original_win, modified_win, original_info, modified_info, initial_buf
 
@@ -326,13 +328,12 @@ function M.create(session_config, filetype, on_ready)
     local explorer = require('codediff.ui.explorer')
     local status_result = session_config.explorer_data.status_result
 
-    -- Build explorer options for dir mode (detected by presence of dir1/dir2)
+    -- For dir mode (git_root == nil), pass original_path and modified_path as dir roots
     local explorer_opts = nil
-    if session_config.explorer_data.dir1 and session_config.explorer_data.dir2 then
+    if not session_config.git_root then
       explorer_opts = {
-        mode = "dir",
-        dir1 = session_config.explorer_data.dir1,
-        dir2 = session_config.explorer_data.dir2,
+        dir1 = session_config.original_path,
+        dir2 = session_config.modified_path,
       }
     end
 

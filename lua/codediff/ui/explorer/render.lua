@@ -17,7 +17,7 @@ M._set_actions_module = function(a) actions_module = a end
 
 function M.create(status_result, git_root, tabpage, width, base_revision, target_revision, opts)
   opts = opts or {}
-  local explorer_mode = opts.mode or "git"
+  local is_dir_mode = not git_root  -- nil git_root signals directory comparison mode
 
   -- Get explorer position and size from config
   local explorer_config = config.options.explorer or {}
@@ -63,7 +63,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   local selected_group = nil
 
   -- Create tree with buffer number
-  local tree_data = tree_module.create_tree_data(status_result, git_root, base_revision, explorer_mode)
+  local tree_data = tree_module.create_tree_data(status_result, git_root, base_revision, is_dir_mode)
   local tree = Tree({
     bufnr = split.bufnr,
     nodes = tree_data,
@@ -125,7 +125,6 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     tree = tree,
     bufnr = split.bufnr,
     winid = split.winid,
-    mode = explorer_mode,
     git_root = git_root,
     dir1 = opts.dir1,
     dir2 = opts.dir2,
@@ -149,7 +148,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     local group = file_data.group or "unstaged"
 
     -- Dir mode: Compare files from dir1 vs dir2 (no git)
-    if explorer_mode == "dir" then
+    if is_dir_mode then
       local original_path = explorer.dir1 .. "/" .. file_path
       local modified_path = explorer.dir2 .. "/" .. file_path
 

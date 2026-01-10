@@ -109,6 +109,10 @@ end
 local function handle_dir_diff(dir1, dir2)
   local dir_mod = require("codediff.core.dir")
 
+  -- Expand ~ and environment variables in paths
+  dir1 = vim.fn.expand(dir1)
+  dir2 = vim.fn.expand(dir2)
+
   if vim.fn.isdirectory(dir1) == 0 then
     vim.notify("Not a directory: " .. dir1, vim.log.levels.ERROR)
     return
@@ -131,15 +135,13 @@ local function handle_dir_diff(dir1, dir2)
   ---@type SessionConfig
   local session_config = {
     mode = "explorer",
-    git_root = diff.root1,  -- In dir mode, left directory root (used for path display)
-    original_path = "",
-    modified_path = "",
+    git_root = nil,  -- nil signals non-git (directory) mode
+    original_path = diff.root1,
+    modified_path = diff.root2,
     original_revision = nil,
     modified_revision = nil,
     explorer_data = {
       status_result = status_result,
-      dir1 = diff.root1,
-      dir2 = diff.root2,
     },
   }
 
@@ -335,11 +337,13 @@ function M.vscode_diff(opts)
   end
 
   -- Auto-detect two directory arguments: :CodeDiff dir1 dir2
-  if #args == 2
-     and vim.fn.isdirectory(args[1]) == 1
-     and vim.fn.isdirectory(args[2]) == 1 then
-    handle_dir_diff(args[1], args[2])
-    return
+  if #args == 2 then
+    local expanded1 = vim.fn.expand(args[1])
+    local expanded2 = vim.fn.expand(args[2])
+    if vim.fn.isdirectory(expanded1) == 1 and vim.fn.isdirectory(expanded2) == 1 then
+      handle_dir_diff(expanded1, expanded2)
+      return
+    end
   end
 
   local subcommand = args[1]

@@ -146,17 +146,17 @@ end
 -- Toggle view mode between 'list' and 'tree'
 function M.toggle_view_mode(explorer)
   if not explorer then return end
-  
+
   local explorer_config = config.options.explorer or {}
   local current_mode = explorer_config.view_mode or "list"
   local new_mode = (current_mode == "list") and "tree" or "list"
-  
+
   -- Update config
   config.options.explorer.view_mode = new_mode
-  
+
   -- Refresh to rebuild tree with new mode
   refresh_module.refresh(explorer)
-  
+
   vim.notify("Explorer view: " .. new_mode, vim.log.levels.INFO)
 end
 

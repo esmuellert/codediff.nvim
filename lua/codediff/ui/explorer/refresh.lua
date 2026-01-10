@@ -10,16 +10,11 @@ M._set_tree_module = function(t) tree_module = t end
 -- Setup auto-refresh triggers for explorer
 -- Returns a cleanup function that should be called when the explorer is destroyed
 function M.setup_auto_refresh(explorer, tabpage)
-  -- Dir mode: no auto-refresh (static snapshot)
-  if explorer.mode == "dir" then
-    return
-  end
-
   local refresh_timer = nil
   local debounce_ms = 500  -- Wait 500ms after last event
   local git_watcher = nil
   local group = vim.api.nvim_create_augroup('CodeDiffExplorerRefresh_' .. tabpage, { clear = true })
-  
+
   local function cleanup()
     if refresh_timer then
       vim.fn.timer_stop(refresh_timer)
@@ -33,16 +28,16 @@ function M.setup_auto_refresh(explorer, tabpage)
     end
     pcall(vim.api.nvim_del_augroup_by_id, group)
   end
-  
+
   -- Store cleanup function on explorer so it can be called from lifecycle cleanup
   explorer._cleanup_auto_refresh = cleanup
-  
+
   local function debounced_refresh()
     -- Cancel pending refresh
     if refresh_timer then
       vim.fn.timer_stop(refresh_timer)
     end
-    
+
     -- Schedule new refresh
     refresh_timer = vim.fn.timer_start(debounce_ms, function()
       -- Only refresh if tabpage still exists and explorer is visible
@@ -52,7 +47,7 @@ function M.setup_auto_refresh(explorer, tabpage)
       refresh_timer = nil
     end)
   end
-  
+
   -- Auto-refresh when explorer buffer is entered (user focuses explorer window)
   vim.api.nvim_create_autocmd('BufEnter', {
     group = group,
@@ -63,103 +58,100 @@ function M.setup_auto_refresh(explorer, tabpage)
       end
     end,
   })
-  
-  -- Watch .git directory for changes (catches git add, commit, reset, etc.)
-  -- Use git rev-parse to get correct git dir (handles worktrees)
-  local git = require('codediff.core.git')
-  git.get_git_dir(explorer.git_root, function(err, git_dir)
-    if err or not git_dir then
-      return
-    end
-    
-    -- Schedule to main thread to safely call Neovim APIs
-    vim.schedule(function()
-      -- Check if directory still exists (may be deleted in tests)
-      if vim.fn.isdirectory(git_dir) ~= 1 then
+
+  -- Watch .git directory for changes (git mode only)
+  -- Dir mode skips this - relies on BufEnter refresh only
+  if explorer.git_root then
+    local git = require('codediff.core.git')
+    git.get_git_dir(explorer.git_root, function(err, git_dir)
+      if err or not git_dir then
         return
       end
-      
-      -- Check if tabpage is still valid (may be closed before async callback)
-      if not vim.api.nvim_tabpage_is_valid(tabpage) then
-        return
-      end
-      
-      local uv = vim.uv or vim.loop
-      git_watcher = uv.new_fs_event()
-      if git_watcher then
-        local ok = pcall(function()
-          git_watcher:start(git_dir, {}, vim.schedule_wrap(function(watch_err, filename, events)
-            if watch_err then
-              return
-            end
-            -- Only refresh if this tabpage is current
-            if vim.api.nvim_get_current_tabpage() == tabpage and
-               vim.api.nvim_tabpage_is_valid(tabpage) and
-               not explorer.is_hidden then
-              debounced_refresh()
-            end
-          end))
-        end)
-        if not ok then
-          -- Failed to start watcher, clean it up
-          pcall(function() git_watcher:close() end)
-          git_watcher = nil
+
+      -- Schedule to main thread to safely call Neovim APIs
+      vim.schedule(function()
+        -- Check if directory still exists (may be deleted in tests)
+        if vim.fn.isdirectory(git_dir) ~= 1 then
+          return
         end
-      end
+
+        -- Check if tabpage is still valid (may be closed before async callback)
+        if not vim.api.nvim_tabpage_is_valid(tabpage) then
+          return
+        end
+
+        local uv = vim.uv or vim.loop
+        git_watcher = uv.new_fs_event()
+        if git_watcher then
+          local ok = pcall(function()
+            git_watcher:start(git_dir, {}, vim.schedule_wrap(function(watch_err, filename, events)
+              if watch_err then
+                return
+              end
+              -- Only refresh if this tabpage is current
+              if vim.api.nvim_get_current_tabpage() == tabpage and
+                 vim.api.nvim_tabpage_is_valid(tabpage) and
+                 not explorer.is_hidden then
+                debounced_refresh()
+              end
+            end))
+          end)
+          if not ok then
+            -- Failed to start watcher, clean it up
+            pcall(function() git_watcher:close() end)
+            git_watcher = nil
+          end
+        end
+      end)
     end)
-  end)
-  
+  end
+
   -- Clean up on tab close
   vim.api.nvim_create_autocmd('TabClosed', {
     group = group,
     pattern = tostring(tabpage),
     callback = cleanup,
   })
-  
+
   return cleanup
 end
 
 -- Refresh explorer with updated git status
 function M.refresh(explorer)
-  -- Dir mode: no refresh (static snapshot)
-  if explorer.mode == "dir" then
-    return
-  end
-
   local git = require('codediff.core.git')
-  
+
   -- Skip refresh if explorer is hidden
   if explorer.is_hidden then
     return
   end
-  
+
   -- Verify window is still valid before accessing
   if not vim.api.nvim_win_is_valid(explorer.winid) then
     return
   end
-  
+
   -- Get current selection to restore it after refresh
   local current_node = explorer.tree:get_node()
   local current_path = current_node and current_node.data and current_node.data.path
-  
+
   local function process_result(err, status_result)
     vim.schedule(function()
       if err then
         vim.notify("Failed to refresh: " .. err, vim.log.levels.ERROR)
         return
       end
-      
+
       -- Rebuild tree nodes using same structure as create_tree_data
-      local root_nodes = tree_module.create_tree_data(status_result, explorer.git_root, explorer.base_revision, explorer.mode)
-      
+      local root_nodes = tree_module.create_tree_data(status_result, explorer.git_root, explorer.base_revision, not explorer.git_root)
+
       -- Expand all groups
       for _, node in ipairs(root_nodes) do
         node:expand()
       end
-      
+
       -- Update tree
       explorer.tree:set_nodes(root_nodes)
-      
+
       -- For tree mode, expand directories after setting nodes
       local explorer_config = config.options.explorer or {}
       if explorer_config.view_mode == "tree" then
@@ -177,12 +169,12 @@ function M.refresh(explorer)
           expand_all_dirs(node)
         end
       end
-      
+
       explorer.tree:render()
-      
+
       -- Update status result for file selection logic
       explorer.status_result = status_result
-      
+
       -- Try to restore selection
       if current_path then
         local nodes = explorer.tree:get_nodes()
@@ -195,9 +187,14 @@ function M.refresh(explorer)
       end
     end)
   end
-  
-  -- Use appropriate git function based on mode
-  if explorer.base_revision and explorer.target_revision and explorer.target_revision ~= "WORKING" then
+
+  -- Use appropriate function based on mode
+  if not explorer.git_root then
+    -- Dir mode: re-scan directories
+    local dir_mod = require("codediff.core.dir")
+    local diff = dir_mod.diff_directories(explorer.dir1, explorer.dir2)
+    process_result(nil, diff.status_result)
+  elseif explorer.base_revision and explorer.target_revision and explorer.target_revision ~= "WORKING" then
     git.get_diff_revisions(explorer.base_revision, explorer.target_revision, explorer.git_root, process_result)
   elseif explorer.base_revision then
     git.get_diff_revision(explorer.base_revision, explorer.git_root, process_result)

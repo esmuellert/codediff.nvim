@@ -21,7 +21,7 @@ local function filter_files(files)
 end
 
 -- Create tree data structure from git status result
-function M.create_tree_data(status_result, git_root, base_revision, explorer_mode)
+function M.create_tree_data(status_result, git_root, base_revision, is_dir_mode)
   local explorer_config = config.options.explorer or {}
   local view_mode = explorer_config.view_mode or "list"
 
@@ -35,7 +35,7 @@ function M.create_tree_data(status_result, git_root, base_revision, explorer_mod
   local staged_nodes = create_nodes(staged, git_root, "staged")
   local conflict_nodes = create_nodes(conflicts, git_root, "conflicts")
 
-  if explorer_mode == "dir" or base_revision then
+  if is_dir_mode or base_revision then
     -- Dir or revision mode: single group showing all changes
     return {
       Tree.Node({

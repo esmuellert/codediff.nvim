@@ -279,6 +279,20 @@ Compare two arbitrary files side-by-side:
 :CodeDiff file file_a.txt file_b.txt
 ```
 
+### Directory Comparison Mode
+
+Compare two directories without git:
+
+```vim
+" Auto-detect directories
+:CodeDiff ~/project-v1 ~/project-v2
+
+" Explicit dir subcommand
+:CodeDiff dir /path/to/dir1 /path/to/dir2
+```
+
+Shows files as Added (A), Deleted (D), or Modified (M) based on file size and modification time. Select a file to view its diff.
+
 ### Git Merge Tool
 
 Use CodeDiff as your git merge tool for resolving conflicts:
