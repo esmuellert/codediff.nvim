@@ -9,6 +9,9 @@ test_diff_core
 *.exe
 diff
 
+# Bundled runtime dependencies (downloaded by installer)
+libgomp.so.1
+
 # Generated VSCode diff bundle (can be regenerated with ./build-vscode-diff.sh)
 vscode-diff.mjs
 vscode-merge.mjs
