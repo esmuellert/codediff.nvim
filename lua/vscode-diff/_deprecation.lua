@@ -13,11 +13,7 @@ function M.warn(old_module, new_module)
   warned[old_module] = true
 
   vim.schedule(function()
-    vim.notify(
-      string.format("[CodeDiff] '%s' is deprecated. Please use '%s' instead.", old_module, new_module),
-      vim.log.levels.WARN,
-      { title = "CodeDiff" }
-    )
+    vim.notify(string.format("[CodeDiff] '%s' is deprecated. Please use '%s' instead.", old_module, new_module), vim.log.levels.WARN, { title = "CodeDiff" })
   end)
 end
 

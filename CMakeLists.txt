@@ -50,7 +50,7 @@ file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
 # Makefile wrapper for developers (uses CMake underneath)
 # Users: Use build.sh instead (no CMake required)
 
-.PHONY: all build test test-c test-lua clean help bump-patch bump-minor bump-major bump-prerelease
+.PHONY: all build test test-c test-lua lint format clean help bump-patch bump-minor bump-major bump-prerelease
 
 all: build
 
@@ -66,6 +66,13 @@ test-c: build
 
 test-lua:
 \t@./tests/run_plenary_tests.sh
+
+lint:
+\t@stylua --check lua
+
+format:
+\t@stylua lua
+\t@echo \"✓ Formatted lua/\"
 
 clean:
 \t@rm -rf build
@@ -84,7 +91,7 @@ bump-prerelease:
 \t@node scripts/bump_version.mjs prerelease
 
 help:
-\t@echo \"Targets: build, test, test-c, test-lua, clean, help\"
+\t@echo \"Targets: build, test, test-c, test-lua, lint, clean, help\"
 \t@echo \"Version: bump-patch, bump-minor, bump-major, bump-prerelease\"
 ")
 
@@ -114,6 +121,13 @@ test-c: build
 test-lua:
 \tnvim --headless --noplugin -u tests/init.lua -c \"lua require('plenary.test_harness').test_directory('tests', { minimal_init = vim.fn.getcwd() .. '/tests/init.lua' })\"
 
+lint:
+\tstylua --check lua
+
+format:
+\tstylua lua
+\t@echo Formatted lua/
+
 clean:
 \tif exist build rmdir /s /q build
 \tif exist libvscode_diff.dll del /q libvscode_diff.dll
@@ -131,7 +145,7 @@ bump-prerelease:
 \tnode scripts/bump_version.mjs prerelease
 
 help:
-\t@echo Targets: build, test, test-c, test-lua, clean, help
+\t@echo Targets: build, test, test-c, test-lua, lint, clean, help
 \t@echo Version: bump-patch, bump-minor, bump-major, bump-prerelease
 ")
 
@@ -140,4 +154,3 @@ message(STATUS "Generated Makefiles:")
 message(STATUS "  Makefile     - for make (Linux/macOS)")
 message(STATUS "  Makefile.win - for nmake /f Makefile.win (Windows)")
 message(STATUS "")
-

@@ -2,7 +2,7 @@
 -- Watches buffer changes (internal and external) and triggers diff recomputation
 local M = {}
 
-local diff = require('codediff.core.diff')
+local diff = require("codediff.core.diff")
 local core = require("codediff.ui.core")
 
 -- Throttle delay in milliseconds
@@ -27,7 +27,7 @@ end
 -- @param skip_watcher_check boolean: If true, don't require buffer to be in watched_buffers
 local function do_diff_update(bufnr, skip_watcher_check)
   local watcher = watched_buffers[bufnr]
-  
+
   -- Check if buffer is being watched (unless skipped for manual trigger)
   if not skip_watcher_check and not watcher then
     return
@@ -45,9 +45,9 @@ local function do_diff_update(bufnr, skip_watcher_check)
     end
     return
   end
-  
+
   -- Get buffer pair from lifecycle
-  local lifecycle = require('codediff.ui.lifecycle')
+  local lifecycle = require("codediff.ui.lifecycle")
   local tabpage = lifecycle.find_tabpage_by_buffer(bufnr)
   if not tabpage then
     if watcher then
@@ -55,7 +55,7 @@ local function do_diff_update(bufnr, skip_watcher_check)
     end
     return
   end
-  
+
   local original_bufnr, modified_bufnr = lifecycle.get_buffers(tabpage)
   if not original_bufnr or not modified_bufnr then
     if watcher then
@@ -63,7 +63,7 @@ local function do_diff_update(bufnr, skip_watcher_check)
     end
     return
   end
-  
+
   if not vim.api.nvim_buf_is_valid(original_bufnr) or not vim.api.nvim_buf_is_valid(modified_bufnr) then
     if watcher then
       watched_buffers[bufnr] = nil
@@ -100,14 +100,14 @@ local function do_diff_update(bufnr, skip_watcher_check)
 
     -- Update decorations on both buffers
     core.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, lines_diff)
-    
+
     -- Re-sync scrollbind after filler changes
     -- This ensures all windows stay aligned even if fillers were added/removed
     local original_win, modified_win, result_win = nil, nil, nil
-    local lifecycle = require('codediff.ui.lifecycle')
+    local lifecycle = require("codediff.ui.lifecycle")
     local tabpage = vim.api.nvim_get_current_tabpage()
     local _, stored_result_win = lifecycle.get_result(tabpage)
-    
+
     for _, win in ipairs(vim.api.nvim_list_wins()) do
       local buf = vim.api.nvim_win_get_buf(win)
       if buf == original_bufnr then
@@ -116,19 +116,19 @@ local function do_diff_update(bufnr, skip_watcher_check)
         modified_win = win
       end
     end
-    
+
     -- Check if result window is valid
     if stored_result_win and vim.api.nvim_win_is_valid(stored_result_win) then
       result_win = stored_result_win
     end
-    
+
     if original_win and modified_win then
       local current_win = vim.api.nvim_get_current_win()
-      
+
       -- Only resync if user is in one of the diff windows
       if current_win == original_win or current_win == modified_win or current_win == result_win then
         local other_win = current_win == original_win and modified_win or original_win
-        
+
         -- Step 1: Save full view state for all windows to prevent flicker
         local saved_view = vim.fn.winsaveview()
         vim.api.nvim_set_current_win(other_win)
@@ -139,14 +139,14 @@ local function do_diff_update(bufnr, skip_watcher_check)
           result_saved_view = vim.fn.winsaveview()
         end
         vim.api.nvim_set_current_win(current_win)
-        
+
         -- Step 2: Reset all windows to line 1 (baseline for scrollbind)
-        vim.api.nvim_win_set_cursor(original_win, {1, 0})
-        vim.api.nvim_win_set_cursor(modified_win, {1, 0})
+        vim.api.nvim_win_set_cursor(original_win, { 1, 0 })
+        vim.api.nvim_win_set_cursor(modified_win, { 1, 0 })
         if result_win then
-          vim.api.nvim_win_set_cursor(result_win, {1, 0})
+          vim.api.nvim_win_set_cursor(result_win, { 1, 0 })
         end
-        
+
         -- Step 3: Re-establish scrollbind (reset sync state)
         vim.wo[original_win].scrollbind = false
         vim.wo[modified_win].scrollbind = false
@@ -158,7 +158,7 @@ local function do_diff_update(bufnr, skip_watcher_check)
         if result_win then
           vim.wo[result_win].scrollbind = true
         end
-        
+
         -- Step 4: Restore full view state for all windows
         vim.api.nvim_set_current_win(other_win)
         vim.fn.winrestview(other_saved_view)
@@ -199,10 +199,10 @@ function M.enable(bufnr)
   }
 
   -- Setup autocmds for this buffer
-  local buf_augroup = vim.api.nvim_create_augroup('codediff_auto_refresh_' .. bufnr, { clear = true })
+  local buf_augroup = vim.api.nvim_create_augroup("codediff_auto_refresh_" .. bufnr, { clear = true })
 
   -- Internal changes (user editing)
-  vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
     group = buf_augroup,
     buffer = bufnr,
     callback = function()
@@ -211,7 +211,7 @@ function M.enable(bufnr)
   })
 
   -- External changes (file modified on disk)
-  vim.api.nvim_create_autocmd({ 'FileChangedShellPost', 'FocusGained' }, {
+  vim.api.nvim_create_autocmd({ "FileChangedShellPost", "FocusGained" }, {
     group = buf_augroup,
     buffer = bufnr,
     callback = function()
@@ -220,7 +220,7 @@ function M.enable(bufnr)
   })
 
   -- Cleanup on buffer delete/wipe
-  vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
     group = buf_augroup,
     buffer = bufnr,
     callback = function()
@@ -235,7 +235,7 @@ function M.disable(bufnr)
   watched_buffers[bufnr] = nil
 
   -- Clear autocmd group
-  pcall(vim.api.nvim_del_augroup_by_name, 'codediff_auto_refresh_' .. bufnr)
+  pcall(vim.api.nvim_del_augroup_by_name, "codediff_auto_refresh_" .. bufnr)
 end
 
 -- Track result buffer timers only (base_lines stored in lifecycle)
@@ -252,7 +252,7 @@ local function do_result_diff_update(bufnr)
   end
 
   -- Get base_lines from lifecycle
-  local lifecycle = require('codediff.ui.lifecycle')
+  local lifecycle = require("codediff.ui.lifecycle")
   local tabpage = lifecycle.find_tabpage_by_buffer(bufnr)
   if not tabpage then
     return
@@ -305,10 +305,10 @@ function M.enable_for_result(bufnr)
   M.disable_result(bufnr)
 
   -- Setup autocmds for this buffer
-  local buf_augroup = vim.api.nvim_create_augroup('codediff_result_refresh_' .. bufnr, { clear = true })
+  local buf_augroup = vim.api.nvim_create_augroup("codediff_result_refresh_" .. bufnr, { clear = true })
 
   -- Internal changes (user editing)
-  vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
     group = buf_augroup,
     buffer = bufnr,
     callback = function()
@@ -317,7 +317,7 @@ function M.enable_for_result(bufnr)
   })
 
   -- Cleanup on buffer delete/wipe
-  vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
     group = buf_augroup,
     buffer = bufnr,
     callback = function()
@@ -339,7 +339,7 @@ function M.disable_result(bufnr)
   end
 
   -- Clear autocmd group
-  pcall(vim.api.nvim_del_augroup_by_name, 'codediff_result_refresh_' .. bufnr)
+  pcall(vim.api.nvim_del_augroup_by_name, "codediff_result_refresh_" .. bufnr)
 end
 
 -- Immediately refresh result buffer diff (call after programmatic changes)

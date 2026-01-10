@@ -2,16 +2,18 @@
 -- Manages the active_diffs data structure
 local M = {}
 
-local config = require('codediff.config')
-local virtual_file = require('codediff.core.virtual_file')
+local config = require("codediff.config")
+local virtual_file = require("codediff.core.virtual_file")
 
 -- Import from sibling modules (will be set by init.lua)
 local state = nil
-M._set_state_module = function(s) state = s end
+M._set_state_module = function(s)
+  state = s
+end
 
 -- Track active diff sessions
--- Structure: { 
---   tabpage_id = { 
+-- Structure: {
+--   tabpage_id = {
 --     original_bufnr, modified_bufnr, original_win, modified_win,
 --     mode = "standalone" | "explorer",
 --     git_root = string?,
@@ -28,7 +30,7 @@ M._set_state_module = function(s) state = s end
 --     result_bufnr = number?,  -- Real file buffer reset to BASE
 --     result_win = number?,    -- Bottom window for result
 --     conflict_files = table?, -- { [file_path] = true } tracks files opened in conflict mode
---   } 
+--   }
 -- }
 local active_diffs = {}
 
@@ -53,8 +55,20 @@ end
 -- Expose compute_virtual_uri for other modules
 M.compute_virtual_uri = compute_virtual_uri
 
-function M.create_session(tabpage, mode, git_root, original_path, modified_path, original_revision, modified_revision,
-                          original_bufnr, modified_bufnr, original_win, modified_win, lines_diff)
+function M.create_session(
+  tabpage,
+  mode,
+  git_root,
+  original_path,
+  modified_path,
+  original_revision,
+  modified_revision,
+  original_bufnr,
+  modified_bufnr,
+  original_win,
+  modified_win,
+  lines_diff
+)
   -- Save buffer states
   local original_state = state.save_buffer_state(original_bufnr)
   local modified_state = state.save_buffer_state(modified_bufnr)
@@ -95,7 +109,7 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
     -- Conflict mode result buffer (3-way merge)
     result_bufnr = nil,
     result_win = nil,
-    conflict_files = {},  -- Tracks files opened in conflict mode for unsaved warning
+    conflict_files = {}, -- Tracks files opened in conflict mode for unsaved warning
   }
 
   -- Mark windows with restore flag
@@ -109,7 +123,7 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
   end
 
   -- Setup tab autocmds
-  local tab_augroup = vim.api.nvim_create_augroup('codediff_lifecycle_tab_' .. tabpage, { clear = true })
+  local tab_augroup = vim.api.nvim_create_augroup("codediff_lifecycle_tab_" .. tabpage, { clear = true })
 
   -- Force disable winbar to prevent alignment issues
   local function ensure_no_winbar()
@@ -121,7 +135,7 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
     end
   end
 
-  vim.api.nvim_create_autocmd({'BufWinEnter', 'FileType'}, {
+  vim.api.nvim_create_autocmd({ "BufWinEnter", "FileType" }, {
     group = tab_augroup,
     callback = function(args)
       local win = vim.api.nvim_get_current_win()
@@ -133,7 +147,7 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
     end,
   })
 
-  vim.api.nvim_create_autocmd('TabLeave', {
+  vim.api.nvim_create_autocmd("TabLeave", {
     group = tab_augroup,
     callback = function()
       local current_tab = vim.api.nvim_get_current_tabpage()
@@ -143,7 +157,7 @@ function M.create_session(tabpage, mode, git_root, original_path, modified_path,
     end,
   })
 
-  vim.api.nvim_create_autocmd('TabEnter', {
+  vim.api.nvim_create_autocmd("TabEnter", {
     group = tab_augroup,
     callback = function()
       vim.schedule(function()

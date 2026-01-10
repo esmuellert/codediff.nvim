@@ -9,9 +9,9 @@ ContentCache.__index = ContentCache
 
 function ContentCache.new(max_size)
   local self = setmetatable({}, ContentCache)
-  self.max_size = max_size or 50  -- Default: cache 50 files
-  self.cache = {}  -- {key -> lines}
-  self.access_order = {}  -- List of keys in LRU order (most recent last)
+  self.max_size = max_size or 50 -- Default: cache 50 files
+  self.cache = {} -- {key -> lines}
+  self.access_order = {} -- List of keys in LRU order (most recent last)
   return self
 end
 
@@ -33,19 +33,19 @@ end
 function ContentCache:get(revision, git_root, rel_path)
   local key = self:_make_key(revision, git_root, rel_path)
   local entry = self.cache[key]
-  
+
   if entry then
     self:_update_access_order(key)
     -- Return a copy to prevent cache corruption
     return vim.list_extend({}, entry)
   end
-  
+
   return nil
 end
 
 function ContentCache:put(revision, git_root, rel_path, lines)
   local key = self:_make_key(revision, git_root, rel_path)
-  
+
   -- If already exists, update access order
   if self.cache[key] then
     self:_update_access_order(key)
@@ -58,7 +58,7 @@ function ContentCache:put(revision, git_root, rel_path, lines)
     end
     table.insert(self.access_order, key)
   end
-  
+
   -- Store a copy to prevent cache corruption
   self.cache[key] = vim.list_extend({}, lines)
 end
@@ -90,20 +90,16 @@ local function run_git_async(args, opts, callback)
       return
     end
 
-    vim.system(
-      vim.list_extend({ "git" }, args),
-      {
-        cwd = opts.cwd,
-        text = true,
-      },
-      function(result)
-        if result.code == 0 then
-          callback(nil, result.stdout or "")
-        else
-          callback(result.stderr or "Git command failed", nil)
-        end
+    vim.system(vim.list_extend({ "git" }, args), {
+      cwd = opts.cwd,
+      text = true,
+    }, function(result)
+      if result.code == 0 then
+        callback(nil, result.stdout or "")
+      else
+        callback(result.stderr or "Git command failed", nil)
       end
-    )
+    end)
   else
     -- Fallback to vim.loop.spawn for older Neovim versions
     -- Validate the directory exists to provide a better error message
@@ -125,9 +121,15 @@ local function run_git_async(args, opts, callback)
       cwd = opts.cwd,
       stdio = { nil, stdout, stderr },
     }, function(code)
-      if stdout then stdout:close() end
-      if stderr then stderr:close() end
-      if handle then handle:close() end
+      if stdout then
+        stdout:close()
+      end
+      if stderr then
+        stderr:close()
+      end
+      if handle then
+        handle:close()
+      end
 
       vim.schedule(function()
         if code == 0 then
@@ -182,48 +184,40 @@ function M.get_git_root(file_path, callback)
   -- Normalize path separators for consistency
   dir = dir:gsub("\\", "/")
 
-  run_git_async(
-    { "rev-parse", "--show-toplevel" },
-    { cwd = dir },
-    function(err, output)
-      if err then
-        callback("Not in a git repository", nil)
-      else
-        local git_root = vim.trim(output)
-        -- Resolve full path to handle short paths/symlinks and normalize
-        git_root = vim.fn.fnamemodify(git_root, ":p")
-        -- Ensure git_root uses forward slashes for consistency
-        git_root = git_root:gsub("\\", "/")
-        -- Remove trailing slash if present (fnamemodify :p adds it on some systems)
-        if git_root:sub(-1) == "/" then
-          git_root = git_root:sub(1, -2)
-        end
-        callback(nil, git_root)
+  run_git_async({ "rev-parse", "--show-toplevel" }, { cwd = dir }, function(err, output)
+    if err then
+      callback("Not in a git repository", nil)
+    else
+      local git_root = vim.trim(output)
+      -- Resolve full path to handle short paths/symlinks and normalize
+      git_root = vim.fn.fnamemodify(git_root, ":p")
+      -- Ensure git_root uses forward slashes for consistency
+      git_root = git_root:gsub("\\", "/")
+      -- Remove trailing slash if present (fnamemodify :p adds it on some systems)
+      if git_root:sub(-1) == "/" then
+        git_root = git_root:sub(1, -2)
       end
+      callback(nil, git_root)
     end
-  )
+  end)
 end
 
 -- Get git directory path (handles worktrees correctly)
 -- git_root: absolute path to git repository root
 -- callback: function(err, git_dir)
 function M.get_git_dir(git_root, callback)
-  run_git_async(
-    { "rev-parse", "--git-dir" },
-    { cwd = git_root },
-    function(err, output)
-      if err then
-        callback("Failed to get git directory: " .. err, nil)
-      else
-        local git_dir = vim.trim(output)
-        -- Make absolute path if relative
-        if not git_dir:match('^/') and not git_dir:match('^%a:') then
-          git_dir = git_root .. '/' .. git_dir
-        end
-        callback(nil, git_dir)
+  run_git_async({ "rev-parse", "--git-dir" }, { cwd = git_root }, function(err, output)
+    if err then
+      callback("Failed to get git directory: " .. err, nil)
+    else
+      local git_dir = vim.trim(output)
+      -- Make absolute path if relative
+      if not git_dir:match("^/") and not git_dir:match("^%a:") then
+        git_dir = git_root .. "/" .. git_dir
       end
+      callback(nil, git_dir)
     end
-  )
+  end)
 end
 
 -- Get relative path of file within git repository (sync, pure computation)
@@ -240,18 +234,14 @@ end
 -- git_root: absolute path to git repository root
 -- callback: function(err, commit_hash)
 function M.resolve_revision(revision, git_root, callback)
-  run_git_async(
-    { "rev-parse", "--verify", revision },
-    { cwd = git_root },
-    function(err, output)
-      if err then
-        callback(string.format("Invalid revision '%s': %s", revision, err), nil)
-      else
-        local commit_hash = vim.trim(output)
-        callback(nil, commit_hash)
-      end
+  run_git_async({ "rev-parse", "--verify", revision }, { cwd = git_root }, function(err, output)
+    if err then
+      callback(string.format("Invalid revision '%s': %s", revision, err), nil)
+    else
+      local commit_hash = vim.trim(output)
+      callback(nil, commit_hash)
     end
-  )
+  end)
 end
 
 -- Get file content from a specific git revision (async, atomic)
@@ -262,7 +252,7 @@ end
 function M.get_file_content(revision, git_root, rel_path, callback)
   -- Don't cache mutable revisions (staged index can change with git add/reset)
   local is_mutable = revision:match("^:[0-3]$")
-  
+
   -- Check cache first (only for immutable revisions)
   if not is_mutable then
     local cached_lines = file_content_cache:get(revision, git_root, rel_path)
@@ -275,32 +265,28 @@ function M.get_file_content(revision, git_root, rel_path, callback)
   -- Cache miss or mutable revision - fetch from git
   local git_object = revision .. ":" .. rel_path
 
-  run_git_async(
-    { "show", git_object },
-    { cwd = git_root },
-    function(err, output)
-      if err then
-        if err:match("does not exist") or err:match("exists on disk, but not in") then
-          callback(string.format("File '%s' not found in revision '%s'", rel_path, revision), nil)
-        else
-          callback(err, nil)
-        end
-        return
+  run_git_async({ "show", git_object }, { cwd = git_root }, function(err, output)
+    if err then
+      if err:match("does not exist") or err:match("exists on disk, but not in") then
+        callback(string.format("File '%s' not found in revision '%s'", rel_path, revision), nil)
+      else
+        callback(err, nil)
       end
-
-      local lines = vim.split(output, "\n")
-      if lines[#lines] == "" then
-        table.remove(lines, #lines)
-      end
-
-      -- Store in cache (only for immutable revisions)
-      if not is_mutable then
-        file_content_cache:put(revision, git_root, rel_path, lines)
-      end
-
-      callback(nil, lines)
+      return
     end
-  )
+
+    local lines = vim.split(output, "\n")
+    if lines[#lines] == "" then
+      table.remove(lines, #lines)
+    end
+
+    -- Store in cache (only for immutable revisions)
+    if not is_mutable then
+      file_content_cache:put(revision, git_root, rel_path, lines)
+    end
+
+    callback(nil, lines)
+  end)
 end
 
 -- Check if a git status code indicates a merge conflict
@@ -336,7 +322,7 @@ end
 -- }
 function M.get_status(git_root, callback)
   run_git_async(
-    { "status", "--porcelain", "-uall", "-M" },  -- -M to detect renames
+    { "status", "--porcelain", "-uall", "-M" }, -- -M to detect renames
     { cwd = git_root },
     function(err, output)
       if err then
@@ -347,7 +333,7 @@ function M.get_status(git_root, callback)
       local result = {
         unstaged = {},
         staged = {},
-        conflicts = {}
+        conflicts = {},
       }
 
       for line in output:gmatch("[^\r\n]+") do
@@ -358,15 +344,15 @@ function M.get_status(git_root, callback)
 
           -- Handle renames: "old_path -> new_path"
           local old_path, new_path = path_part:match("^(.+) %-> (.+)$")
-          local path = old_path and new_path or path_part  -- Use new_path for display if rename
+          local path = old_path and new_path or path_part -- Use new_path for display if rename
           local is_rename = old_path ~= nil
 
           -- Check for merge conflicts first (takes priority)
           if is_conflict_status(index_status, worktree_status) then
             table.insert(result.conflicts, {
               path = path,
-              status = "!",  -- Use ! symbol for conflicts
-              conflict_type = index_status .. worktree_status,  -- Store original status (e.g., "UU", "AA")
+              status = "!", -- Use ! symbol for conflicts
+              conflict_type = index_status .. worktree_status, -- Store original status (e.g., "UU", "AA")
             })
           else
             -- Staged changes (index has changes)
@@ -374,7 +360,7 @@ function M.get_status(git_root, callback)
               table.insert(result.staged, {
                 path = path,
                 status = index_status,
-                old_path = is_rename and old_path or nil,  -- Store old path if rename
+                old_path = is_rename and old_path or nil, -- Store old path if rename
               })
             end
 
@@ -400,46 +386,42 @@ end
 -- git_root: absolute path to git repository root
 -- callback: function(err, status_result) where status_result has same format as get_status
 function M.get_diff_revision(revision, git_root, callback)
-  run_git_async(
-    { "diff", "--name-status", "-M", revision },
-    { cwd = git_root },
-    function(err, output)
-      if err then
-        callback(err, nil)
-        return
-      end
+  run_git_async({ "diff", "--name-status", "-M", revision }, { cwd = git_root }, function(err, output)
+    if err then
+      callback(err, nil)
+      return
+    end
 
-      local result = {
-        unstaged = {},
-        staged = {}
-      }
+    local result = {
+      unstaged = {},
+      staged = {},
+    }
 
-      for line in output:gmatch("[^\r\n]+") do
-        if #line > 0 then
-          local parts = vim.split(line, "\t")
-          if #parts >= 2 then
-            local status = parts[1]:sub(1, 1)
-            local path = parts[2]
-            local old_path = nil
+    for line in output:gmatch("[^\r\n]+") do
+      if #line > 0 then
+        local parts = vim.split(line, "\t")
+        if #parts >= 2 then
+          local status = parts[1]:sub(1, 1)
+          local path = parts[2]
+          local old_path = nil
 
-            -- Handle renames (R100 or similar)
-            if status == "R" and #parts >= 3 then
-              old_path = parts[2]
-              path = parts[3]
-            end
-
-            table.insert(result.unstaged, {
-              path = path,
-              status = status,
-              old_path = old_path,
-            })
+          -- Handle renames (R100 or similar)
+          if status == "R" and #parts >= 3 then
+            old_path = parts[2]
+            path = parts[3]
           end
+
+          table.insert(result.unstaged, {
+            path = path,
+            status = status,
+            old_path = old_path,
+          })
         end
       end
-
-      callback(nil, result)
     end
-  )
+
+    callback(nil, result)
+  end)
 end
 
 -- Get diff between two revisions (async)
@@ -448,50 +430,46 @@ end
 -- git_root: absolute path to git repository root
 -- callback: function(err, status_result)
 function M.get_diff_revisions(rev1, rev2, git_root, callback)
-  run_git_async(
-    { "diff", "--name-status", "-M", rev1, rev2 },
-    { cwd = git_root },
-    function(err, output)
-      if err then
-        callback(err, nil)
-        return
-      end
+  run_git_async({ "diff", "--name-status", "-M", rev1, rev2 }, { cwd = git_root }, function(err, output)
+    if err then
+      callback(err, nil)
+      return
+    end
 
-      local result = {
-        unstaged = {},
-        staged = {}
-      }
+    local result = {
+      unstaged = {},
+      staged = {},
+    }
 
-      -- For revision comparison, we treat everything as "unstaged" for explorer compatibility
-      -- But to keep explorer compatible, we'll put them in 'staged' as they are committed changes
-      -- relative to each other.
-      
-      for line in output:gmatch("[^\r\n]+") do
-        if #line > 0 then
-          local parts = vim.split(line, "\t")
-          if #parts >= 2 then
-            local status = parts[1]:sub(1, 1)
-            local path = parts[2]
-            local old_path = nil
+    -- For revision comparison, we treat everything as "unstaged" for explorer compatibility
+    -- But to keep explorer compatible, we'll put them in 'staged' as they are committed changes
+    -- relative to each other.
 
-            -- Handle renames (R100 or similar)
-            if status == "R" and #parts >= 3 then
-              old_path = parts[2]
-              path = parts[3]
-            end
+    for line in output:gmatch("[^\r\n]+") do
+      if #line > 0 then
+        local parts = vim.split(line, "\t")
+        if #parts >= 2 then
+          local status = parts[1]:sub(1, 1)
+          local path = parts[2]
+          local old_path = nil
 
-            table.insert(result.unstaged, {
-              path = path,
-              status = status,
-              old_path = old_path,
-            })
+          -- Handle renames (R100 or similar)
+          if status == "R" and #parts >= 3 then
+            old_path = parts[2]
+            path = parts[3]
           end
+
+          table.insert(result.unstaged, {
+            path = path,
+            status = status,
+            old_path = old_path,
+          })
         end
       end
-
-      callback(nil, result)
     end
-  )
+
+    callback(nil, result)
+  end)
 end
 
 -- Run a git command synchronously
@@ -545,8 +523,13 @@ function M.get_rev_candidates(git_root)
 
   -- Get branches, tags, and remotes
   local refs = run_git_sync({
-    "-C", git_root,
-    "rev-parse", "--symbolic", "--branches", "--tags", "--remotes"
+    "-C",
+    git_root,
+    "rev-parse",
+    "--symbolic",
+    "--branches",
+    "--tags",
+    "--remotes",
   })
   if refs then
     vim.list_extend(candidates, refs)
@@ -554,8 +537,11 @@ function M.get_rev_candidates(git_root)
 
   -- Get stashes
   local stashes = run_git_sync({
-    "-C", git_root,
-    "stash", "list", "--pretty=format:%gd"
+    "-C",
+    git_root,
+    "stash",
+    "list",
+    "--pretty=format:%gd",
   })
   if stashes then
     vim.list_extend(candidates, stashes)

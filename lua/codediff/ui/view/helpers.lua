@@ -1,7 +1,7 @@
 -- Buffer preparation helpers for diff view
 local M = {}
 
-local virtual_file = require('codediff.core.virtual_file')
+local virtual_file = require("codediff.core.virtual_file")
 
 -- Helper: Check if revision is virtual (commit hash or STAGED)
 -- Virtual: "STAGED" or commit hash | Real: nil or "WORKING"
@@ -25,20 +25,20 @@ function M.prepare_buffer(is_virtual, git_root, revision, path)
     local is_mutable_revision = revision == ":0" or revision == ":1" or revision == ":2" or revision == ":3"
 
     if existing_buf ~= -1 and not is_mutable_revision then
-       -- Buffer exists for immutable revision, reuse it
-       return {
-         bufnr = existing_buf,
-         target = virtual_url,
-         needs_edit = false
-       }
+      -- Buffer exists for immutable revision, reuse it
+      return {
+        bufnr = existing_buf,
+        target = virtual_url,
+        needs_edit = false,
+      }
     else
-       -- Either buffer doesn't exist, or it's a mutable revision that needs refresh
-       -- Don't delete here - let the :edit! handle it (will trigger BufReadCmd)
-       return {
-         bufnr = existing_buf ~= -1 and existing_buf or nil,
-         target = virtual_url,
-         needs_edit = true,
-       }
+      -- Either buffer doesn't exist, or it's a mutable revision that needs refresh
+      -- Don't delete here - let the :edit! handle it (will trigger BufReadCmd)
+      return {
+        bufnr = existing_buf ~= -1 and existing_buf or nil,
+        target = virtual_url,
+        needs_edit = true,
+      }
     end
   else
     -- Real file: check if already loaded

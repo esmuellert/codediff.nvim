@@ -1,16 +1,16 @@
 -- Diff view creation and window management
 local M = {}
 
-local lifecycle = require('codediff.ui.lifecycle')
-local virtual_file = require('codediff.core.virtual_file')
-local auto_refresh = require('codediff.ui.auto_refresh')
-local config = require('codediff.config')
+local lifecycle = require("codediff.ui.lifecycle")
+local virtual_file = require("codediff.core.virtual_file")
+local auto_refresh = require("codediff.ui.auto_refresh")
+local config = require("codediff.config")
 
 -- Import submodules
-local helpers = require('codediff.ui.view.helpers')
-local render = require('codediff.ui.view.render')
-local view_keymaps = require('codediff.ui.view.keymaps')
-local conflict_window = require('codediff.ui.view.conflict_window')
+local helpers = require("codediff.ui.view.helpers")
+local render = require("codediff.ui.view.render")
+local view_keymaps = require("codediff.ui.view.keymaps")
+local conflict_window = require("codediff.ui.view.conflict_window")
 
 -- Re-export helper functions for backward compatibility
 local is_virtual_revision = helpers.is_virtual_revision
@@ -43,9 +43,8 @@ function M.create(session_config, filetype, on_ready)
 
   -- For explorer mode with empty paths OR dir mode (git_root == nil with explorer_data),
   -- create empty panes and skip buffer setup
-  local is_explorer_placeholder = session_config.mode == "explorer" and
-                                   ((session_config.original_path == "" or session_config.original_path == nil) or
-                                    (not session_config.git_root and session_config.explorer_data))
+  local is_explorer_placeholder = session_config.mode == "explorer"
+    and ((session_config.original_path == "" or session_config.original_path == nil) or (not session_config.git_root and session_config.explorer_data))
 
   local original_win, modified_win, original_info, modified_info, initial_buf
 
@@ -65,18 +64,8 @@ function M.create(session_config, filetype, on_ready)
     local original_is_virtual = is_virtual_revision(session_config.original_revision)
     local modified_is_virtual = is_virtual_revision(session_config.modified_revision)
 
-    original_info = prepare_buffer(
-      original_is_virtual,
-      session_config.git_root,
-      session_config.original_revision,
-      session_config.original_path
-    )
-    modified_info = prepare_buffer(
-      modified_is_virtual,
-      session_config.git_root,
-      session_config.modified_revision,
-      session_config.modified_path
-    )
+    original_info = prepare_buffer(original_is_virtual, session_config.git_root, session_config.original_revision, session_config.original_path)
+    modified_info = prepare_buffer(modified_is_virtual, session_config.git_root, session_config.modified_revision, session_config.modified_path)
 
     initial_buf = vim.api.nvim_get_current_buf()
     original_win = vim.api.nvim_get_current_win()
@@ -130,7 +119,7 @@ function M.create(session_config, filetype, on_ready)
       tabpage,
       session_config.mode,
       session_config.git_root,
-      "",  -- Empty paths indicate placeholder
+      "", -- Empty paths indicate placeholder
       "",
       nil,
       nil,
@@ -138,12 +127,11 @@ function M.create(session_config, filetype, on_ready)
       modified_info.bufnr,
       original_win,
       modified_win,
-      {}  -- Empty diff result - will be updated on first file selection
+      {} -- Empty diff result - will be updated on first file selection
     )
   else
     -- Normal mode: Full rendering
-    local has_virtual_buffer = is_virtual_revision(session_config.original_revision) or
-                                is_virtual_revision(session_config.modified_revision)
+    local has_virtual_buffer = is_virtual_revision(session_config.original_revision) or is_virtual_revision(session_config.modified_revision)
     local original_is_virtual = is_virtual_revision(session_config.original_revision)
     local modified_is_virtual = is_virtual_revision(session_config.modified_revision)
 
@@ -165,7 +153,7 @@ function M.create(session_config, filetype, on_ready)
 
       if session_config.conflict then
         -- Conflict mode: Fetch base content and render both sides against base
-        local git = require('codediff.core.git')
+        local git = require("codediff.core.git")
         local base_revision = ":1"
 
         git.get_file_content(base_revision, session_config.git_root, session_config.original_path, function(err, base_lines)
@@ -176,10 +164,14 @@ function M.create(session_config, filetype, on_ready)
 
           vim.schedule(function()
             local conflict_diffs = compute_and_render_conflict(
-              original_info.bufnr, modified_info.bufnr,
-              base_lines, original_lines, modified_lines,
-              original_win, modified_win,
-              true  -- auto_scroll_to_first_hunk = true on create
+              original_info.bufnr,
+              modified_info.bufnr,
+              base_lines,
+              original_lines,
+              modified_lines,
+              original_win,
+              modified_win,
+              true -- auto_scroll_to_first_hunk = true on create
             )
 
             if conflict_diffs then
@@ -207,23 +199,29 @@ function M.create(session_config, filetype, on_ready)
               if success then
                 setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, false)
                 -- Setup conflict keymaps AFTER setup_all_keymaps to override do/dp
-                local conflict = require('codediff.ui.conflict')
+                local conflict = require("codediff.ui.conflict")
                 conflict.setup_keymaps(tabpage)
               end
 
               -- Signal that view is ready
-              if on_ready then on_ready() end
+              if on_ready then
+                on_ready()
+              end
             end
           end)
         end)
       else
         -- Normal mode: Compute and render diff between left and right
         local lines_diff = compute_and_render(
-          original_info.bufnr, modified_info.bufnr,
-          original_lines, modified_lines,
-          original_is_virtual, modified_is_virtual,
-          original_win, modified_win,
-          true  -- auto_scroll_to_first_hunk = true on create
+          original_info.bufnr,
+          modified_info.bufnr,
+          original_lines,
+          modified_lines,
+          original_is_virtual,
+          modified_is_virtual,
+          original_win,
+          modified_win,
+          true -- auto_scroll_to_first_hunk = true on create
         )
 
         if lines_diff then
@@ -253,7 +251,9 @@ function M.create(session_config, filetype, on_ready)
           lifecycle.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified_is_virtual)
 
           -- Signal that view is ready
-          if on_ready then on_ready() end
+          if on_ready then
+            on_ready()
+          end
         end
       end
     end
@@ -263,55 +263,61 @@ function M.create(session_config, filetype, on_ready)
     local has_virtual = original_is_virtual or modified_is_virtual
 
     if has_virtual then
-    -- Virtual file(s): Wait for BufReadCmd to load content
-    local group = vim.api.nvim_create_augroup('CodeDiffVirtualFileHighlight_' .. tabpage, { clear = true })
+      -- Virtual file(s): Wait for BufReadCmd to load content
+      local group = vim.api.nvim_create_augroup("CodeDiffVirtualFileHighlight_" .. tabpage, { clear = true })
 
-    vim.api.nvim_create_autocmd('User', {
-      group = group,
-      pattern = 'CodeDiffVirtualFileLoaded',
-      callback = function(event)
-        if not event.data or not event.data.buf then return end
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "CodeDiffVirtualFileLoaded",
+        callback = function(event)
+          if not event.data or not event.data.buf then
+            return
+          end
 
-        local loaded_buf = event.data.buf
+          local loaded_buf = event.data.buf
 
-        -- Check if this is one of our virtual buffers
-        -- We don't need complex state tracking anymore because we know they WILL load
-        local all_loaded = true
+          -- Check if this is one of our virtual buffers
+          -- We don't need complex state tracking anymore because we know they WILL load
+          local all_loaded = true
 
-        -- Check if original is virtual and loaded
-        if original_is_virtual then
-           -- We can't easily check "is loaded" without state, but we can check if THIS event matches
-           -- For simplicity in this event-driven model, we'll use a small state tracker just for this closure
-        end
-      end,
-    })
+          -- Check if original is virtual and loaded
+          if original_is_virtual then
+            -- We can't easily check "is loaded" without state, but we can check if THIS event matches
+            -- For simplicity in this event-driven model, we'll use a small state tracker just for this closure
+          end
+        end,
+      })
 
-    -- Re-implementing the simple tracker locally
-    local loaded_buffers = {}
+      -- Re-implementing the simple tracker locally
+      local loaded_buffers = {}
 
-    vim.api.nvim_create_autocmd('User', {
-      group = group,
-      pattern = 'CodeDiffVirtualFileLoaded',
-      callback = function(event)
-        if not event.data or not event.data.buf then return end
-        local loaded_buf = event.data.buf
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "CodeDiffVirtualFileLoaded",
+        callback = function(event)
+          if not event.data or not event.data.buf then
+            return
+          end
+          local loaded_buf = event.data.buf
 
-        if (original_is_virtual and loaded_buf == original_info.bufnr) or
-           (modified_is_virtual and loaded_buf == modified_info.bufnr) then
+          if (original_is_virtual and loaded_buf == original_info.bufnr) or (modified_is_virtual and loaded_buf == modified_info.bufnr) then
+            loaded_buffers[loaded_buf] = true
 
-           loaded_buffers[loaded_buf] = true
+            local ready = true
+            if original_is_virtual and not loaded_buffers[original_info.bufnr] then
+              ready = false
+            end
+            if modified_is_virtual and not loaded_buffers[modified_info.bufnr] then
+              ready = false
+            end
 
-           local ready = true
-           if original_is_virtual and not loaded_buffers[original_info.bufnr] then ready = false end
-           if modified_is_virtual and not loaded_buffers[modified_info.bufnr] then ready = false end
-
-           if ready then
-             vim.schedule(render_everything)
-             vim.api.nvim_del_augroup_by_id(group)
-           end
-        end
-      end
-    })
+            if ready then
+              vim.schedule(render_everything)
+              vim.api.nvim_del_augroup_by_id(group)
+            end
+          end
+        end,
+      })
     else
       -- Real files only: Defer until :edit completes
       vim.schedule(render_everything)
@@ -325,7 +331,7 @@ function M.create(session_config, filetype, on_ready)
     local position = explorer_config.position or "left"
 
     -- Create explorer (explorer manages its own lifecycle and callbacks)
-    local explorer = require('codediff.ui.explorer')
+    local explorer = require("codediff.ui.explorer")
     local status_result = session_config.explorer_data.status_result
 
     -- For dir mode (git_root == nil), pass original_path and modified_path as dir roots
@@ -347,7 +353,7 @@ function M.create(session_config, filetype, on_ready)
     -- Adjust diff window sizes based on explorer position
     if position == "bottom" then
       -- For bottom position, diff windows take full width, equalize them
-      vim.cmd('wincmd =')
+      vim.cmd("wincmd =")
     else
       -- For left position, calculate remaining width and split equally
       local total_width = vim.o.columns
@@ -374,7 +380,6 @@ end
 ---@param auto_scroll_to_first_hunk boolean? Whether to auto-scroll to first hunk (default: false)
 ---@return boolean success Whether update succeeded
 function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
-
   -- Get existing session
   local session = lifecycle.get_session(tabpage)
   if not session then
@@ -417,25 +422,15 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   local modified_is_virtual = is_virtual_revision(session_config.modified_revision)
 
   -- Prepare new buffer information
-  local original_info = prepare_buffer(
-    original_is_virtual,
-    session_config.git_root,
-    session_config.original_revision,
-    session_config.original_path
-  )
-  local modified_info = prepare_buffer(
-    modified_is_virtual,
-    session_config.git_root,
-    session_config.modified_revision,
-    session_config.modified_path
-  )
+  local original_info = prepare_buffer(original_is_virtual, session_config.git_root, session_config.original_revision, session_config.original_path)
+  local modified_info = prepare_buffer(modified_is_virtual, session_config.git_root, session_config.modified_revision, session_config.modified_path)
 
   -- Determine if we need to wait for virtual file content
   -- Since we force reload virtual files, we always wait for the load event
   -- Use a state table to avoid closure capture issues in autocmd
   local wait_state = {
     original = original_is_virtual and original_info.needs_edit,
-    modified = modified_is_virtual and modified_info.needs_edit
+    modified = modified_is_virtual and modified_info.needs_edit,
   }
 
   local render_everything = function()
@@ -459,7 +454,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
 
     if session_config.conflict then
       -- Conflict mode: Fetch base content and render both sides against base
-      local git = require('codediff.core.git')
+      local git = require("codediff.core.git")
       local base_revision = ":1"
 
       git.get_file_content(base_revision, session_config.git_root, session_config.original_path, function(err, base_lines)
@@ -469,12 +464,8 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         end
 
         vim.schedule(function()
-          local conflict_diffs = compute_and_render_conflict(
-            original_info.bufnr, modified_info.bufnr,
-            base_lines, original_lines, modified_lines,
-            original_win, modified_win,
-            should_auto_scroll
-          )
+          local conflict_diffs =
+            compute_and_render_conflict(original_info.bufnr, modified_info.bufnr, base_lines, original_lines, modified_lines, original_win, modified_win, should_auto_scroll)
 
           if conflict_diffs then
             -- Update lifecycle session with conflict diff info
@@ -482,11 +473,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
             lifecycle.update_git_root(tabpage, session_config.git_root)
             lifecycle.update_revisions(tabpage, session_config.original_revision, session_config.modified_revision)
             lifecycle.update_diff_result(tabpage, conflict_diffs.base_to_modified_diff)
-            lifecycle.update_changedtick(
-              tabpage,
-              vim.api.nvim_buf_get_changedtick(original_info.bufnr),
-              vim.api.nvim_buf_get_changedtick(modified_info.bufnr)
-            )
+            lifecycle.update_changedtick(tabpage, vim.api.nvim_buf_get_changedtick(original_info.bufnr), vim.api.nvim_buf_get_changedtick(modified_info.bufnr))
 
             -- Setup auto-refresh for consistency (both buffers are virtual in conflict mode)
             setup_auto_refresh(original_info.bufnr, modified_info.bufnr, true, true)
@@ -497,7 +484,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
             if success then
               setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, is_explorer_mode)
               -- Setup conflict keymaps AFTER setup_all_keymaps to override do/dp
-              local conflict = require('codediff.ui.conflict')
+              local conflict = require("codediff.ui.conflict")
               conflict.setup_keymaps(tabpage)
             end
           end
@@ -506,10 +493,14 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     else
       -- Normal mode: Compute and render diff between left and right
       lines_diff = compute_and_render(
-        original_info.bufnr, modified_info.bufnr,
-        original_lines, modified_lines,
-        original_is_virtual, modified_is_virtual,
-        original_win, modified_win,
+        original_info.bufnr,
+        modified_info.bufnr,
+        original_lines,
+        modified_lines,
+        original_is_virtual,
+        modified_is_virtual,
+        original_win,
+        modified_win,
         should_auto_scroll
       )
 
@@ -519,11 +510,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         lifecycle.update_git_root(tabpage, session_config.git_root)
         lifecycle.update_revisions(tabpage, session_config.original_revision, session_config.modified_revision)
         lifecycle.update_diff_result(tabpage, lines_diff)
-        lifecycle.update_changedtick(
-          tabpage,
-          vim.api.nvim_buf_get_changedtick(original_info.bufnr),
-          vim.api.nvim_buf_get_changedtick(modified_info.bufnr)
-        )
+        lifecycle.update_changedtick(tabpage, vim.api.nvim_buf_get_changedtick(original_info.bufnr), vim.api.nvim_buf_get_changedtick(modified_info.bufnr))
 
         -- Re-enable auto-refresh for real file buffers
         setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
@@ -539,13 +526,15 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   -- This prevents race conditions where fast systems complete before the listener is ready
   local autocmd_group = nil
   if wait_state.original or wait_state.modified then
-    autocmd_group = vim.api.nvim_create_augroup('CodeDiffVirtualFileUpdate_' .. tabpage, { clear = true })
+    autocmd_group = vim.api.nvim_create_augroup("CodeDiffVirtualFileUpdate_" .. tabpage, { clear = true })
 
-    vim.api.nvim_create_autocmd('User', {
+    vim.api.nvim_create_autocmd("User", {
       group = autocmd_group,
-      pattern = 'CodeDiffVirtualFileLoaded',
+      pattern = "CodeDiffVirtualFileLoaded",
       callback = function(event)
-        if not event.data or not event.data.buf then return end
+        if not event.data or not event.data.buf then
+          return
+        end
 
         local loaded_buf = event.data.buf
 
@@ -675,15 +664,11 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   lifecycle.update_paths(tabpage, session_config.original_path, session_config.modified_path)
 
   -- Delete old virtual buffers if they were virtual AND are not reused in either new window
-  if lifecycle.is_original_virtual(tabpage) and
-     old_original_buf ~= original_info.bufnr and
-     old_original_buf ~= modified_info.bufnr then
+  if lifecycle.is_original_virtual(tabpage) and old_original_buf ~= original_info.bufnr and old_original_buf ~= modified_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_original_buf, { force = true })
   end
 
-  if lifecycle.is_modified_virtual(tabpage) and
-     old_modified_buf ~= modified_info.bufnr and
-     old_modified_buf ~= original_info.bufnr then
+  if lifecycle.is_modified_virtual(tabpage) and old_modified_buf ~= modified_info.bufnr and old_modified_buf ~= original_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_modified_buf, { force = true })
   end
 

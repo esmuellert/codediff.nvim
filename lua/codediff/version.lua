@@ -7,7 +7,7 @@ do
   local source = debug.getinfo(1).source:sub(2)
   local plugin_root = vim.fn.fnamemodify(source, ":h:h:h")
   local version_file = plugin_root .. "/VERSION"
-  local f = io.open(version_file, "r") 
+  local f = io.open(version_file, "r")
   if f then
     -- Read only the first line and trim whitespace
     local line = f:read("*line")

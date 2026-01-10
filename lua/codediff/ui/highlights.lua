@@ -1,6 +1,6 @@
 -- Highlight setup for diff rendering
 local M = {}
-local config = require('codediff.config')
+local config = require("codediff.config")
 
 -- Namespaces for highlights and fillers
 M.ns_highlight = vim.api.nvim_create_namespace("codediff-highlight")
@@ -9,7 +9,9 @@ M.ns_conflict = vim.api.nvim_create_namespace("codediff-conflict")
 
 -- Helper function to adjust color brightness
 local function adjust_brightness(color, factor)
-  if not color then return nil end
+  if not color then
+    return nil
+  end
   local r = math.floor(color / 65536) % 256
   local g = math.floor(color / 256) % 256
   local b = color % 256
@@ -58,7 +60,7 @@ local function resolve_color(value, fallback_gui, fallback_cterm)
       return {
         bg = hl.bg or fallback_gui,
         ctermbg = hl.ctermbg or fallback_cterm,
-        default = true
+        default = true,
       }
     end
   elseif type(value) == "number" then
@@ -104,7 +106,7 @@ function M.setup()
     -- Derive from line_insert with brightness adjustment
     char_insert_color = {
       bg = adjust_brightness(line_insert_color.bg, brightness) or 0x2a4556,
-      ctermbg = base256_color(0, 2, 0)
+      ctermbg = base256_color(0, 2, 0),
     }
   end
 
@@ -116,7 +118,7 @@ function M.setup()
     char_delete_color = {
       bg = adjust_brightness(line_delete_color.bg, brightness) or 0x4b2a3d,
       ctermbg = base256_color(2, 0, 0),
-      default = true
+      default = true,
     }
   end
 
@@ -125,7 +127,7 @@ function M.setup()
 
   -- Filler lines (no highlight, inherits editor default background)
   vim.api.nvim_set_hl(0, "CodeDiffFiller", {
-    fg = "#444444",  -- Subtle gray for the slash character
+    fg = "#444444", -- Subtle gray for the slash character
     ctermfg = base256_greyscale(8),
     default = true,
   })
@@ -188,39 +190,19 @@ function M.setup()
 
   -- Conflict sign in gutter (for merge view) - unresolved conflicts
   -- Fallback chain: user config -> DiagnosticSignWarn -> hardcoded orange
-  set_conflict_sign_hl(
-    "CodeDiffConflictSign",
-    hl_config.conflict_sign,
-    { "DiagnosticSignWarn" },
-    "#f0883e"
-  )
+  set_conflict_sign_hl("CodeDiffConflictSign", hl_config.conflict_sign, { "DiagnosticSignWarn" }, "#f0883e")
 
   -- Conflict sign in gutter (for merge view) - resolved conflicts (generic)
   -- Fallback chain: user config -> Comment -> hardcoded gray
-  set_conflict_sign_hl(
-    "CodeDiffConflictSignResolved",
-    hl_config.conflict_sign_resolved,
-    { "Comment" },
-    "#6e7681"
-  )
+  set_conflict_sign_hl("CodeDiffConflictSignResolved", hl_config.conflict_sign_resolved, { "Comment" }, "#6e7681")
 
   -- Conflict sign for accepted side (green - this content was chosen)
   -- Fallback chain: user config -> GitSignsAdd -> DiagnosticSignOk -> hardcoded green
-  set_conflict_sign_hl(
-    "CodeDiffConflictSignAccepted",
-    hl_config.conflict_sign_accepted,
-    { "GitSignsAdd", "DiagnosticSignOk" },
-    "#3fb950"
-  )
+  set_conflict_sign_hl("CodeDiffConflictSignAccepted", hl_config.conflict_sign_accepted, { "GitSignsAdd", "DiagnosticSignOk" }, "#3fb950")
 
   -- Conflict sign for rejected side (red - this content was not chosen)
   -- Fallback chain: user config -> GitSignsDelete -> DiagnosticSignError -> hardcoded red
-  set_conflict_sign_hl(
-    "CodeDiffConflictSignRejected",
-    hl_config.conflict_sign_rejected,
-    { "GitSignsDelete", "DiagnosticSignError" },
-    "#f85149"
-  )
+  set_conflict_sign_hl("CodeDiffConflictSignRejected", hl_config.conflict_sign_rejected, { "GitSignsDelete", "DiagnosticSignError" }, "#f85149")
 end
 
 return M

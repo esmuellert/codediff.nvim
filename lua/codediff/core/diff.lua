@@ -26,20 +26,22 @@ local lib_path = plugin_root .. "/" .. lib_name
 
 -- Check if library exists or needs update, if so, install/update it
 -- Skip auto-installation if explicitly disabled (e.g., in tests where library is already built)
-local installer = require('codediff.core.installer')
+local installer = require("codediff.core.installer")
 if not vim.env.VSCODE_DIFF_NO_AUTO_INSTALL and installer.needs_update() then
   local success, err = installer.install({ silent = false })
   if not success then
-    error(string.format(
-      "libvscode-diff not found and automatic installation failed: %s\n" ..
-      "Troubleshooting:\n" ..
-      "1. Check that curl or wget is installed\n" ..
-      "2. Verify internet connectivity to github.com\n" ..
-      "3. Try manual install: :CodeDiff install!\n" ..
-      "4. Or build from source: run 'make' (Unix) or 'build.cmd' (Windows)\n" ..
-      "5. Download manually from: https://github.com/esmuellert/vscode-diff.nvim/releases",
-      err or "unknown error"
-    ))
+    error(
+      string.format(
+        "libvscode-diff not found and automatic installation failed: %s\n"
+          .. "Troubleshooting:\n"
+          .. "1. Check that curl or wget is installed\n"
+          .. "2. Verify internet connectivity to github.com\n"
+          .. "3. Try manual install: :CodeDiff install!\n"
+          .. "4. Or build from source: run 'make' (Unix) or 'build.cmd' (Windows)\n"
+          .. "5. Download manually from: https://github.com/esmuellert/vscode-diff.nvim/releases",
+        err or "unknown error"
+      )
+    )
   end
 end
 
@@ -61,7 +63,7 @@ if not load_ok then
 end
 
 -- FFI type definitions matching C types.h
-ffi.cdef[[
+ffi.cdef([[
   // Basic range types
   typedef struct {
     int start_line;  // 1-based, inclusive
@@ -131,7 +133,7 @@ ffi.cdef[[
 
   void free_lines_diff(LinesDiff* diff);
   const char* get_version(void);
-]]
+]])
 
 ---@class DiffOptions
 ---@field ignore_trim_whitespace boolean
@@ -157,7 +159,7 @@ local function char_range_to_lua(c_range)
     start_line = c_range.start_line,
     start_col = c_range.start_col,
     end_line = c_range.end_line,
-    end_col = c_range.end_col
+    end_col = c_range.end_col,
   }
 end
 
@@ -165,7 +167,7 @@ end
 local function line_range_to_lua(c_range)
   return {
     start_line = c_range.start_line,
-    end_line = c_range.end_line
+    end_line = c_range.end_line,
   }
 end
 
@@ -173,7 +175,7 @@ end
 local function range_mapping_to_lua(c_mapping)
   return {
     original = char_range_to_lua(c_mapping.original),
-    modified = char_range_to_lua(c_mapping.modified)
+    modified = char_range_to_lua(c_mapping.modified),
   }
 end
 
@@ -190,7 +192,7 @@ local function detailed_mapping_to_lua(c_mapping)
   return {
     original = line_range_to_lua(c_mapping.original),
     modified = line_range_to_lua(c_mapping.modified),
-    inner_changes = inner_changes
+    inner_changes = inner_changes,
   }
 end
 
@@ -198,7 +200,7 @@ end
 local function moved_text_to_lua(c_moved)
   return {
     original = line_range_to_lua(c_moved.original),
-    modified = line_range_to_lua(c_moved.modified)
+    modified = line_range_to_lua(c_moved.modified),
   }
 end
 
@@ -221,7 +223,7 @@ local function lines_diff_to_lua(c_diff)
   return {
     changes = changes,
     moves = moves,
-    hit_timeout = c_diff.hit_timeout
+    hit_timeout = c_diff.hit_timeout,
   }
 end
 
@@ -236,7 +238,7 @@ function M.compute_diff(original_lines, modified_lines, options)
 
   -- Create options struct
   ---@type DiffOptions
----@diagnostic disable-next-line: assign-type-mismatch
+  ---@diagnostic disable-next-line: assign-type-mismatch
   local c_options = ffi.new("DiffOptions")
   c_options.ignore_trim_whitespace = options.ignore_trim_whitespace or false
   c_options.max_computation_time_ms = options.max_computation_time_ms or 5000

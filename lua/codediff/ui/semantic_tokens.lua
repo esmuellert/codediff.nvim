@@ -29,10 +29,10 @@
 local M = {}
 
 local api = vim.api
-local bit = require('bit')
+local bit = require("bit")
 
 -- Namespace for semantic token highlights
-local ns_semantic = api.nvim_create_namespace('codediff_semantic_tokens')
+local ns_semantic = api.nvim_create_namespace("codediff_semantic_tokens")
 
 -- ============================================================================
 -- VENDORED FROM: vim/lsp/semantic_tokens.lua
@@ -65,7 +65,7 @@ local function tokens_to_ranges(data, bufnr, legend, encoding)
   local token_types = legend.tokenTypes
   local token_modifiers = legend.tokenModifiers
   local lines = api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local eol_offset = vim.bo[bufnr].fileformat == 'dos' and 2 or 1
+  local eol_offset = vim.bo[bufnr].fileformat == "dos" and 2 or 1
   local ranges = {}
 
   local line = nil
@@ -83,7 +83,7 @@ local function tokens_to_ranges(data, bufnr, legend, encoding)
     if token_type then
       local modifiers = modifiers_from_number(data[i + 4], token_modifiers)
       local end_char = start_char + data[i + 2]
-      local buf_line = lines[line + 1] or ''
+      local buf_line = lines[line + 1] or ""
       local end_line = line
       local start_col = vim.str_byteindex(buf_line, encoding, start_char, false)
 
@@ -93,7 +93,7 @@ local function tokens_to_ranges(data, bufnr, legend, encoding)
       while new_end_char > 0 do
         end_char = new_end_char
         end_line = end_line + 1
-        buf_line = lines[end_line + 1] or ''
+        buf_line = lines[end_line + 1] or ""
         new_end_char = new_end_char - vim.str_utfindex(buf_line, encoding) - eol_offset
       end
 
@@ -126,11 +126,11 @@ local function apply_highlights(bufnr, ranges)
 
   for _, token in ipairs(ranges) do
     -- Build highlight group name
-    local hl_group = '@lsp.type.' .. token.type
+    local hl_group = "@lsp.type." .. token.type
 
     -- Add modifiers
     for modifier, _ in pairs(token.modifiers) do
-      hl_group = hl_group .. '.' .. modifier
+      hl_group = hl_group .. "." .. modifier
     end
 
     -- Apply extmark with semantic token highlight
@@ -164,7 +164,7 @@ function M.apply_semantic_tokens(left_buf, right_buf)
   if not api.nvim_buf_is_valid(left_buf) or not api.nvim_buf_is_valid(right_buf) then
     return false
   end
-  
+
   -- Get LSP clients from right buffer
   local clients = vim.lsp.get_clients({ bufnr = right_buf })
   if #clients == 0 then
@@ -187,11 +187,11 @@ function M.apply_semantic_tokens(left_buf, right_buf)
   -- Get URI and content from left buffer
   local left_uri = vim.uri_from_bufnr(left_buf)
   local left_lines = api.nvim_buf_get_lines(left_buf, 0, -1, false)
-  local left_text = table.concat(left_lines, '\n')
-  
+  local left_text = table.concat(left_lines, "\n")
+
   -- Get language ID from right buffer's filetype
-  local language_id = vim.bo[right_buf].filetype or 'text'
-  
+  local language_id = vim.bo[right_buf].filetype or "text"
+
   -- First, notify LSP about this virtual file via textDocument/didOpen
   local didopen_params = {
     textDocument = {
@@ -199,24 +199,24 @@ function M.apply_semantic_tokens(left_buf, right_buf)
       languageId = language_id,
       version = 1,
       text = left_text,
-    }
+    },
   }
-  
-  client.notify('textDocument/didOpen', didopen_params)
-  
+
+  client.notify("textDocument/didOpen", didopen_params)
+
   -- Now request semantic tokens for this file
   local params = {
     textDocument = {
       uri = left_uri,
-    }
+    },
   }
 
   -- Make async request for semantic tokens
-  client.request('textDocument/semanticTokens/full', params, function(err, result)
+  client.request("textDocument/semanticTokens/full", params, function(err, result)
     if err then
       return
     end
-    
+
     if not result then
       return
     end
@@ -236,7 +236,7 @@ function M.apply_semantic_tokens(left_buf, right_buf)
 
       -- Get legend from client capabilities
       local legend = client.server_capabilities.semanticTokensProvider.legend
-      local encoding = client.offset_encoding or 'utf-16'
+      local encoding = client.offset_encoding or "utf-16"
 
       -- Convert tokens to ranges
       local ranges = tokens_to_ranges(data, left_buf, legend, encoding)

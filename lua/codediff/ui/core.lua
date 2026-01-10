@@ -1,7 +1,7 @@
 -- Core diff rendering algorithm
 local M = {}
 
-local highlights = require('codediff.ui.highlights')
+local highlights = require("codediff.ui.highlights")
 
 -- Namespace references
 local ns_highlight = highlights.ns_highlight
@@ -14,8 +14,7 @@ local ns_conflict = highlights.ns_conflict
 
 -- Check if a range is empty (start and end are the same position)
 local function is_empty_range(range)
-  return range.start_line == range.end_line and
-         range.start_col == range.end_col
+  return range.start_line == range.end_line and range.start_col == range.end_col
 end
 
 -- Check if a column position is past the visible line content
@@ -41,7 +40,7 @@ local function insert_filler_lines(bufnr, after_line_0idx, count)
   local filler_text = string.rep("╱", 500)
 
   for _ = 1, count do
-    table.insert(virt_lines_content, {{filler_text, "CodeDiffFiller"}})
+    table.insert(virt_lines_content, { { filler_text, "CodeDiffFiller" } })
   end
 
   vim.api.nvim_buf_set_extmark(bufnr, ns_filler, after_line_0idx, 0, {
@@ -126,7 +125,7 @@ local function apply_char_highlight(bufnr, char_range, hl_group, lines)
     end_col = utf16_col_to_byte_col(line_content, end_col)
     end_col = math.min(end_col, #line_content + 1)
   end
-  
+
   -- Verify buffer has enough lines (buffer may have changed since diff was computed)
   local buf_line_count = vim.api.nvim_buf_line_count(bufnr)
   if start_line > buf_line_count or end_line > buf_line_count then
@@ -200,16 +199,16 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
     if mapping_orig_lines > mapping_mod_lines then
       local diff = mapping_orig_lines - mapping_mod_lines
       table.insert(fillers, {
-        buffer = 'modified',
+        buffer = "modified",
         after_line = mapping.modified.start_line - 1,
-        count = diff
+        count = diff,
       })
     elseif mapping_mod_lines > mapping_orig_lines then
       local diff = mapping_mod_lines - mapping_orig_lines
       table.insert(fillers, {
-        buffer = 'original',
+        buffer = "original",
         after_line = mapping.original.start_line - 1,
-        count = diff
+        count = diff,
       })
     end
     return fillers, mapping.original.end_line, mapping.modified.end_line
@@ -229,7 +228,7 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
         mod_start = last_mod_line,
         mod_end = mod_line_exclusive,
         orig_len = orig_gap,
-        mod_len = mod_gap
+        mod_len = mod_gap,
       })
       last_orig_line = orig_line_exclusive
       last_mod_line = mod_line_exclusive
@@ -259,7 +258,7 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
         mod_start = last_mod_line,
         mod_end = mod_line_exclusive,
         orig_len = orig_range_len,
-        mod_len = mod_range_len
+        mod_len = mod_range_len,
       })
     end
 
@@ -285,15 +284,15 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
 
     if line_diff > 0 then
       table.insert(fillers, {
-        buffer = 'original',
+        buffer = "original",
         after_line = align.orig_end - 1,
-        count = line_diff
+        count = line_diff,
       })
     elseif line_diff < 0 then
       table.insert(fillers, {
-        buffer = 'modified',
+        buffer = "modified",
         after_line = align.mod_end - 1,
-        count = -line_diff
+        count = -line_diff,
       })
     end
   end
@@ -335,26 +334,22 @@ function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, 
     if mapping.inner_changes then
       for _, inner in ipairs(mapping.inner_changes) do
         if not is_empty_range(inner.original) then
-          apply_char_highlight(left_bufnr, inner.original,
-                             "CodeDiffCharDelete", original_lines)
+          apply_char_highlight(left_bufnr, inner.original, "CodeDiffCharDelete", original_lines)
         end
 
         if not is_empty_range(inner.modified) then
-          apply_char_highlight(right_bufnr, inner.modified,
-                             "CodeDiffCharInsert", modified_lines)
+          apply_char_highlight(right_bufnr, inner.modified, "CodeDiffCharInsert", modified_lines)
         end
       end
     end
 
-    local fillers, new_last_orig, new_last_mod = calculate_fillers(
-      mapping, original_lines, modified_lines, last_orig_line, last_mod_line
-    )
+    local fillers, new_last_orig, new_last_mod = calculate_fillers(mapping, original_lines, modified_lines, last_orig_line, last_mod_line)
 
     last_orig_line = new_last_orig
     last_mod_line = new_last_mod
 
     for _, filler in ipairs(fillers) do
-      if filler.buffer == 'original' then
+      if filler.buffer == "original" then
         insert_filler_lines(left_bufnr, filler.after_line - 1, filler.count)
         total_left_fillers = total_left_fillers + filler.count
       else
@@ -441,7 +436,7 @@ end
 -- left_lines_content: array of input1 content lines
 -- right_lines_content: array of input2 content lines
 function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
-  local merge_alignment = require('codediff.ui.merge_alignment')
+  local merge_alignment = require("codediff.ui.merge_alignment")
 
   -- Clear existing highlights and fillers
   vim.api.nvim_buf_clear_namespace(left_bufnr, ns_highlight, 0, -1)
@@ -456,10 +451,8 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
   local right_lines = vim.api.nvim_buf_get_lines(right_bufnr, 0, -1, false)
 
   -- Compute alignments to identify conflict regions (where both sides have changes)
-  local alignments, conflict_left_changes, conflict_right_changes = merge_alignment.compute_merge_fillers_and_conflicts(
-    base_to_left_diff, base_to_right_diff,
-    base_lines, left_lines_content, right_lines_content
-  )
+  local alignments, conflict_left_changes, conflict_right_changes =
+    merge_alignment.compute_merge_fillers_and_conflicts(base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
 
   -- Render highlights ONLY for conflict regions (where both left and right modified the same base region)
   -- This matches VSCode's behavior of only highlighting conflicting changes

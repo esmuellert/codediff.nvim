@@ -1,14 +1,18 @@
 -- Vimdiff-style diffget operations for merge tool
 local M = {}
 
-local lifecycle = require('codediff.ui.lifecycle')
-local auto_refresh = require('codediff.ui.auto_refresh')
+local lifecycle = require("codediff.ui.lifecycle")
+local auto_refresh = require("codediff.ui.auto_refresh")
 
 -- Will be injected by init.lua
 local tracking = nil
 local signs = nil
-M._set_tracking_module = function(t) tracking = t end
-M._set_signs_module = function(s) signs = s end
+M._set_tracking_module = function(t)
+  tracking = t
+end
+M._set_signs_module = function(s)
+  signs = s
+end
 
 --- Apply text to result buffer at the conflict's range
 --- @param result_bufnr number Result buffer
@@ -17,7 +21,7 @@ M._set_signs_module = function(s) signs = s end
 --- @param base_lines table Original BASE content (for fallback)
 local function apply_to_result(result_bufnr, block, lines, base_lines)
   local start_row, end_row
-  
+
   -- Method 1: Try using extmarks (robust against edits)
   if block.extmark_id then
     local mark = vim.api.nvim_buf_get_extmark_by_id(result_bufnr, tracking.tracking_ns, block.extmark_id, { details = true })
@@ -26,7 +30,7 @@ local function apply_to_result(result_bufnr, block, lines, base_lines)
       end_row = mark[3].end_row
     end
   end
-  
+
   -- Method 2: Fallback to content search or original range
   if not start_row then
     local base_range = block.base_range
@@ -34,9 +38,9 @@ local function apply_to_result(result_bufnr, block, lines, base_lines)
     for i = base_range.start_line, base_range.end_line - 1 do
       table.insert(base_content, base_lines[i] or "")
     end
-  
+
     local result_lines = vim.api.nvim_buf_get_lines(result_bufnr, 0, -1, false)
-  
+
     local found_start = nil
     for i = 1, #result_lines - #base_content + 1 do
       local match = true
@@ -51,7 +55,7 @@ local function apply_to_result(result_bufnr, block, lines, base_lines)
         break
       end
     end
-  
+
     if found_start then
       start_row = found_start - 1
       end_row = found_start - 1 + #base_content
@@ -60,7 +64,7 @@ local function apply_to_result(result_bufnr, block, lines, base_lines)
       end_row = math.min(base_range.end_line - 1, #result_lines)
     end
   end
-  
+
   if start_row and end_row then
     vim.api.nvim_buf_set_lines(result_bufnr, start_row, end_row, false, lines)
   end

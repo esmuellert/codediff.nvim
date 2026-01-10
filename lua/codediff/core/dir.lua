@@ -19,11 +19,15 @@ local function scan_dir(root)
 
   local function recurse(current, rel_prefix)
     local handle = uv.fs_scandir(current)
-    if not handle then return end
+    if not handle then
+      return
+    end
 
     while true do
       local name, t = uv.fs_scandir_next(handle)
-      if not name then break end
+      if not name then
+        break
+      end
 
       local abs = current .. "/" .. name
       local rel = rel_prefix ~= "" and (rel_prefix .. "/" .. name) or name
@@ -46,9 +50,15 @@ local function scan_dir(root)
 end
 
 local function is_modified(a, b)
-  if not a or not b then return false end
-  if a.size ~= b.size then return true end
-  if a.mtime ~= b.mtime then return true end
+  if not a or not b then
+    return false
+  end
+  if a.size ~= b.size then
+    return true
+  end
+  if a.mtime ~= b.mtime then
+    return true
+  end
   return false
 end
 
@@ -66,7 +76,7 @@ function M.diff_directories(dir1, dir2)
   local result = {
     unstaged = {},
     staged = {},
-    conflicts = {},  -- Empty for dir mode, but consistent with git status shape
+    conflicts = {}, -- Empty for dir mode, but consistent with git status shape
   }
 
   local seen = {}

@@ -2,7 +2,7 @@
 -- Handles tracking state, checking if blocks are active/resolved
 local M = {}
 
-local lifecycle = require('codediff.ui.lifecycle')
+local lifecycle = require("codediff.ui.lifecycle")
 
 local tracking_ns = vim.api.nvim_create_namespace("codediff-conflict-tracking")
 local result_signs_ns = vim.api.nvim_create_namespace("codediff-result-signs")
@@ -38,22 +38,30 @@ end
 --- @param block table The conflict block
 --- @return boolean is_active
 function M.is_block_active(session, block)
-  if not block.extmark_id then return true end  -- Default to active if no tracking
-  
+  if not block.extmark_id then
+    return true
+  end -- Default to active if no tracking
+
   -- 1. Get current content from buffer via Extmark
   local mark = vim.api.nvim_buf_get_extmark_by_id(session.result_bufnr, tracking_ns, block.extmark_id, { details = true })
-  if not mark or #mark == 0 then return true end  -- Default to active if extmark invalid
-  if not mark[3] or mark[3].end_row == nil then return true end  -- Default to active if details missing
-  
+  if not mark or #mark == 0 then
+    return true
+  end -- Default to active if extmark invalid
+  if not mark[3] or mark[3].end_row == nil then
+    return true
+  end -- Default to active if details missing
+
   local start_row = mark[1]
   local end_row = mark[3].end_row
-  
+
   local current_lines = vim.api.nvim_buf_get_lines(session.result_bufnr, start_row, end_row, false)
-  
+
   -- 2. Get expected base content from session
   local base_lines = session.result_base_lines
-  if not base_lines then return true end  -- Default to active if no base lines
-  
+  if not base_lines then
+    return true
+  end -- Default to active if no base lines
+
   local expected_lines = {}
   -- base_range is 1-based, inclusive-exclusive logic?
   -- In `apply_to_result`, we used: for i = base_range.start_line, base_range.end_line - 1
@@ -61,16 +69,18 @@ function M.is_block_active(session, block)
   for i = block.base_range.start_line, block.base_range.end_line - 1 do
     table.insert(expected_lines, base_lines[i] or "")
   end
-  
+
   -- 3. Compare
-  if #current_lines ~= #expected_lines then return false end
-  
+  if #current_lines ~= #expected_lines then
+    return false
+  end
+
   for i = 1, #current_lines do
     if current_lines[i] ~= expected_lines[i] then
       return false
     end
   end
-  
+
   return true
 end
 
@@ -79,17 +89,23 @@ end
 --- @param block table The conflict block
 --- @return string|nil "incoming", "current", "both", or nil if unresolved/unknown
 function M.get_accepted_side(session, block)
-  if not block.extmark_id then return nil end
-  if M.is_block_active(session, block) then return nil end  -- Still unresolved
-  
+  if not block.extmark_id then
+    return nil
+  end
+  if M.is_block_active(session, block) then
+    return nil
+  end -- Still unresolved
+
   -- Get current content from result buffer
   local mark = vim.api.nvim_buf_get_extmark_by_id(session.result_bufnr, tracking_ns, block.extmark_id, { details = true })
-  if not mark or #mark < 3 then return nil end
-  
+  if not mark or #mark < 3 then
+    return nil
+  end
+
   local start_row = mark[1]
   local end_row = mark[3].end_row
   local current_lines = vim.api.nvim_buf_get_lines(session.result_bufnr, start_row, end_row, false)
-  
+
   -- Get incoming (left) content
   local incoming_lines = {}
   if session.original_bufnr and vim.api.nvim_buf_is_valid(session.original_bufnr) then
@@ -97,7 +113,7 @@ function M.get_accepted_side(session, block)
     local left_end = block.output1_range.end_line
     incoming_lines = vim.api.nvim_buf_get_lines(session.original_bufnr, left_start - 1, left_end - 1, false)
   end
-  
+
   -- Get current (right) content
   local current_side_lines = {}
   if session.modified_bufnr and vim.api.nvim_buf_is_valid(session.modified_bufnr) then
@@ -105,22 +121,26 @@ function M.get_accepted_side(session, block)
     local right_end = block.output2_range.end_line
     current_side_lines = vim.api.nvim_buf_get_lines(session.modified_bufnr, right_start - 1, right_end - 1, false)
   end
-  
+
   -- Helper to compare line arrays
   local function lines_equal(a, b)
-    if #a ~= #b then return false end
+    if #a ~= #b then
+      return false
+    end
     for i = 1, #a do
-      if a[i] ~= b[i] then return false end
+      if a[i] ~= b[i] then
+        return false
+      end
     end
     return true
   end
-  
+
   -- Check which side matches
   local matches_incoming = lines_equal(current_lines, incoming_lines)
   local matches_current = lines_equal(current_lines, current_side_lines)
-  
+
   if matches_incoming and matches_current then
-    return "both"  -- Both sides are the same (shouldn't happen in conflict, but handle it)
+    return "both" -- Both sides are the same (shouldn't happen in conflict, but handle it)
   elseif matches_incoming then
     return "incoming"
   elseif matches_current then
@@ -138,7 +158,7 @@ function M.get_accepted_side(session, block)
     if lines_equal(current_lines, both_lines) then
       return "both"
     end
-    return "edited"  -- Manual edit or unknown
+    return "edited" -- Manual edit or unknown
   end
 end
 
@@ -151,10 +171,10 @@ end
 function M.find_conflict_at_cursor(session, cursor_line, side, allow_resolved)
   local blocks = session.conflict_blocks
   local range_key = side == "left" and "output1_range" or "output2_range"
-  
+
   for _, block in ipairs(blocks) do
     local is_match = false
-    
+
     if allow_resolved then
       -- Just check if extmark exists (valid block tracking)
       if block.extmark_id then
@@ -186,15 +206,17 @@ end
 --- @return table|nil The conflict block containing the cursor
 function M.find_conflict_at_cursor_in_result(session, cursor_line)
   local blocks = session.conflict_blocks
-  if not blocks then return nil end
-  
+  if not blocks then
+    return nil
+  end
+
   for _, block in ipairs(blocks) do
     if block.extmark_id then
       local mark = vim.api.nvim_buf_get_extmark_by_id(session.result_bufnr, tracking_ns, block.extmark_id, { details = true })
       if mark and #mark > 0 then
-        local start_row = mark[1] + 1  -- Convert to 1-based
+        local start_row = mark[1] + 1 -- Convert to 1-based
         local end_row = mark[3] and mark[3].end_row and (mark[3].end_row + 1) or start_row
-        
+
         -- Check if cursor is within this block's range in result buffer
         if cursor_line >= start_row and cursor_line <= end_row then
           -- Also check if block is still active (not resolved)
@@ -224,15 +246,17 @@ end
 --- @param result_bufnr number Result buffer handle
 --- @param conflict_blocks table List of conflict blocks
 function M.initialize_tracking(result_bufnr, conflict_blocks)
-  if not result_bufnr or not vim.api.nvim_buf_is_valid(result_bufnr) then return end
-  
+  if not result_bufnr or not vim.api.nvim_buf_is_valid(result_bufnr) then
+    return
+  end
+
   -- Clear existing extmarks in our namespace
   vim.api.nvim_buf_clear_namespace(result_bufnr, tracking_ns, 0, -1)
-  
+
   for _, block in ipairs(conflict_blocks) do
     local start_line = block.base_range.start_line - 1
     local end_line = block.base_range.end_line - 1
-    
+
     -- Create extmark with gravity: right (adjusts as text is inserted before it)
     -- We want to track the *range* of this block.
     -- Since we replace the whole block content, tracking the start point is most critical.
@@ -241,9 +265,9 @@ function M.initialize_tracking(result_bufnr, conflict_blocks)
       end_row = end_line,
       end_col = 0,
       right_gravity = false,
-      end_right_gravity = true
+      end_right_gravity = true,
     })
-    
+
     block.extmark_id = id
   end
 end

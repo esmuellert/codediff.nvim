@@ -3,7 +3,9 @@ local M = {}
 
 -- Will be injected by init.lua
 local session = nil
-M._set_session_module = function(s) session = s end
+M._set_session_module = function(s)
+  session = s
+end
 
 -- Check if a revision represents a virtual buffer
 local function is_virtual_revision(revision)
@@ -33,7 +35,9 @@ end
 function M.get_git_context(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return nil end
+  if not sess then
+    return nil
+  end
 
   return {
     git_root = sess.git_root,
@@ -46,7 +50,9 @@ end
 function M.get_buffers(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return nil, nil end
+  if not sess then
+    return nil, nil
+  end
   return sess.original_bufnr, sess.modified_bufnr
 end
 
@@ -54,7 +60,9 @@ end
 function M.get_windows(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return nil, nil end
+  if not sess then
+    return nil, nil
+  end
   return sess.original_win, sess.modified_win
 end
 
@@ -62,7 +70,9 @@ end
 function M.get_paths(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return nil, nil end
+  if not sess then
+    return nil, nil
+  end
   return sess.original_path, sess.modified_path
 end
 
@@ -81,7 +91,9 @@ end
 function M.is_original_virtual(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
   return is_virtual_revision(sess.original_revision)
 end
 
@@ -89,7 +101,9 @@ end
 function M.is_modified_virtual(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
   return is_virtual_revision(sess.modified_revision)
 end
 
@@ -118,7 +132,9 @@ end
 function M.get_result(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return nil, nil end
+  if not sess then
+    return nil, nil
+  end
   return sess.result_bufnr, sess.result_win
 end
 
@@ -135,7 +151,9 @@ end
 function M.get_conflict_files(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return {} end
+  if not sess then
+    return {}
+  end
   return sess.conflict_files or {}
 end
 
@@ -144,7 +162,9 @@ end
 function M.get_unsaved_conflict_files(tabpage)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess or not sess.conflict_files then return {} end
+  if not sess or not sess.conflict_files then
+    return {}
+  end
 
   local unsaved = {}
   for file_path, _ in pairs(sess.conflict_files) do
@@ -167,7 +187,9 @@ end
 function M.update_suspended(tabpage, suspended)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.suspended = suspended
   return true
@@ -177,7 +199,9 @@ end
 function M.update_diff_result(tabpage, diff_lines)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.stored_diff_result = diff_lines
   return true
@@ -187,7 +211,9 @@ end
 function M.update_changedtick(tabpage, original_tick, modified_tick)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.changedtick.original = original_tick
   sess.changedtick.modified = modified_tick
@@ -198,7 +224,9 @@ end
 function M.update_mtime(tabpage, original_mtime, modified_mtime)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.mtime.original = original_mtime
   sess.mtime.modified = modified_mtime
@@ -209,7 +237,9 @@ end
 function M.update_paths(tabpage, original_path, modified_path)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.original_path = original_path
   sess.modified_path = modified_path
@@ -221,9 +251,11 @@ end
 function M.update_buffers(tabpage, original_bufnr, modified_bufnr)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
-  local state = require('codediff.ui.lifecycle.state')
+  local state = require("codediff.ui.lifecycle.state")
 
   sess.original_bufnr = original_bufnr
   sess.modified_bufnr = modified_bufnr
@@ -239,7 +271,9 @@ end
 function M.update_git_root(tabpage, git_root)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.git_root = git_root
   return true
@@ -249,7 +283,9 @@ end
 function M.update_revisions(tabpage, original_revision, modified_revision)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.original_revision = original_revision
   sess.modified_revision = modified_revision
@@ -260,7 +296,9 @@ end
 function M.set_explorer(tabpage, explorer)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.explorer = explorer
   return true
@@ -270,7 +308,9 @@ end
 function M.set_result(tabpage, result_bufnr, result_win)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.result_bufnr = result_bufnr
   sess.result_win = result_win
@@ -287,7 +327,9 @@ end
 function M.set_result_base_lines(tabpage, base_lines)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
   sess.result_base_lines = base_lines
   return true
 end
@@ -298,7 +340,9 @@ end
 function M.set_conflict_blocks(tabpage, blocks)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
   sess.conflict_blocks = blocks
   return true
 end
@@ -307,7 +351,9 @@ end
 function M.track_conflict_file(tabpage, file_path)
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
-  if not sess then return false end
+  if not sess then
+    return false
+  end
 
   sess.conflict_files = sess.conflict_files or {}
   sess.conflict_files[file_path] = true
@@ -319,7 +365,7 @@ end
 function M.confirm_close_with_unsaved(tabpage)
   local unsaved = M.get_unsaved_conflict_files(tabpage)
   if #unsaved == 0 then
-    return true  -- No unsaved files, proceed
+    return true -- No unsaved files, proceed
   end
 
   -- Build message
@@ -341,7 +387,7 @@ function M.confirm_close_with_unsaved(tabpage)
       if bufnr ~= -1 and vim.api.nvim_buf_is_valid(bufnr) then
         -- Reload from disk to restore original file content
         vim.api.nvim_buf_call(bufnr, function()
-          vim.cmd('edit!')
+          vim.cmd("edit!")
         end)
       end
     end
@@ -372,22 +418,22 @@ function M.set_tab_keymap(tabpage, mode, lhs, rhs, opts)
 
   -- Set on both diff buffers
   if vim.api.nvim_buf_is_valid(sess.original_bufnr) then
-    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = sess.original_bufnr }))
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.original_bufnr }))
   end
 
   if vim.api.nvim_buf_is_valid(sess.modified_bufnr) then
-    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = sess.modified_bufnr }))
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.modified_bufnr }))
   end
 
   -- Set on explorer buffer if exists
   local explorer = sess.explorer
   if explorer and explorer.bufnr and vim.api.nvim_buf_is_valid(explorer.bufnr) then
-    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = explorer.bufnr }))
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = explorer.bufnr }))
   end
 
   -- Set on result buffer if exists (conflict mode)
   if sess.result_bufnr and vim.api.nvim_buf_is_valid(sess.result_bufnr) then
-    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', base_opts, opts, { buffer = sess.result_bufnr }))
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.result_bufnr }))
   end
 
   return true
@@ -407,7 +453,7 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
   local active_diffs = session.get_active_diffs()
   local sess = active_diffs[tabpage]
   if not sess then
-    vim.notify('[codediff] No session found for auto-sync setup', vim.log.levels.ERROR)
+    vim.notify("[codediff] No session found for auto-sync setup", vim.log.levels.ERROR)
     return
   end
 
@@ -416,18 +462,18 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
   local working_side = original_is_virtual and "modified" or "original"
 
   if not working_win or not vim.api.nvim_win_is_valid(working_win) then
-    vim.notify('[codediff] Working window not found for auto-sync', vim.log.levels.WARN)
+    vim.notify("[codediff] Working window not found for auto-sync", vim.log.levels.WARN)
     return
   end
 
   -- Track current file path
-  local current_path = sess[working_side .. '_path']
+  local current_path = sess[working_side .. "_path"]
 
   -- Setup listener using BufWinEnter (fires when buffer enters window, even if existing buffer)
-  local sync_group = vim.api.nvim_create_augroup('codediff_working_sync_' .. tabpage, { clear = true })
+  local sync_group = vim.api.nvim_create_augroup("codediff_working_sync_" .. tabpage, { clear = true })
 
   -- Listen to BufWinEnter - fires when ANY buffer enters the window (including existing buffers)
-  vim.api.nvim_create_autocmd('BufWinEnter', {
+  vim.api.nvim_create_autocmd("BufWinEnter", {
     group = sync_group,
     callback = function(args)
       -- Check if this buffer is in the working window
@@ -439,7 +485,7 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
       local new_path = vim.api.nvim_buf_get_name(args.buf)
 
       -- Skip virtual files - they're programmatic, not user navigation
-      if new_path:match('^codediff://') then
+      if new_path:match("^codediff://") then
         return
       end
 
@@ -454,8 +500,8 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
       -- Path changed! Need to update both sides
       vim.schedule(function()
         -- Get git root (might have changed if user switched to different repo)
-        local git = require('codediff.core.git')
-        local view = require('codediff.ui.view')
+        local git = require("codediff.core.git")
+        local view = require("codediff.ui.view")
 
         git.get_git_root(new_path, function(err, new_git_root)
           if err then
@@ -468,15 +514,14 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
               end
 
               -- No pre-fetching needed, buffers will load content
-              view.update(tabpage,
-                {
-                  mode = sess.mode,
-                  git_root = nil,
-                  original_path = working_side == "original" and new_path or relative_path,
-                  modified_path = working_side == "modified" and new_path or relative_path,
-                  original_revision = working_side == "original" and nil or sess.original_revision,
-                  modified_revision = working_side == "modified" and nil or sess.modified_revision,
-                })
+              view.update(tabpage, {
+                mode = sess.mode,
+                git_root = nil,
+                original_path = working_side == "original" and new_path or relative_path,
+                modified_path = working_side == "modified" and new_path or relative_path,
+                original_revision = working_side == "original" and nil or sess.original_revision,
+                modified_revision = working_side == "modified" and nil or sess.modified_revision,
+              })
             end)
             return
           end
@@ -486,15 +531,14 @@ function M.setup_auto_sync_on_file_switch(tabpage, original_is_virtual, modified
 
           -- No pre-fetching needed, buffers will load content
           vim.schedule(function()
-            view.update(tabpage,
-              {
-                mode = sess.mode,
-                git_root = new_git_root,
-                original_path = relative_path,
-                modified_path = relative_path,
-                original_revision = sess.original_revision,
-                modified_revision = sess.modified_revision,
-              })
+            view.update(tabpage, {
+              mode = sess.mode,
+              git_root = new_git_root,
+              original_path = relative_path,
+              modified_path = relative_path,
+              original_revision = sess.original_revision,
+              modified_revision = sess.modified_revision,
+            })
           end)
         end)
       end)

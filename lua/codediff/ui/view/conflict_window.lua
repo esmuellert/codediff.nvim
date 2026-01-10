@@ -1,8 +1,8 @@
 -- Conflict result window setup for merge tool
 local M = {}
 
-local lifecycle = require('codediff.ui.lifecycle')
-local auto_refresh = require('codediff.ui.auto_refresh')
+local lifecycle = require("codediff.ui.lifecycle")
+local auto_refresh = require("codediff.ui.auto_refresh")
 
 -- Common logic: Setup conflict result window at bottom
 -- Creates the result window layout and loads the real file with BASE content
@@ -47,7 +47,7 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   -- Load real file buffer in result window
   -- Use silent and swapfile handling to avoid prompts
   local old_shortmess = vim.o.shortmess
-  vim.o.shortmess = old_shortmess .. 'A'
+  vim.o.shortmess = old_shortmess .. "A"
   local ok, err = pcall(vim.cmd, "silent edit " .. vim.fn.fnameescape(abs_path))
   vim.o.shortmess = old_shortmess
 
@@ -79,7 +79,7 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   vim.wo[result_win].winbar = ""
 
   -- Enable scrollbind for result window
-  vim.api.nvim_win_set_cursor(result_win, {1, 0})
+  vim.api.nvim_win_set_cursor(result_win, { 1, 0 })
   vim.wo[result_win].scrollbind = true
 
   -- Update lifecycle with result buffer/window
@@ -92,7 +92,7 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   auto_refresh.enable_for_result(result_bufnr)
 
   -- Initialize conflict tracking (keymaps setup separately after setup_all_keymaps)
-  local conflict = require('codediff.ui.conflict')
+  local conflict = require("codediff.ui.conflict")
   conflict.initialize_tracking(result_bufnr, conflict_diffs.conflict_blocks)
 
   -- Setup autocmd to refresh signs when result buffer changes (event-driven approach)

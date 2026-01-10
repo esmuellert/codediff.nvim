@@ -1,14 +1,24 @@
 -- Diff computation and rendering for diff view
 local M = {}
 
-local core = require('codediff.ui.core')
-local semantic = require('codediff.ui.semantic_tokens')
-local config = require('codediff.config')
-local diff_module = require('codediff.core.diff')
+local core = require("codediff.ui.core")
+local semantic = require("codediff.ui.semantic_tokens")
+local config = require("codediff.config")
+local diff_module = require("codediff.core.diff")
 
 -- Common logic: Compute diff and render highlights
 -- @param auto_scroll_to_first_hunk boolean: Whether to auto-scroll to first change (default true)
-function M.compute_and_render(original_buf, modified_buf, original_lines, modified_lines, original_is_virtual, modified_is_virtual, original_win, modified_win, auto_scroll_to_first_hunk)
+function M.compute_and_render(
+  original_buf,
+  modified_buf,
+  original_lines,
+  modified_lines,
+  original_is_virtual,
+  modified_is_virtual,
+  original_win,
+  modified_win,
+  auto_scroll_to_first_hunk
+)
   -- Compute diff
   local diff_options = {
     max_computation_time_ms = config.options.diff.max_computation_time_ms,
@@ -44,8 +54,8 @@ function M.compute_and_render(original_buf, modified_buf, original_lines, modifi
 
     -- Step 2: ATOMIC - Reset both to line 1 AND re-enable scrollbind together
     -- This ensures scrollbind is established with proper baseline for filler lines
-    vim.api.nvim_win_set_cursor(original_win, {1, 0})
-    vim.api.nvim_win_set_cursor(modified_win, {1, 0})
+    vim.api.nvim_win_set_cursor(original_win, { 1, 0 })
+    vim.api.nvim_win_set_cursor(modified_win, { 1, 0 })
     vim.wo[original_win].scrollbind = true
     vim.wo[modified_win].scrollbind = true
 
@@ -58,8 +68,8 @@ function M.compute_and_render(original_buf, modified_buf, original_lines, modifi
       local first_change = lines_diff.changes[1]
       local target_line = first_change.original.start_line
 
-      pcall(vim.api.nvim_win_set_cursor, original_win, {target_line, 0})
-      pcall(vim.api.nvim_win_set_cursor, modified_win, {target_line, 0})
+      pcall(vim.api.nvim_win_set_cursor, original_win, { target_line, 0 })
+      pcall(vim.api.nvim_win_set_cursor, modified_win, { target_line, 0 })
 
       if vim.api.nvim_win_is_valid(modified_win) then
         vim.api.nvim_set_current_win(modified_win)
@@ -69,7 +79,7 @@ function M.compute_and_render(original_buf, modified_buf, original_lines, modifi
     elseif saved_cursor then
       pcall(vim.api.nvim_win_set_cursor, modified_win, saved_cursor)
       -- Sync original window to same line (scrollbind will handle column)
-      pcall(vim.api.nvim_win_set_cursor, original_win, {saved_cursor[1], 0})
+      pcall(vim.api.nvim_win_set_cursor, original_win, { saved_cursor[1], 0 })
     end
   end
 
@@ -121,8 +131,8 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
     vim.wo[modified_win].wrap = false
 
     -- Reset scroll position and enable scrollbind
-    vim.api.nvim_win_set_cursor(original_win, {1, 0})
-    vim.api.nvim_win_set_cursor(modified_win, {1, 0})
+    vim.api.nvim_win_set_cursor(original_win, { 1, 0 })
+    vim.api.nvim_win_set_cursor(modified_win, { 1, 0 })
     vim.wo[original_win].scrollbind = true
     vim.wo[modified_win].scrollbind = true
 
@@ -136,8 +146,8 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
       end
 
       if first_line then
-        pcall(vim.api.nvim_win_set_cursor, original_win, {first_line, 0})
-        pcall(vim.api.nvim_win_set_cursor, modified_win, {first_line, 0})
+        pcall(vim.api.nvim_win_set_cursor, original_win, { first_line, 0 })
+        pcall(vim.api.nvim_win_set_cursor, modified_win, { first_line, 0 })
         if vim.api.nvim_win_is_valid(modified_win) then
           vim.api.nvim_set_current_win(modified_win)
           vim.cmd("normal! zz")
@@ -155,7 +165,7 @@ end
 
 -- Common logic: Setup auto-refresh for real file buffers
 function M.setup_auto_refresh(original_buf, modified_buf, original_is_virtual, modified_is_virtual)
-  local auto_refresh = require('codediff.ui.auto_refresh')
+  local auto_refresh = require("codediff.ui.auto_refresh")
 
   if not original_is_virtual then
     auto_refresh.enable(original_buf)

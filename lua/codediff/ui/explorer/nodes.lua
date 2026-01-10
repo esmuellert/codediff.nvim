@@ -8,19 +8,19 @@ local config = require("codediff.config")
 
 -- Merge artifact patterns (created by git mergetool)
 local MERGE_ARTIFACT_PATTERNS = {
-  "%.orig$",           -- file.orig
-  "%.BACKUP%.",        -- file.BACKUP.xxxxx
-  "%.BASE%.",          -- file.BASE.xxxxx
-  "%.LOCAL%.",         -- file.LOCAL.xxxxx
-  "%.REMOTE%.",        -- file.REMOTE.xxxxx
-  "_BACKUP_%d+%.",     -- file_BACKUP_xxxxx.ext
-  "_BASE_%d+%.",       -- file_BASE_xxxxx.ext
-  "_LOCAL_%d+%.",      -- file_LOCAL_xxxxx.ext
-  "_REMOTE_%d+%.",     -- file_REMOTE_xxxxx.ext
-  "_BACKUP_%d+$",      -- file_BACKUP_xxxxx
-  "_BASE_%d+$",        -- file_BASE_xxxxx
-  "_LOCAL_%d+$",       -- file_LOCAL_xxxxx
-  "_REMOTE_%d+$",      -- file_REMOTE_xxxxx
+  "%.orig$", -- file.orig
+  "%.BACKUP%.", -- file.BACKUP.xxxxx
+  "%.BASE%.", -- file.BASE.xxxxx
+  "%.LOCAL%.", -- file.LOCAL.xxxxx
+  "%.REMOTE%.", -- file.REMOTE.xxxxx
+  "_BACKUP_%d+%.", -- file_BACKUP_xxxxx.ext
+  "_BASE_%d+%.", -- file_BASE_xxxxx.ext
+  "_LOCAL_%d+%.", -- file_LOCAL_xxxxx.ext
+  "_REMOTE_%d+%.", -- file_REMOTE_xxxxx.ext
+  "_BACKUP_%d+$", -- file_BACKUP_xxxxx
+  "_BASE_%d+$", -- file_BASE_xxxxx
+  "_LOCAL_%d+$", -- file_LOCAL_xxxxx
+  "_REMOTE_%d+$", -- file_REMOTE_xxxxx
 }
 
 -- Status symbols and colors
@@ -29,15 +29,15 @@ local STATUS_SYMBOLS = {
   A = { symbol = "A", color = "DiagnosticOk" },
   D = { symbol = "D", color = "DiagnosticError" },
   ["??"] = { symbol = "??", color = "DiagnosticInfo" },
-  ["!"] = { symbol = "!", color = "DiagnosticError" },  -- Merge conflict
+  ["!"] = { symbol = "!", color = "DiagnosticError" }, -- Merge conflict
 }
 
 -- Indent marker characters (neo-tree style)
 local INDENT_MARKERS = {
-  edge = "│",      -- Vertical line for non-last items
-  item = "├",      -- Branch for non-last items
-  last = "└",      -- Branch for last item
-  none = " ",      -- Space when parent was last item
+  edge = "│", -- Vertical line for non-last items
+  item = "├", -- Branch for non-last items
+  last = "└", -- Branch for last item
+  none = " ", -- Space when parent was last item
 }
 
 -- Check if a file path matches merge artifact patterns
@@ -55,7 +55,7 @@ function M.filter_merge_artifacts(files)
   if not config.options.diff.hide_merge_artifacts then
     return files
   end
-  
+
   local filtered = {}
   for _, file in ipairs(files) do
     if not is_merge_artifact(file.path) then
@@ -99,14 +99,14 @@ function M.create_file_nodes(files, git_root, group)
       data = {
         path = file.path,
         status = file.status,
-        old_path = file.old_path,  -- For renames: original path before rename
+        old_path = file.old_path, -- For renames: original path before rename
         icon = icon,
         icon_color = icon_color,
         status_symbol = status_info.symbol,
         status_color = status_info.color,
         git_root = git_root,
         group = group,
-      }
+      },
     })
   end
   return nodes
@@ -183,7 +183,7 @@ function M.create_tree_file_nodes(files, git_root, group)
             dir_path = full_path,
             group = group,
             indent_state = node_indent_state,
-          }
+          },
         }, children)
       else
         -- File node
@@ -204,7 +204,7 @@ function M.create_tree_file_nodes(files, git_root, group)
             git_root = git_root,
             group = group,
             indent_state = node_indent_state,
-          }
+          },
         })
       end
     end
@@ -220,7 +220,7 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
   local line = NuiLine()
   local data = node.data or {}
   local explorer_config = config.options.explorer or {}
-  local use_indent_markers = explorer_config.indent_markers ~= false  -- default true
+  local use_indent_markers = explorer_config.indent_markers ~= false -- default true
 
   -- Helper to build indent string with markers (for tree mode)
   local function build_indent_markers(indent_state)
@@ -269,14 +269,14 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
   else
     -- Match both path AND group to handle files in both staged and unstaged
     local is_selected = data.path and data.path == selected_path and data.group == selected_group
-    
+
     -- Get selected background color once
     local selected_bg = nil
     if is_selected then
       local sel_hl = vim.api.nvim_get_hl(0, { name = "CodeDiffExplorerSelected", link = false })
       selected_bg = sel_hl.bg
     end
-    
+
     -- Helper to get highlight with selected background but original foreground
     local function get_hl(default)
       if not is_selected then
@@ -285,11 +285,11 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
       -- Create a combined highlight: original fg + selected bg
       local base_hl_name = default or "Normal"
       local combined_name = "CodeDiffExplorerSel_" .. base_hl_name:gsub("[^%w]", "_")
-      
+
       -- Get foreground from base highlight
       local base_hl = vim.api.nvim_get_hl(0, { name = base_hl_name, link = false })
       local fg = base_hl.fg
-      
+
       -- Set the combined highlight (will be cached by nvim)
       vim.api.nvim_set_hl(0, combined_name, { fg = fg, bg = selected_bg })
       return combined_name
@@ -327,7 +327,7 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
 
     -- Calculate how much width we've used and reserve for status
     local used_width = vim.fn.strdisplaywidth(indent) + vim.fn.strdisplaywidth(icon_part)
-    local status_reserve = vim.fn.strdisplaywidth(status_symbol) + 3  -- 2 spaces before + 1 space after status
+    local status_reserve = vim.fn.strdisplaywidth(status_symbol) + 3 -- 2 spaces before + 1 space after status
     local available_for_content = max_width - used_width - status_reserve
 
     -- Show: filename + full directory path, truncate directory from left if needed
@@ -347,7 +347,9 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
         local accumulated_width = 0
         for char in vim.gsplit(directory, "") do
           local char_width = vim.fn.strdisplaywidth(char)
-          if accumulated_width + char_width > chars_to_keep then break end
+          if accumulated_width + char_width > chars_to_keep then
+            break
+          end
           accumulated_width = accumulated_width + char_width
           byte_pos = byte_pos + #char
         end
@@ -373,7 +375,7 @@ function M.prepare_node(node, max_width, selected_path, selected_group)
       line:append(string.rep(" ", padding_needed), get_hl("Normal"))
     end
     line:append(status_symbol, get_hl(data.status_color))
-    line:append(" ", get_hl("Normal"))  -- Right padding (matches status_reserve calculation)
+    line:append(" ", get_hl("Normal")) -- Right padding (matches status_reserve calculation)
   end
 
   return line

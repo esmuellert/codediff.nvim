@@ -1,16 +1,20 @@
 -- Cleanup and autocmd management for diff views
 local M = {}
 
-local config = require('codediff.config')
+local config = require("codediff.config")
 
 -- Will be injected by init.lua
 local session = nil
 local state = nil
-M._set_session_module = function(s) session = s end
-M._set_state_module = function(s) state = s end
+M._set_session_module = function(s)
+  session = s
+end
+M._set_state_module = function(s)
+  state = s
+end
 
 -- Autocmd group for cleanup
-local augroup = vim.api.nvim_create_augroup('codediff_lifecycle', { clear = true })
+local augroup = vim.api.nvim_create_augroup("codediff_lifecycle", { clear = true })
 
 -- Check if a revision represents a virtual buffer
 local function is_virtual_revision(revision)
@@ -27,7 +31,7 @@ local function cleanup_diff(tabpage)
   end
 
   -- Disable auto-refresh for both buffers
-  local auto_refresh = require('codediff.ui.auto_refresh')
+  local auto_refresh = require("codediff.ui.auto_refresh")
   auto_refresh.disable(diff.original_bufnr)
   auto_refresh.disable(diff.modified_bufnr)
 
@@ -44,25 +48,25 @@ local function cleanup_diff(tabpage)
     if vim.api.nvim_buf_is_valid(bufnr) then
       for _, key in pairs(config.options.keymaps.view) do
         if key then
-          pcall(vim.keymap.del, 'n', key, { buffer = bufnr })
+          pcall(vim.keymap.del, "n", key, { buffer = bufnr })
         end
       end
     end
   end
 
-  -- Clean view and explorer keymaps from explorer buffer 
+  -- Clean view and explorer keymaps from explorer buffer
   if diff.explorer and diff.explorer.bufnr and vim.api.nvim_buf_is_valid(diff.explorer.bufnr) then
     for _, key in pairs(config.options.keymaps.view) do
       if key then
-        pcall(vim.keymap.del, 'n', key, { buffer = diff.explorer.bufnr })
+        pcall(vim.keymap.del, "n", key, { buffer = diff.explorer.bufnr })
       end
     end
     for _, key in pairs(config.options.keymaps.explorer) do
       if key then
-        pcall(vim.keymap.del, 'n', key, { buffer = diff.explorer.bufnr })
+        pcall(vim.keymap.del, "n", key, { buffer = diff.explorer.bufnr })
       end
     end
-    
+
     -- Call explorer's cleanup function to stop file watchers
     if diff.explorer._cleanup_auto_refresh then
       pcall(diff.explorer._cleanup_auto_refresh)
@@ -81,13 +85,13 @@ local function cleanup_diff(tabpage)
   for _, client in ipairs(clients) do
     if client.server_capabilities.semanticTokensProvider then
       if original_virtual_uri then
-        pcall(client.notify, 'textDocument/didClose', {
-          textDocument = { uri = original_virtual_uri }
+        pcall(client.notify, "textDocument/didClose", {
+          textDocument = { uri = original_virtual_uri },
         })
       end
       if modified_virtual_uri then
-        pcall(client.notify, 'textDocument/didClose', {
-          textDocument = { uri = modified_virtual_uri }
+        pcall(client.notify, "textDocument/didClose", {
+          textDocument = { uri = modified_virtual_uri },
         })
       end
     end
@@ -129,9 +133,9 @@ local function cleanup_diff(tabpage)
   diff.conflict_files = {}
 
   -- Clear tab-specific autocmd groups
-  pcall(vim.api.nvim_del_augroup_by_name, 'codediff_lifecycle_tab_' .. tabpage)
-  pcall(vim.api.nvim_del_augroup_by_name, 'codediff_working_sync_' .. tabpage)
-  pcall(vim.api.nvim_del_augroup_by_name, 'CodeDiffConflictSigns_' .. tabpage)
+  pcall(vim.api.nvim_del_augroup_by_name, "codediff_lifecycle_tab_" .. tabpage)
+  pcall(vim.api.nvim_del_augroup_by_name, "codediff_working_sync_" .. tabpage)
+  pcall(vim.api.nvim_del_augroup_by_name, "CodeDiffConflictSigns_" .. tabpage)
 
   -- Remove from tracking
   active_diffs[tabpage] = nil
@@ -140,7 +144,7 @@ end
 -- Count windows in current tabpage that have diff markers
 local function count_diff_windows()
   local count = 0
-  for i = 1, vim.fn.winnr('$') do
+  for i = 1, vim.fn.winnr("$") do
     local win = vim.fn.win_getid(i)
     if vim.w[win].codediff_restore then
       count = count + 1
@@ -157,7 +161,7 @@ end
 -- Setup autocmds for automatic cleanup
 function M.setup_autocmds()
   -- When a window is closed, check if we should cleanup the diff
-  vim.api.nvim_create_autocmd('WinClosed', {
+  vim.api.nvim_create_autocmd("WinClosed", {
     group = augroup,
     callback = function(args)
       local closed_win = tonumber(args.match)
@@ -184,7 +188,7 @@ function M.setup_autocmds()
   })
 
   -- When a tab is closed, cleanup its diff
-  vim.api.nvim_create_autocmd('TabClosed', {
+  vim.api.nvim_create_autocmd("TabClosed", {
     group = augroup,
     callback = function()
       -- TabClosed doesn't give us the tab number, so we need to scan
@@ -204,7 +208,7 @@ function M.setup_autocmds()
   })
 
   -- Fallback: When entering a buffer, check if we need cleanup
-  vim.api.nvim_create_autocmd('BufEnter', {
+  vim.api.nvim_create_autocmd("BufEnter", {
     group = augroup,
     callback = function()
       local current_tab = vim.api.nvim_get_current_tabpage()

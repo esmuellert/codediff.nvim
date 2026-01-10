@@ -5,7 +5,7 @@ local M = {}
 function M.setup(opts)
   local config = require("codediff.config")
   config.setup(opts)
-  
+
   local render = require("codediff.ui")
   render.setup_highlights()
 end

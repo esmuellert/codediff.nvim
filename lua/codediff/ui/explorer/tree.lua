@@ -8,7 +8,9 @@ local filter = require("codediff.ui.explorer.filter")
 
 -- Will be injected by init.lua
 local nodes = nil
-M._set_nodes_module = function(n) nodes = n end
+M._set_nodes_module = function(n)
+  nodes = n
+end
 
 -- Filter files based on explorer.file_filter config
 -- Returns files that should be shown (not ignored)
@@ -46,27 +48,36 @@ function M.create_tree_data(status_result, git_root, base_revision, is_dir_mode)
   else
     -- Status mode: separate conflicts/staged/unstaged groups
     local tree_nodes = {}
-    
+
     -- Conflicts first (most important)
     if #conflict_nodes > 0 then
-      table.insert(tree_nodes, Tree.Node({
-        text = string.format("Merge Changes (%d)", #conflicts),
-        data = { type = "group", name = "conflicts" },
-      }, conflict_nodes))
+      table.insert(
+        tree_nodes,
+        Tree.Node({
+          text = string.format("Merge Changes (%d)", #conflicts),
+          data = { type = "group", name = "conflicts" },
+        }, conflict_nodes)
+      )
     end
-    
+
     -- Unstaged changes
-    table.insert(tree_nodes, Tree.Node({
-      text = string.format("Changes (%d)", #unstaged),
-      data = { type = "group", name = "unstaged" },
-    }, unstaged_nodes))
-    
+    table.insert(
+      tree_nodes,
+      Tree.Node({
+        text = string.format("Changes (%d)", #unstaged),
+        data = { type = "group", name = "unstaged" },
+      }, unstaged_nodes)
+    )
+
     -- Staged changes
-    table.insert(tree_nodes, Tree.Node({
-      text = string.format("Staged Changes (%d)", #staged),
-      data = { type = "group", name = "staged" },
-    }, staged_nodes))
-    
+    table.insert(
+      tree_nodes,
+      Tree.Node({
+        text = string.format("Staged Changes (%d)", #staged),
+        data = { type = "group", name = "staged" },
+      }, staged_nodes)
+    )
+
     return tree_nodes
   end
 end

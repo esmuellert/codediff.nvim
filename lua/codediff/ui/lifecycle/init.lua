@@ -9,10 +9,10 @@
 local M = {}
 
 -- Import submodules
-local session = require('codediff.ui.lifecycle.session')
-local state = require('codediff.ui.lifecycle.state')
-local cleanup = require('codediff.ui.lifecycle.cleanup')
-local accessors = require('codediff.ui.lifecycle.accessors')
+local session = require("codediff.ui.lifecycle.session")
+local state = require("codediff.ui.lifecycle.state")
+local cleanup = require("codediff.ui.lifecycle.cleanup")
+local accessors = require("codediff.ui.lifecycle.accessors")
 
 -- Wire up cross-module dependencies
 session._set_state_module(state)

@@ -2,11 +2,13 @@
 -- Handles save/restore, suspend/resume, and buffer state
 local M = {}
 
-local highlights = require('codediff.ui.highlights')
+local highlights = require("codediff.ui.highlights")
 
 -- Will be injected by init.lua
 local session = nil
-M._set_session_module = function(s) session = s end
+M._set_session_module = function(s)
+  session = s
+end
 
 -- Save buffer state before modifications
 local function save_buffer_state(bufnr)
@@ -64,7 +66,7 @@ local function get_file_mtime(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
 
   -- Virtual buffers don't have mtime
-  if bufname:match('^codediff://') or bufname == '' then
+  if bufname:match("^codediff://") or bufname == "" then
     return nil
   end
 
@@ -90,7 +92,7 @@ local function suspend_diff(tabpage)
   end
 
   -- Disable auto-refresh (stop watching buffer changes)
-  local auto_refresh = require('codediff.ui.auto_refresh')
+  local auto_refresh = require("codediff.ui.auto_refresh")
   auto_refresh.disable(diff.original_bufnr)
   auto_refresh.disable(diff.modified_bufnr)
   if diff.result_bufnr then
@@ -153,7 +155,7 @@ local function resume_diff(tabpage)
 
   if need_recompute or not diff.stored_diff_result then
     -- Buffer or file changed, recompute diff
-    local diff_module = require('codediff.core.diff')
+    local diff_module = require("codediff.core.diff")
     lines_diff = diff_module.compute_diff(original_lines, modified_lines)
     diff_was_recomputed = true
 
@@ -174,7 +176,7 @@ local function resume_diff(tabpage)
 
   -- Render with fresh content and (possibly reused) diff result
   if lines_diff then
-    local core = require('codediff.ui.core')
+    local core = require("codediff.ui.core")
     core.render_diff(diff.original_bufnr, diff.modified_bufnr, original_lines, modified_lines, lines_diff)
 
     -- Re-sync scrollbind ONLY if diff was recomputed (fillers may have changed)
@@ -187,10 +189,10 @@ local function resume_diff(tabpage)
         local saved_cursor = vim.api.nvim_win_get_cursor(current_win)
 
         -- Step 2: Reset all to line 1 (baseline)
-        vim.api.nvim_win_set_cursor(diff.original_win, {1, 0})
-        vim.api.nvim_win_set_cursor(diff.modified_win, {1, 0})
+        vim.api.nvim_win_set_cursor(diff.original_win, { 1, 0 })
+        vim.api.nvim_win_set_cursor(diff.modified_win, { 1, 0 })
         if result_win then
-          vim.api.nvim_win_set_cursor(result_win, {1, 0})
+          vim.api.nvim_win_set_cursor(result_win, { 1, 0 })
         end
 
         -- Step 3: Re-establish scrollbind (reset sync state)
@@ -223,7 +225,7 @@ local function resume_diff(tabpage)
   end
 
   -- Re-enable auto-refresh for real buffers only
-  local auto_refresh = require('codediff.ui.auto_refresh')
+  local auto_refresh = require("codediff.ui.auto_refresh")
 
   -- Check if buffers are real files (not virtual) using revision
   local original_is_real = not is_virtual_revision(diff.original_revision)

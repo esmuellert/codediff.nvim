@@ -10,20 +10,28 @@ local nodes_module = nil
 local tree_module = nil
 local refresh_module = nil
 local actions_module = nil
-M._set_nodes_module = function(n) nodes_module = n end
-M._set_tree_module = function(t) tree_module = t end
-M._set_refresh_module = function(r) refresh_module = r end
-M._set_actions_module = function(a) actions_module = a end
+M._set_nodes_module = function(n)
+  nodes_module = n
+end
+M._set_tree_module = function(t)
+  tree_module = t
+end
+M._set_refresh_module = function(r)
+  refresh_module = r
+end
+M._set_actions_module = function(a)
+  actions_module = a
+end
 
 function M.create(status_result, git_root, tabpage, width, base_revision, target_revision, opts)
   opts = opts or {}
-  local is_dir_mode = not git_root  -- nil git_root signals directory comparison mode
+  local is_dir_mode = not git_root -- nil git_root signals directory comparison mode
 
   -- Get explorer position and size from config
   local explorer_config = config.options.explorer or {}
   local position = explorer_config.position or "left"
   local size
-  local text_width  -- Width for text rendering (always horizontal width)
+  local text_width -- Width for text rendering (always horizontal width)
 
   if position == "bottom" then
     size = explorer_config.height or 15
@@ -89,20 +97,22 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       end
     end
   end
-  
+
   -- nui.tree get_child_ids returns IDs, need to get actual nodes
   for _, node in ipairs(tree_data) do
     if node.data and node.data.type == "group" then
       node:expand()
     end
   end
-  
+
   -- For tree mode, expand directories after initial render when we have node IDs
   local explorer_config = config.options.explorer or {}
   if explorer_config.view_mode == "tree" then
     -- We need to expand directory nodes - they're children of group nodes
     local function expand_all_dirs(parent_node)
-      if not parent_node:has_children() then return end
+      if not parent_node:has_children() then
+        return
+      end
       for _, child_id in ipairs(parent_node:get_child_ids()) do
         local child = tree:get_node(child_id)
         if child and child.data and child.data.type == "directory" then
@@ -131,20 +141,20 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     base_revision = base_revision,
     target_revision = target_revision,
     status_result = status_result, -- Store initial status result
-    on_file_select = nil,  -- Will be set below
-    current_file_path = nil,  -- Track currently selected file
+    on_file_select = nil, -- Will be set below
+    current_file_path = nil, -- Track currently selected file
     current_file_group = nil, -- Track currently selected file's group (staged/unstaged)
-    is_hidden = false,  -- Track visibility state
+    is_hidden = false, -- Track visibility state
   }
 
   -- File selection callback - manages its own lifecycle
   local function on_file_select(file_data)
-    local git = require('codediff.core.git')
-    local view = require('codediff.ui.view')
-    local lifecycle = require('codediff.ui.lifecycle')
-    
+    local git = require("codediff.core.git")
+    local view = require("codediff.ui.view")
+    local lifecycle = require("codediff.ui.lifecycle")
+
     local file_path = file_data.path
-    local old_path = file_data.old_path  -- For renames: path in original revision
+    local old_path = file_data.old_path -- For renames: path in original revision
     local group = file_data.group or "unstaged"
 
     -- Dir mode: Compare files from dir1 vs dir2 (no git)
@@ -179,14 +189,13 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     -- Same file can have different diffs (staged vs HEAD, working vs staged)
     local session = lifecycle.get_session(tabpage)
     if session then
-      local is_same_file = (session.modified_path == abs_path or 
-                           (session.git_root and session.original_path == file_path))
-      
+      local is_same_file = (session.modified_path == abs_path or (session.git_root and session.original_path == file_path))
+
       if is_same_file then
         -- Check if it's the same diff comparison
         local is_staged_diff = group == "staged"
         local current_is_staged = session.modified_revision == ":0"
-        
+
         if is_staged_diff == current_is_staged then
           -- Same file AND same diff type, skip update
           return
@@ -244,8 +253,8 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
             git_root = git_root,
             original_path = file_path,
             modified_path = file_path,
-            original_revision = ":3",  -- Theirs/Incoming (left buffer)
-            modified_revision = ":2",  -- Ours/Current (right buffer)
+            original_revision = ":3", -- Theirs/Incoming (left buffer)
+            modified_revision = ":2", -- Ours/Current (right buffer)
             conflict = true,
           }
           view.update(tabpage, session_config, true)
@@ -259,8 +268,8 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           local session_config = {
             mode = "explorer",
             git_root = git_root,
-            original_path = old_path or file_path,  -- Use old_path if rename
-            modified_path = file_path,              -- New path after rename
+            original_path = old_path or file_path, -- Use old_path if rename
+            modified_path = file_path, -- New path after rename
             original_revision = commit_hash,
             modified_revision = ":0",
           }
@@ -297,7 +306,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       end
     end)
   end
-  
+
   -- Wrap on_file_select to track current file and group
   explorer.on_file_select = function(file_data)
     explorer.current_file_path = file_data.path
@@ -315,8 +324,10 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   if config.options.keymaps.explorer.select then
     vim.keymap.set("n", config.options.keymaps.explorer.select, function()
       local node = tree:get_node()
-      if not node then return end
-  
+      if not node then
+        return
+      end
+
       if node.data and (node.data.type == "group" or node.data.type == "directory") then
         -- Toggle group or directory
         if node:is_expanded() then
@@ -337,7 +348,9 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   -- Double click also works for files
   vim.keymap.set("n", "<2-LeftMouse>", function()
     local node = tree:get_node()
-    if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then return end
+    if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then
+      return
+    end
     explorer.on_file_select(node.data)
   end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
 
@@ -345,7 +358,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   -- vim.keymap.set("n", "q", function()
   --   split:unmount()
   -- end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
-  
+
   -- Hover to show full path (K key, like LSP hover)
   local hover_win = nil
   if config.options.keymaps.explorer.hover then
@@ -356,29 +369,31 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
         hover_win = nil
         return
       end
-      
+
       local node = tree:get_node()
-      if not node or not node.data or node.data.type == "group" then return end
-      
+      if not node or not node.data or node.data.type == "group" then
+        return
+      end
+
       local full_path = node.data.path
       local display_text = git_root .. "/" .. full_path
-      
+
       -- Create hover buffer
       local hover_buf = vim.api.nvim_create_buf(false, true)
       vim.api.nvim_buf_set_lines(hover_buf, 0, -1, false, { display_text })
       vim.bo[hover_buf].modifiable = false
-      
+
       -- Calculate window position (next to cursor)
       local cursor = vim.api.nvim_win_get_cursor(0)
       local row = cursor[1] - 1
       local col = vim.api.nvim_win_get_width(0)
-      
+
       -- Calculate window dimensions with wrapping
       local max_width = 80
       local text_len = #display_text
       local width = math.min(text_len + 2, max_width)
-      local height = math.ceil(text_len / (max_width - 2))  -- Account for padding
-      
+      local height = math.ceil(text_len / (max_width - 2)) -- Account for padding
+
       -- Create floating window with wrap enabled
       hover_win = vim.api.nvim_open_win(hover_buf, false, {
         relative = "win",
@@ -389,12 +404,12 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
         style = "minimal",
         border = "rounded",
       })
-      
+
       -- Enable wrap in hover window
       vim.wo[hover_win].wrap = true
-      
+
       -- Auto-close on cursor move or buffer leave
-      vim.api.nvim_create_autocmd({"CursorMoved", "BufLeave"}, {
+      vim.api.nvim_create_autocmd({ "CursorMoved", "BufLeave" }, {
         buffer = split.bufnr,
         once = true,
         callback = function()
@@ -406,7 +421,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       })
     end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
   end
-  
+
   -- Refresh explorer (R key)
   if config.options.keymaps.explorer.refresh then
     vim.keymap.set("n", config.options.keymaps.explorer.refresh, function()
@@ -460,12 +475,12 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       })
     end, 100)
   end
-  
+
   -- Setup auto-refresh
   refresh_module.setup_auto_refresh(explorer, tabpage)
-  
+
   -- Re-render on window resize for dynamic width
-  vim.api.nvim_create_autocmd('WinResized', {
+  vim.api.nvim_create_autocmd("WinResized", {
     callback = function()
       -- Check if explorer window was resized
       local resized_wins = vim.v.event.windows or {}
@@ -477,7 +492,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       end
     end,
   })
-  
+
   return explorer
 end
 

@@ -5,15 +5,17 @@ local config = require("codediff.config")
 
 -- Will be injected by init.lua
 local tree_module = nil
-M._set_tree_module = function(t) tree_module = t end
+M._set_tree_module = function(t)
+  tree_module = t
+end
 
 -- Setup auto-refresh triggers for explorer
 -- Returns a cleanup function that should be called when the explorer is destroyed
 function M.setup_auto_refresh(explorer, tabpage)
   local refresh_timer = nil
-  local debounce_ms = 500  -- Wait 500ms after last event
+  local debounce_ms = 500 -- Wait 500ms after last event
   local git_watcher = nil
-  local group = vim.api.nvim_create_augroup('CodeDiffExplorerRefresh_' .. tabpage, { clear = true })
+  local group = vim.api.nvim_create_augroup("CodeDiffExplorerRefresh_" .. tabpage, { clear = true })
 
   local function cleanup()
     if refresh_timer then
@@ -21,9 +23,13 @@ function M.setup_auto_refresh(explorer, tabpage)
       refresh_timer = nil
     end
     if git_watcher then
-      pcall(function() git_watcher:stop() end)
+      pcall(function()
+        git_watcher:stop()
+      end)
       -- On Windows, we must close the handle to release file locks
-      pcall(function() git_watcher:close() end)
+      pcall(function()
+        git_watcher:close()
+      end)
       git_watcher = nil
     end
     pcall(vim.api.nvim_del_augroup_by_id, group)
@@ -49,7 +55,7 @@ function M.setup_auto_refresh(explorer, tabpage)
   end
 
   -- Auto-refresh when explorer buffer is entered (user focuses explorer window)
-  vim.api.nvim_create_autocmd('BufEnter', {
+  vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
     buffer = explorer.bufnr,
     callback = function()
@@ -62,7 +68,7 @@ function M.setup_auto_refresh(explorer, tabpage)
   -- Watch .git directory for changes (git mode only)
   -- Dir mode skips this - relies on BufEnter refresh only
   if explorer.git_root then
-    local git = require('codediff.core.git')
+    local git = require("codediff.core.git")
     git.get_git_dir(explorer.git_root, function(err, git_dir)
       if err or not git_dir then
         return
@@ -84,21 +90,25 @@ function M.setup_auto_refresh(explorer, tabpage)
         git_watcher = uv.new_fs_event()
         if git_watcher then
           local ok = pcall(function()
-            git_watcher:start(git_dir, {}, vim.schedule_wrap(function(watch_err, filename, events)
-              if watch_err then
-                return
-              end
-              -- Only refresh if this tabpage is current
-              if vim.api.nvim_get_current_tabpage() == tabpage and
-                 vim.api.nvim_tabpage_is_valid(tabpage) and
-                 not explorer.is_hidden then
-                debounced_refresh()
-              end
-            end))
+            git_watcher:start(
+              git_dir,
+              {},
+              vim.schedule_wrap(function(watch_err, filename, events)
+                if watch_err then
+                  return
+                end
+                -- Only refresh if this tabpage is current
+                if vim.api.nvim_get_current_tabpage() == tabpage and vim.api.nvim_tabpage_is_valid(tabpage) and not explorer.is_hidden then
+                  debounced_refresh()
+                end
+              end)
+            )
           end)
           if not ok then
             -- Failed to start watcher, clean it up
-            pcall(function() git_watcher:close() end)
+            pcall(function()
+              git_watcher:close()
+            end)
             git_watcher = nil
           end
         end
@@ -107,7 +117,7 @@ function M.setup_auto_refresh(explorer, tabpage)
   end
 
   -- Clean up on tab close
-  vim.api.nvim_create_autocmd('TabClosed', {
+  vim.api.nvim_create_autocmd("TabClosed", {
     group = group,
     pattern = tostring(tabpage),
     callback = cleanup,
@@ -118,7 +128,7 @@ end
 
 -- Refresh explorer with updated git status
 function M.refresh(explorer)
-  local git = require('codediff.core.git')
+  local git = require("codediff.core.git")
 
   -- Skip refresh if explorer is hidden
   if explorer.is_hidden then
@@ -156,7 +166,9 @@ function M.refresh(explorer)
       local explorer_config = config.options.explorer or {}
       if explorer_config.view_mode == "tree" then
         local function expand_all_dirs(parent_node)
-          if not parent_node:has_children() then return end
+          if not parent_node:has_children() then
+            return
+          end
           for _, child_id in ipairs(parent_node:get_child_ids()) do
             local child = explorer.tree:get_node(child_id)
             if child and child.data and child.data.type == "directory" then
@@ -207,12 +219,16 @@ end
 -- Handles both list mode (flat) and tree mode (nested directories)
 function M.get_all_files(tree)
   local files = {}
-  
+
   -- Recursively collect files from a node and its children
   local function collect_files(parent_node)
-    if not parent_node:has_children() then return end
-    if not parent_node:is_expanded() then return end
-    
+    if not parent_node:has_children() then
+      return
+    end
+    if not parent_node:is_expanded() then
+      return
+    end
+
     for _, child_id in ipairs(parent_node:get_child_ids()) do
       local node = tree:get_node(child_id)
       if node and node.data then
@@ -229,12 +245,12 @@ function M.get_all_files(tree)
       end
     end
   end
-  
+
   local nodes = tree:get_nodes()
   for _, group_node in ipairs(nodes) do
     collect_files(group_node)
   end
-  
+
   return files
 end
 

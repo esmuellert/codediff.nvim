@@ -1,21 +1,25 @@
 -- Conflict navigation for merge tool
 local M = {}
 
-local lifecycle = require('codediff.ui.lifecycle')
+local lifecycle = require("codediff.ui.lifecycle")
 
 -- Will be injected by init.lua
 local tracking = nil
-M._set_tracking_module = function(t) tracking = t end
+M._set_tracking_module = function(t)
+  tracking = t
+end
 
 --- Navigate to next conflict
 --- @param tabpage number
 function M.navigate_next_conflict(tabpage)
   local session = lifecycle.get_session(tabpage)
-  if not session or not session.conflict_blocks then return end
+  if not session or not session.conflict_blocks then
+    return
+  end
 
   local current_buf = vim.api.nvim_get_current_buf()
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-  
+
   local target_block = nil
   local target_line = nil
   local target_index = 0
@@ -55,19 +59,19 @@ function M.navigate_next_conflict(tabpage)
       target_line = start
       target_index = 1
     end
-    
+
     if target_line and target_line < cursor_line then
-       -- Wrapped
+      -- Wrapped
     else
-       -- Should not happen if total_active > 0
-       return
+      -- Should not happen if total_active > 0
+      return
     end
   end
 
   if target_line then
-    vim.api.nvim_win_set_cursor(0, {target_line, 0})
+    vim.api.nvim_win_set_cursor(0, { target_line, 0 })
     vim.cmd("normal! zz")
-    vim.api.nvim_echo({{string.format('Conflict %d of %d', target_index, total_active), 'None'}}, false, {})
+    vim.api.nvim_echo({ { string.format("Conflict %d of %d", target_index, total_active), "None" } }, false, {})
   end
 end
 
@@ -75,11 +79,13 @@ end
 --- @param tabpage number
 function M.navigate_prev_conflict(tabpage)
   local session = lifecycle.get_session(tabpage)
-  if not session or not session.conflict_blocks then return end
+  if not session or not session.conflict_blocks then
+    return
+  end
 
   local current_buf = vim.api.nvim_get_current_buf()
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-  
+
   local target_block = nil
   local target_line = nil
   local target_index = 0
@@ -120,18 +126,18 @@ function M.navigate_prev_conflict(tabpage)
       target_line = start
       target_index = #active_indices
     end
-    
+
     if target_line and target_line > cursor_line then
-       -- Wrapped
+      -- Wrapped
     else
-       return
+      return
     end
   end
 
   if target_line then
-    vim.api.nvim_win_set_cursor(0, {target_line, 0})
+    vim.api.nvim_win_set_cursor(0, { target_line, 0 })
     vim.cmd("normal! zz")
-    vim.api.nvim_echo({{string.format('Conflict %d of %d', target_index, total_active), 'None'}}, false, {})
+    vim.api.nvim_echo({ { string.format("Conflict %d of %d", target_index, total_active), "None" } }, false, {})
   end
 end
 
