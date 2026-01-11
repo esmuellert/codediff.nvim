@@ -149,19 +149,12 @@ local function handle_dir_diff(dir1, dir2)
 end
 
 local function handle_explorer(revision, revision2)
-  -- Always use current working directory for explorer mode
-  -- (user expects to see status of the repo they're working in, not the buffer's repo)
-  local check_path = vim.fn.getcwd()
+  -- Try buffer path first (consistent with original behavior), fallback to cwd
+  local current_buf = vim.api.nvim_get_current_buf()
+  local current_file = vim.api.nvim_buf_get_name(current_buf)
+  local cwd = vim.fn.getcwd()
 
-  -- Check if in git repository
-  git.get_git_root(check_path, function(err_root, git_root)
-    if err_root then
-      vim.schedule(function()
-        vim.notify(err_root, vim.log.levels.ERROR)
-      end)
-      return
-    end
-
+  local function open_explorer(git_root)
     local function process_status(err_status, status_result, original_rev, modified_rev)
       vim.schedule(function()
         if err_status then
@@ -243,7 +236,40 @@ local function handle_explorer(revision, revision2)
         process_status(err_status, status_result, nil, nil)
       end)
     end
-  end)
+  end
+
+  -- Try buffer path first if available
+  if current_file ~= "" then
+    git.get_git_root(current_file, function(err_file, git_root_file)
+      if not err_file then
+        open_explorer(git_root_file)
+        return
+      end
+
+      -- Buffer path failed, try cwd as fallback
+      git.get_git_root(cwd, function(err_cwd, git_root_cwd)
+        if not err_cwd then
+          open_explorer(git_root_cwd)
+          return
+        end
+        -- Both failed
+        vim.schedule(function()
+          vim.notify("Not in a git repository", vim.log.levels.ERROR)
+        end)
+      end)
+    end)
+  else
+    -- No buffer, try cwd directly
+    git.get_git_root(cwd, function(err_cwd, git_root)
+      if err_cwd then
+        vim.schedule(function()
+          vim.notify(err_cwd, vim.log.levels.ERROR)
+        end)
+        return
+      end
+      open_explorer(git_root)
+    end)
+  end
 end
 
 function M.vscode_merge(opts)
