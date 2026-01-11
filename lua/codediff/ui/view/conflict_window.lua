@@ -36,6 +36,9 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
     result_win = vim.api.nvim_get_current_win()
 
     -- Move original window to be a vertical split with modified
+    -- rightbelow=true puts original_win to the RIGHT of modified_win
+    -- rightbelow=false puts original_win to the LEFT of modified_win
+    -- We want original_win on LEFT (consistent with normal diff), so use rightbelow=false
     vim.fn.win_splitmove(original_win, modified_win, { vertical = true, rightbelow = false })
 
     -- Set result window height (30% of available height or minimum 10 lines)

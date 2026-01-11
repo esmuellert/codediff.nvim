@@ -33,6 +33,7 @@ M.defaults = {
     max_computation_time_ms = 5000, -- Maximum time for diff computation (5 seconds, VSCode default)
     hide_merge_artifacts = false, -- Hide merge tool temp files (*.orig, *.BACKUP.*, *.BASE.*, *.LOCAL.*, *.REMOTE.*)
     original_position = "left", -- Position of original (old) content: "left" or "right"
+    conflict_ours_position = "right", -- Position of ours (:2) in conflict view: "left" or "right" (independent of original_position)
   },
 
   -- Explorer panel configuration

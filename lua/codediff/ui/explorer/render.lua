@@ -246,15 +246,32 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
         end)
       elseif group == "conflicts" then
         -- Merge conflict: Show incoming (:3) vs current (:2), both diffed against base (:1)
+        -- Position controlled by config.diff.conflict_ours_position (absolute screen position)
         vim.schedule(function()
+          -- Determine conflict buffer positions based on config
+          -- conflict_ours_position controls where :2 (OURS) appears on screen
+          local ours_position = config.options.diff.conflict_ours_position or "right"
+
+          -- After conflict_window.lua's win_splitmove(rightbelow=false):
+          -- - original_win is on LEFT
+          -- - modified_win is on RIGHT
+          local original_rev, modified_rev
+          if ours_position == "right" then
+            original_rev = ":3" -- THEIRS in original_win (LEFT)
+            modified_rev = ":2" -- OURS in modified_win (RIGHT)
+          else
+            original_rev = ":2" -- OURS in original_win (LEFT)
+            modified_rev = ":3" -- THEIRS in modified_win (RIGHT)
+          end
+
           ---@type SessionConfig
           local session_config = {
             mode = "explorer",
             git_root = git_root,
             original_path = file_path,
             modified_path = file_path,
-            original_revision = ":3", -- Theirs/Incoming (left buffer)
-            modified_revision = ":2", -- Ours/Current (right buffer)
+            original_revision = original_rev,
+            modified_revision = modified_rev,
             conflict = true,
           }
           view.update(tabpage, session_config, true)

@@ -6,6 +6,7 @@ M.SUBCOMMANDS = { "merge", "file", "dir", "install" }
 
 local git = require("codediff.core.git")
 local lifecycle = require("codediff.ui.lifecycle")
+local config = require("codediff.config")
 
 --- Handles diffing the current buffer against a given git revision.
 -- @param revision string: The git revision (e.g., "HEAD", commit hash, branch name) to compare the current file against.
@@ -313,14 +314,30 @@ function M.vscode_merge(opts)
     vim.schedule(function()
       local filetype = vim.filetype.match({ filename = full_path }) or ""
 
+      -- Determine conflict buffer positions based on config
+      -- conflict_ours_position controls where :2 (OURS) appears on screen
+      local ours_position = config.options.diff.conflict_ours_position or "right"
+
+      -- After conflict_window.lua's win_splitmove(rightbelow=false):
+      -- - original_win is on LEFT
+      -- - modified_win is on RIGHT
+      local original_rev, modified_rev
+      if ours_position == "right" then
+        original_rev = ":3" -- THEIRS in original_win (LEFT)
+        modified_rev = ":2" -- OURS in modified_win (RIGHT)
+      else
+        original_rev = ":2" -- OURS in original_win (LEFT)
+        modified_rev = ":3" -- THEIRS in modified_win (RIGHT)
+      end
+
       ---@type SessionConfig
       local session_config = {
         mode = "standalone",
         git_root = git_root,
         original_path = relative_path,
         modified_path = relative_path,
-        original_revision = ":3",
-        modified_revision = ":2",
+        original_revision = original_rev,
+        modified_revision = modified_rev,
         conflict = true,
       }
 
