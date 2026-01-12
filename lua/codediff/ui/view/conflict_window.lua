@@ -77,7 +77,8 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   end
 
   -- Set window options for result
-  vim.wo[result_win].wrap = false
+  local config = require("codediff.config")
+  vim.wo[result_win].wrap = config.options.diff.wrap
   vim.wo[result_win].cursorline = true
   vim.wo[result_win].winbar = ""
 

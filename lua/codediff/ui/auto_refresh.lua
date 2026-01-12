@@ -98,11 +98,7 @@ local function do_diff_update(bufnr, skip_watcher_check)
     -- Update stored diff result in lifecycle (critical for hunk navigation and do/dp)
     lifecycle.update_diff_result(tabpage, lines_diff)
 
-    -- Update decorations on both buffers
-    core.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, lines_diff)
-
-    -- Re-sync scrollbind after filler changes
-    -- This ensures all windows stay aligned even if fillers were added/removed
+    -- Find windows for wrap alignment (Step 4) and scrollbind sync
     local original_win, modified_win, result_win = nil, nil, nil
     local lifecycle = require("codediff.ui.lifecycle")
     local tabpage = vim.api.nvim_get_current_tabpage()
@@ -117,6 +113,11 @@ local function do_diff_update(bufnr, skip_watcher_check)
       end
     end
 
+    -- Update decorations on both buffers (pass windows for wrap alignment)
+    core.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, lines_diff, original_win, modified_win)
+
+    -- Re-sync scrollbind after filler changes
+    -- This ensures all windows stay aligned even if fillers were added/removed
     -- Check if result window is valid
     if stored_result_win and vim.api.nvim_win_is_valid(stored_result_win) then
       result_win = stored_result_win

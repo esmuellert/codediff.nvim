@@ -177,7 +177,10 @@ local function resume_diff(tabpage)
   -- Render with fresh content and (possibly reused) diff result
   if lines_diff then
     local core = require("codediff.ui.core")
-    core.render_diff(diff.original_bufnr, diff.modified_bufnr, original_lines, modified_lines, lines_diff)
+    -- Pass windows for wrap alignment (Step 4)
+    local original_win = vim.api.nvim_win_is_valid(diff.original_win) and diff.original_win or nil
+    local modified_win = vim.api.nvim_win_is_valid(diff.modified_win) and diff.modified_win or nil
+    core.render_diff(diff.original_bufnr, diff.modified_bufnr, original_lines, modified_lines, lines_diff, original_win, modified_win)
 
     -- Re-sync scrollbind ONLY if diff was recomputed (fillers may have changed)
     if diff_was_recomputed and vim.api.nvim_win_is_valid(diff.original_win) and vim.api.nvim_win_is_valid(diff.modified_win) then
@@ -208,10 +211,12 @@ local function resume_diff(tabpage)
         end
 
         -- Re-apply critical window options that might have been reset
-        vim.wo[diff.original_win].wrap = false
-        vim.wo[diff.modified_win].wrap = false
+        local config = require("codediff.config")
+        local wrap_enabled = config.options.diff.wrap
+        vim.wo[diff.original_win].wrap = wrap_enabled
+        vim.wo[diff.modified_win].wrap = wrap_enabled
         if result_win then
-          vim.wo[result_win].wrap = false
+          vim.wo[result_win].wrap = wrap_enabled
         end
 
         -- Step 4: Restore cursor position with both line and column

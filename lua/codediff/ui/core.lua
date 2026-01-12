@@ -301,12 +301,244 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
 end
 
 -- ============================================================================
+-- Step 4: Wrap Line Alignment (only when wrap is enabled)
+-- ============================================================================
+
+-- Calculate how many display lines a buffer line takes when wrapped
+-- @param line_content string: The line content
+-- @param win_width number: Window width in columns
+-- @return number: Number of display lines (1 if not wrapping)
+local function get_display_line_count(line_content, win_width)
+  if not line_content or win_width <= 0 then
+    return 1
+  end
+
+  -- Account for line number column and sign column (approximate)
+  -- In wrapped mode, effective width is reduced by these
+  local effective_width = win_width
+
+  local display_len = vim.fn.strdisplaywidth(line_content)
+  if display_len == 0 then
+    return 1
+  end
+
+  return math.ceil(display_len / effective_width)
+end
+
+-- Build line mapping between original and modified from diff changes
+-- Returns a table mapping original line numbers to modified line numbers
+-- @param lines_diff table: The diff result with changes
+-- @param orig_line_count number: Total lines in original
+-- @param mod_line_count number: Total lines in modified
+-- @return table: { orig_line = mod_line, ... } for corresponding lines
+local function build_line_mapping(lines_diff, orig_line_count, mod_line_count)
+  local mapping = {}
+
+  -- Track line offset caused by insertions/deletions
+  local offset = 0
+  local last_orig_end = 1
+  local last_mod_end = 1
+
+  for _, change in ipairs(lines_diff.changes) do
+    local orig_start = change.original.start_line
+    local orig_end = change.original.end_line
+    local mod_start = change.modified.start_line
+    local mod_end = change.modified.end_line
+
+    -- Map unchanged lines before this change (they correspond 1:1 with offset)
+    for line = last_orig_end, orig_start - 1 do
+      local corresponding_mod_line = line + offset
+      if corresponding_mod_line >= 1 and corresponding_mod_line <= mod_line_count then
+        mapping[line] = corresponding_mod_line
+      end
+    end
+
+    -- For changes with inner_changes, use them to determine line correspondence
+    if change.inner_changes and #change.inner_changes > 0 then
+      -- Track which lines are mapped via inner changes
+      for _, inner in ipairs(change.inner_changes) do
+        -- Map start lines of inner changes
+        if inner.original.start_line >= orig_start and inner.original.start_line < orig_end
+           and inner.modified.start_line >= mod_start and inner.modified.start_line < mod_end then
+          mapping[inner.original.start_line] = inner.modified.start_line
+        end
+        -- Also map end lines if different
+        if inner.original.end_line >= orig_start and inner.original.end_line <= orig_end
+           and inner.modified.end_line >= mod_start and inner.modified.end_line <= mod_end then
+          if inner.original.end_line ~= inner.original.start_line then
+            mapping[inner.original.end_line] = inner.modified.end_line
+          end
+        end
+      end
+    else
+      -- No inner changes - map lines 1:1 if same number of lines
+      local orig_count = orig_end - orig_start
+      local mod_count = mod_end - mod_start
+
+      if orig_count == mod_count then
+        for i = 0, orig_count - 1 do
+          mapping[orig_start + i] = mod_start + i
+        end
+      end
+    end
+
+    -- Update offset for next unchanged region
+    local orig_lines_in_change = orig_end - orig_start
+    local mod_lines_in_change = mod_end - mod_start
+    offset = offset + (mod_lines_in_change - orig_lines_in_change)
+
+    last_orig_end = orig_end
+    last_mod_end = mod_end
+  end
+
+  -- Map unchanged lines after the last change
+  for line = last_orig_end, orig_line_count do
+    local corresponding_mod_line = line + offset
+    if corresponding_mod_line >= 1 and corresponding_mod_line <= mod_line_count then
+      mapping[line] = corresponding_mod_line
+    end
+  end
+
+  return mapping
+end
+
+-- Calculate wrap alignment fillers for a pair of buffers
+-- This handles two cases:
+-- 1. Mapped lines: Lines that correspond between original and modified may wrap differently
+-- 2. Inserted/deleted blocks: Pure insertions or deletions may wrap to more display lines
+--    than the buffer line count, requiring additional fillers
+-- @param left_bufnr number: Left buffer number
+-- @param right_bufnr number: Right buffer number
+-- @param left_win number: Left window number
+-- @param right_win number: Right window number
+-- @param original_lines table: Original (left) buffer lines
+-- @param modified_lines table: Modified (right) buffer lines
+-- @param lines_diff table: The diff result
+-- @return table: { left_fillers = {...}, right_fillers = {...} }
+local function calculate_wrap_fillers(left_bufnr, right_bufnr, left_win, right_win, original_lines, modified_lines, lines_diff)
+  local left_fillers = {}
+  local right_fillers = {}
+
+  -- Get window widths
+  local left_width = vim.api.nvim_win_get_width(left_win)
+  local right_width = vim.api.nvim_win_get_width(right_win)
+
+  -- Build line mapping from diff
+  local line_mapping = build_line_mapping(lines_diff, #original_lines, #modified_lines)
+
+  -- Case 1: For each mapped line pair, calculate wrap difference
+  for orig_line, mod_line in pairs(line_mapping) do
+    if orig_line >= 1 and orig_line <= #original_lines
+       and mod_line >= 1 and mod_line <= #modified_lines then
+
+      local orig_content = original_lines[orig_line]
+      local mod_content = modified_lines[mod_line]
+
+      local orig_display_lines = get_display_line_count(orig_content, left_width)
+      local mod_display_lines = get_display_line_count(mod_content, right_width)
+
+      local diff = orig_display_lines - mod_display_lines
+
+      if diff > 0 then
+        -- Original has more wrapped lines, add fillers to modified
+        table.insert(right_fillers, {
+          after_line = mod_line,
+          count = diff,
+        })
+      elseif diff < 0 then
+        -- Modified has more wrapped lines, add fillers to original
+        table.insert(left_fillers, {
+          after_line = orig_line,
+          count = -diff,
+        })
+      end
+    end
+  end
+
+  -- Case 2: Handle insertions and deletions that may wrap
+  -- The Step 3 filler calculation inserts fillers based on buffer line count differences.
+  -- But when wrap is enabled, inserted/deleted lines may wrap to MORE display lines,
+  -- requiring additional fillers beyond what Step 3 provides.
+  for _, change in ipairs(lines_diff.changes) do
+    local orig_start = change.original.start_line
+    local orig_end = change.original.end_line
+    local mod_start = change.modified.start_line
+    local mod_end = change.modified.end_line
+
+    local orig_line_count = orig_end - orig_start
+    local mod_line_count = mod_end - mod_start
+
+    -- Pure insertion: lines exist in modified but not original
+    if orig_line_count == 0 and mod_line_count > 0 then
+      -- Calculate total display lines for inserted block
+      local total_display_lines = 0
+      for line = mod_start, mod_end - 1 do
+        if line >= 1 and line <= #modified_lines then
+          total_display_lines = total_display_lines + get_display_line_count(modified_lines[line], right_width)
+        end
+      end
+
+      -- Step 3 already added mod_line_count fillers to original
+      -- We need additional fillers if wrapped display lines > buffer lines
+      local extra_fillers = total_display_lines - mod_line_count
+      if extra_fillers > 0 then
+        -- Insert after the line before the insertion point (or at line 0 if at start)
+        local after_line = orig_start > 1 and (orig_start - 1) or 0
+        table.insert(left_fillers, {
+          after_line = after_line,
+          count = extra_fillers,
+        })
+      end
+    end
+
+    -- Pure deletion: lines exist in original but not modified
+    if mod_line_count == 0 and orig_line_count > 0 then
+      -- Calculate total display lines for deleted block
+      local total_display_lines = 0
+      for line = orig_start, orig_end - 1 do
+        if line >= 1 and line <= #original_lines then
+          total_display_lines = total_display_lines + get_display_line_count(original_lines[line], left_width)
+        end
+      end
+
+      -- Step 3 already added orig_line_count fillers to modified
+      -- We need additional fillers if wrapped display lines > buffer lines
+      local extra_fillers = total_display_lines - orig_line_count
+      if extra_fillers > 0 then
+        -- Insert after the line before the deletion point (or at line 0 if at start)
+        local after_line = mod_start > 1 and (mod_start - 1) or 0
+        table.insert(right_fillers, {
+          after_line = after_line,
+          count = extra_fillers,
+        })
+      end
+    end
+  end
+
+  -- Sort fillers by line number for proper rendering order
+  table.sort(left_fillers, function(a, b) return a.after_line < b.after_line end)
+  table.sort(right_fillers, function(a, b) return a.after_line < b.after_line end)
+
+  return {
+    left_fillers = left_fillers,
+    right_fillers = right_fillers,
+  }
+end
+
+-- ============================================================================
 -- Main Rendering Function
 -- ============================================================================
 
 -- Render diff highlights and fillers
 -- Assumes buffer content is already set by caller
-function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, lines_diff)
+-- @param left_bufnr number: Left buffer number
+-- @param right_bufnr number: Right buffer number
+-- @param original_lines table: Original (left) buffer lines
+-- @param modified_lines table: Modified (right) buffer lines
+-- @param lines_diff table: The diff result
+-- @param left_win number|nil: Left window (required for wrap alignment)
+-- @param right_win number|nil: Right window (required for wrap alignment)
+function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, lines_diff, left_win, right_win)
   -- Clear existing highlights
   vim.api.nvim_buf_clear_namespace(left_bufnr, ns_highlight, 0, -1)
   vim.api.nvim_buf_clear_namespace(right_bufnr, ns_highlight, 0, -1)
@@ -356,6 +588,23 @@ function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, 
         insert_filler_lines(right_bufnr, filler.after_line - 1, filler.count)
         total_right_fillers = total_right_fillers + filler.count
       end
+    end
+  end
+
+  -- Step 4: Wrap alignment (only when wrap is enabled and windows are provided)
+  local config = require("codediff.config")
+  if config.options.diff.wrap and left_win and right_win
+     and vim.api.nvim_win_is_valid(left_win) and vim.api.nvim_win_is_valid(right_win) then
+    local wrap_result = calculate_wrap_fillers(left_bufnr, right_bufnr, left_win, right_win, original_lines, modified_lines, lines_diff)
+
+    for _, filler in ipairs(wrap_result.left_fillers) do
+      insert_filler_lines(left_bufnr, filler.after_line - 1, filler.count)
+      total_left_fillers = total_left_fillers + filler.count
+    end
+
+    for _, filler in ipairs(wrap_result.right_fillers) do
+      insert_filler_lines(right_bufnr, filler.after_line - 1, filler.count)
+      total_right_fillers = total_right_fillers + filler.count
     end
   end
 
@@ -508,5 +757,16 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
     conflict_blocks = alignments.conflict_blocks,
   }
 end
+
+-- ============================================================================
+-- Test Utilities (exported for testing purposes)
+-- ============================================================================
+
+-- Export internal functions for unit testing
+M._test = {
+  get_display_line_count = get_display_line_count,
+  build_line_mapping = build_line_mapping,
+  calculate_wrap_fillers = calculate_wrap_fillers,
+}
 
 return M
