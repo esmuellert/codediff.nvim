@@ -104,9 +104,11 @@ function M.create(session_config, filetype, on_ready)
 
   -- Window options (scrollbind will be set by compute_and_render)
   -- Note: number and relativenumber are intentionally NOT set to honor user's local config
+  -- Wrap setting is controlled by config.options.diff.wrap
+  local wrap_enabled = config.options.diff.wrap == true
   local win_opts = {
     cursorline = true,
-    wrap = false,
+    wrap = wrap_enabled,
   }
 
   for opt, val in pairs(win_opts) do

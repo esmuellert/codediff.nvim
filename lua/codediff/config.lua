@@ -34,6 +34,7 @@ M.defaults = {
     hide_merge_artifacts = false, -- Hide merge tool temp files (*.orig, *.BACKUP.*, *.BASE.*, *.LOCAL.*, *.REMOTE.*)
     original_position = "left", -- Position of original (old) content: "left" or "right"
     conflict_ours_position = "right", -- Position of ours (:2) in conflict view: "left" or "right" (independent of original_position)
+    wrap = true, -- Enable wrap mode with filler line alignment (experimental)
   },
 
   -- Explorer panel configuration

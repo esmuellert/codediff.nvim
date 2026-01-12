@@ -142,7 +142,9 @@ function M.create_session(
       if win == original_win or win == modified_win then
         ensure_no_winbar()
         -- Re-apply critical window options that might get reset by ftplugins/autocmds
-        vim.wo[win].wrap = false
+        -- Respect wrap config setting
+        local wrap_enabled = require("codediff.config").options.diff.wrap == true
+        vim.wo[win].wrap = wrap_enabled
       end
     end,
   })

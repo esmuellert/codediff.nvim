@@ -306,15 +306,38 @@ end
 
 -- Render diff highlights and fillers
 -- Assumes buffer content is already set by caller
-function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, lines_diff)
-  -- Clear existing highlights
-  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_highlight, 0, -1)
-  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_highlight, 0, -1)
-  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_filler, 0, -1)
-  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_filler, 0, -1)
+--
+-- Note: Parameters use "original/modified" terminology which refers to CONTENT,
+-- not screen position. The actual window positions (left/right) are determined
+-- by config.options.diff.original_position. This function is position-agnostic.
+--
+-- @param original_bufnr number Buffer containing original (old) content
+-- @param modified_bufnr number Buffer containing modified (new) content
+-- @param original_lines table Lines from original buffer
+-- @param modified_lines table Lines from modified buffer
+-- @param lines_diff table The diff result
+-- @param opts table? Optional parameters:
+--   - original_win: number Window showing original content (required for wrap mode)
+--   - modified_win: number Window showing modified content (required for wrap mode)
+--   - wrap: boolean Enable wrap-aware filler calculation
+function M.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, lines_diff, opts)
+  opts = opts or {}
 
-  local total_left_fillers = 0
-  local total_right_fillers = 0
+  -- Clear existing highlights
+  vim.api.nvim_buf_clear_namespace(original_bufnr, ns_highlight, 0, -1)
+  vim.api.nvim_buf_clear_namespace(modified_bufnr, ns_highlight, 0, -1)
+  vim.api.nvim_buf_clear_namespace(original_bufnr, ns_filler, 0, -1)
+  vim.api.nvim_buf_clear_namespace(modified_bufnr, ns_filler, 0, -1)
+
+  -- Also clear wrap fillers if wrap module is available
+  local wrap_filler_ok, wrap_filler = pcall(require, "codediff.ui.wrap_filler")
+  if wrap_filler_ok then
+    wrap_filler.clear_wrap_fillers(original_bufnr)
+    wrap_filler.clear_wrap_fillers(modified_bufnr)
+  end
+
+  local total_original_fillers = 0
+  local total_modified_fillers = 0
 
   local last_orig_line = 1
   local last_mod_line = 1
@@ -324,21 +347,21 @@ function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, 
     local mod_is_empty = (mapping.modified.end_line <= mapping.modified.start_line)
 
     if not orig_is_empty then
-      apply_line_highlights(left_bufnr, mapping.original, "CodeDiffLineDelete")
+      apply_line_highlights(original_bufnr, mapping.original, "CodeDiffLineDelete")
     end
 
     if not mod_is_empty then
-      apply_line_highlights(right_bufnr, mapping.modified, "CodeDiffLineInsert")
+      apply_line_highlights(modified_bufnr, mapping.modified, "CodeDiffLineInsert")
     end
 
     if mapping.inner_changes then
       for _, inner in ipairs(mapping.inner_changes) do
         if not is_empty_range(inner.original) then
-          apply_char_highlight(left_bufnr, inner.original, "CodeDiffCharDelete", original_lines)
+          apply_char_highlight(original_bufnr, inner.original, "CodeDiffCharDelete", original_lines)
         end
 
         if not is_empty_range(inner.modified) then
-          apply_char_highlight(right_bufnr, inner.modified, "CodeDiffCharInsert", modified_lines)
+          apply_char_highlight(modified_bufnr, inner.modified, "CodeDiffCharInsert", modified_lines)
         end
       end
     end
@@ -350,18 +373,35 @@ function M.render_diff(left_bufnr, right_bufnr, original_lines, modified_lines, 
 
     for _, filler in ipairs(fillers) do
       if filler.buffer == "original" then
-        insert_filler_lines(left_bufnr, filler.after_line - 1, filler.count)
-        total_left_fillers = total_left_fillers + filler.count
+        insert_filler_lines(original_bufnr, filler.after_line - 1, filler.count)
+        total_original_fillers = total_original_fillers + filler.count
       else
-        insert_filler_lines(right_bufnr, filler.after_line - 1, filler.count)
-        total_right_fillers = total_right_fillers + filler.count
+        insert_filler_lines(modified_bufnr, filler.after_line - 1, filler.count)
+        total_modified_fillers = total_modified_fillers + filler.count
       end
     end
   end
 
+  -- Apply wrap-aware fillers if wrap mode is enabled
+  local wrap_stats = nil
+  if opts.wrap and opts.original_win and opts.modified_win and wrap_filler_ok then
+    if vim.api.nvim_win_is_valid(opts.original_win) and vim.api.nvim_win_is_valid(opts.modified_win) then
+      wrap_stats = wrap_filler.apply_wrap_fillers(
+        original_bufnr,
+        modified_bufnr,
+        original_lines,
+        modified_lines,
+        lines_diff,
+        opts.original_win,
+        opts.modified_win
+      )
+    end
+  end
+
   return {
-    left_fillers = total_left_fillers,
-    right_fillers = total_right_fillers,
+    original_fillers = total_original_fillers,
+    modified_fillers = total_modified_fillers,
+    wrap_stats = wrap_stats,
   }
 end
 

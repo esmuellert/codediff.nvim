@@ -29,8 +29,19 @@ function M.compute_and_render(
     return nil
   end
 
-  -- Render diff highlights
-  core.render_diff(original_buf, modified_buf, original_lines, modified_lines, lines_diff)
+  -- Check if wrap mode is enabled
+  local wrap_enabled = config.options.diff.wrap == true
+
+  -- Render diff highlights with wrap support if enabled
+  local render_opts = nil
+  if wrap_enabled and original_win and modified_win then
+    render_opts = {
+      wrap = true,
+      original_win = original_win,
+      modified_win = modified_win,
+    }
+  end
+  core.render_diff(original_buf, modified_buf, original_lines, modified_lines, lines_diff, render_opts)
 
   -- Apply semantic tokens for virtual buffers
   if original_is_virtual then
@@ -59,9 +70,27 @@ function M.compute_and_render(
     vim.wo[original_win].scrollbind = true
     vim.wo[modified_win].scrollbind = true
 
-    -- Re-apply critical window options that might have been reset
-    vim.wo[original_win].wrap = false
-    vim.wo[modified_win].wrap = false
+    -- Set wrap mode based on config
+    if wrap_enabled then
+      vim.wo[original_win].wrap = true
+      vim.wo[modified_win].wrap = true
+
+      -- Setup resize handler for wrap mode
+      local wrap_filler_ok, wrap_filler = pcall(require, "codediff.ui.wrap_filler")
+      if wrap_filler_ok then
+        local tabpage = vim.api.nvim_win_get_tabpage(original_win)
+        wrap_filler.setup_resize_handler(tabpage, original_buf, modified_buf, original_win, modified_win, function()
+          return {
+            original_lines = original_lines,
+            modified_lines = modified_lines,
+            lines_diff = lines_diff,
+          }
+        end)
+      end
+    else
+      vim.wo[original_win].wrap = false
+      vim.wo[modified_win].wrap = false
+    end
 
     -- Step 3a: On create, scroll to first change
     if auto_scroll_to_first_hunk and #lines_diff.changes > 0 then
@@ -127,6 +156,8 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
 
   -- Setup window options with scrollbind (filler lines enable proper alignment)
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
+    -- Note: Wrap mode is not currently supported in conflict view
+    -- TODO: Add wrap support for 3-way merge when needed
     vim.wo[original_win].wrap = false
     vim.wo[modified_win].wrap = false
 

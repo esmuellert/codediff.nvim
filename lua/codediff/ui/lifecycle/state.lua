@@ -208,10 +208,12 @@ local function resume_diff(tabpage)
         end
 
         -- Re-apply critical window options that might have been reset
-        vim.wo[diff.original_win].wrap = false
-        vim.wo[diff.modified_win].wrap = false
+        -- Respect wrap config setting
+        local wrap_enabled = require("codediff.config").options.diff.wrap == true
+        vim.wo[diff.original_win].wrap = wrap_enabled
+        vim.wo[diff.modified_win].wrap = wrap_enabled
         if result_win then
-          vim.wo[result_win].wrap = false
+          vim.wo[result_win].wrap = false -- Result window never wraps
         end
 
         -- Step 4: Restore cursor position with both line and column
