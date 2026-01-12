@@ -38,6 +38,7 @@ SPEC_FILES=(
   "tests/dir_spec.lua"
   "tests/render/semantic_tokens_spec.lua"
   "tests/render/core_spec.lua"
+  "tests/render/wrap_filler_spec.lua"
   "tests/render/lifecycle_spec.lua"
   "tests/render/view_spec.lua"
   "tests/render/merge_alignment_spec.lua"
