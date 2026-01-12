@@ -237,7 +237,7 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
 
   -- Quit keymap (q)
   if keymaps.quit then
-    lifecycle.set_tab_keymap(tabpage, "n", keymaps.quit, quit_diff, { desc = "Close diff view" })
+    lifecycle.set_tab_keymap(tabpage, "n", keymaps.quit, quit_diff, { desc = "Close codediff tab" })
   end
 
   -- Hunk navigation (]c, [c)

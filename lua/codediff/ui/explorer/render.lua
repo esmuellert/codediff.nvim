@@ -359,7 +359,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           explorer.on_file_select(node.data)
         end
       end
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Select/toggle entry" }))
   end
 
   -- Double click also works for files
@@ -369,7 +369,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       return
     end
     explorer.on_file_select(node.data)
-  end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Select file" }))
 
   -- Close explorer (disabled)
   -- vim.keymap.set("n", "q", function()
@@ -436,63 +436,63 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           end
         end,
       })
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Show full path" }))
   end
 
   -- Refresh explorer (R key)
   if config.options.keymaps.explorer.refresh then
     vim.keymap.set("n", config.options.keymaps.explorer.refresh, function()
       refresh_module.refresh(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Refresh explorer" }))
   end
 
   -- Toggle view mode (i key) - switch between 'list' and 'tree'
   if config.options.keymaps.explorer.toggle_view_mode then
     vim.keymap.set("n", config.options.keymaps.explorer.toggle_view_mode, function()
       actions_module.toggle_view_mode(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Toggle list/tree view" }))
   end
 
   -- Toggle stage/unstage (- key, like diffview)
   if config.options.keymaps.explorer.toggle_stage then
     vim.keymap.set("n", config.options.keymaps.explorer.toggle_stage, function()
       actions_module.toggle_stage_entry(explorer, tree)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Toggle stage/unstage" }))
   end
 
   -- Stage all files (S key)
   if config.options.keymaps.explorer.stage_all then
     vim.keymap.set("n", config.options.keymaps.explorer.stage_all, function()
       actions_module.stage_all(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Stage all files" }))
   end
 
   -- Unstage all files (U key)
   if config.options.keymaps.explorer.unstage_all then
     vim.keymap.set("n", config.options.keymaps.explorer.unstage_all, function()
       actions_module.unstage_all(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Unstage all files" }))
   end
 
   -- Restore/discard changes (X key)
   if config.options.keymaps.explorer.restore then
     vim.keymap.set("n", config.options.keymaps.explorer.restore, function()
       actions_module.restore_entry(explorer, tree)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Restore/discard changes" }))
   end
 
   -- Navigate to next file
   if config.options.keymaps.view.next_file then
     vim.keymap.set("n", config.options.keymaps.view.next_file, function()
       M.navigate_next(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Next file" }))
   end
 
   -- Navigate to previous file
   if config.options.keymaps.view.prev_file then
     vim.keymap.set("n", config.options.keymaps.view.prev_file, function()
       M.navigate_prev(explorer)
-    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr, desc = "Previous file" }))
   end
 
   -- Select first file by default (conflicts first, then unstaged, then staged)
