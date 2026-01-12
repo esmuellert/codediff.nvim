@@ -359,4 +359,181 @@ function M.cleanup_resize_handler(tabpage)
   pcall(vim.api.nvim_del_augroup_by_name, "CodeDiffWrapFiller_" .. tabpage)
 end
 
+-- ============================================================================
+-- 3-way Merge Wrap Filler Support
+-- ============================================================================
+
+-- Calculate wrap filler lines for merge view (3-way merge)
+-- The merge alignment module already handles LINE count differences.
+-- This function calculates additional fillers needed for VISUAL LINE differences from wrapping.
+--
+-- In merge view:
+-- - Left buffer shows input1 (incoming/theirs)
+-- - Right buffer shows input2 (current/ours)
+-- - Both are compared against base, but displayed side-by-side
+-- - The merge_alignment module provides line-level alignment
+-- - We need to add wrap fillers so visual heights match at each alignment point
+--
+---@param left_lines string[] Lines from left buffer (input1)
+---@param right_lines string[] Lines from right buffer (input2)
+---@param left_width number Width of left window in columns
+---@param right_width number Width of right window in columns
+---@return table fillers { left_fillers = {...}, right_fillers = {...} }
+function M.calculate_merge_wrap_fillers(left_lines, right_lines, left_width, right_width)
+  local left_fillers = {}
+  local right_fillers = {}
+
+  -- Helper to calculate visual lines for a line
+  local function calc_visual(line, width)
+    if width <= 0 then
+      return 1
+    end
+    local dw = display_width(line or "")
+    if dw == 0 then
+      return 1
+    end
+    return math.ceil(dw / width)
+  end
+
+  -- Helper to add filler
+  local function add_filler(side, after_line, count)
+    if count > 0 and after_line > 0 then
+      if side == "left" then
+        table.insert(left_fillers, { after_line = after_line, count = count })
+      else
+        table.insert(right_fillers, { after_line = after_line, count = count })
+      end
+    end
+  end
+
+  -- Process lines pairwise (after merge alignment, both sides should have same logical line count
+  -- when including filler lines from merge_alignment)
+  -- We only add wrap fillers for corresponding lines
+  local left_count = #left_lines
+  local right_count = #right_lines
+  local max_lines = math.max(left_count, right_count)
+
+  for i = 1, max_lines do
+    local left_line = left_lines[i] or ""
+    local right_line = right_lines[i] or ""
+
+    local left_visual = calc_visual(left_line, left_width)
+    local right_visual = calc_visual(right_line, right_width)
+
+    local diff = left_visual - right_visual
+
+    if diff > 0 then
+      -- Left has more visual lines, add filler to right
+      add_filler("right", i, diff)
+    elseif diff < 0 then
+      -- Right has more visual lines, add filler to left
+      add_filler("left", i, -diff)
+    end
+  end
+
+  return {
+    left_fillers = left_fillers,
+    right_fillers = right_fillers,
+  }
+end
+
+-- Apply wrap fillers for merge view
+-- This is the entry point for 3-way merge wrap support
+---@param left_bufnr number Left buffer number (input1/incoming)
+---@param right_bufnr number Right buffer number (input2/current)
+---@param left_lines string[] Lines from left buffer
+---@param right_lines string[] Lines from right buffer
+---@param left_win number Left window handle
+---@param right_win number Right window handle
+---@return table stats Statistics about applied fillers
+function M.apply_merge_wrap_fillers(left_bufnr, right_bufnr, left_lines, right_lines, left_win, right_win)
+  -- Clear existing wrap fillers
+  M.clear_wrap_fillers(left_bufnr)
+  M.clear_wrap_fillers(right_bufnr)
+
+  -- Get window widths (accounting for gutter)
+  local left_width = vim.api.nvim_win_get_width(left_win)
+  local right_width = vim.api.nvim_win_get_width(right_win)
+
+  local left_textoff = vim.fn.getwininfo(left_win)[1].textoff or 0
+  local right_textoff = vim.fn.getwininfo(right_win)[1].textoff or 0
+
+  local left_text_width = left_width - left_textoff
+  local right_text_width = right_width - right_textoff
+
+  -- Calculate wrap fillers
+  local fillers = M.calculate_merge_wrap_fillers(left_lines, right_lines, left_text_width, right_text_width)
+
+  -- Apply fillers
+  local left_filler_count = 0
+  local right_filler_count = 0
+
+  for _, filler in ipairs(fillers.left_fillers) do
+    insert_wrap_filler_lines(left_bufnr, filler.after_line, filler.count)
+    left_filler_count = left_filler_count + filler.count
+  end
+
+  for _, filler in ipairs(fillers.right_fillers) do
+    insert_wrap_filler_lines(right_bufnr, filler.after_line, filler.count)
+    right_filler_count = right_filler_count + filler.count
+  end
+
+  return {
+    left_fillers = left_filler_count,
+    right_fillers = right_filler_count,
+    total_fillers = left_filler_count + right_filler_count,
+  }
+end
+
+-- Setup resize handler for merge view
+---@param tabpage number Tabpage handle
+---@param left_bufnr number Left buffer number
+---@param right_bufnr number Right buffer number
+---@param left_win number Left window handle
+---@param right_win number Right window handle
+---@param get_state_fn function Function to get current state (left_lines, right_lines)
+function M.setup_merge_resize_handler(tabpage, left_bufnr, right_bufnr, left_win, right_win, get_state_fn)
+  local group = vim.api.nvim_create_augroup("CodeDiffMergeWrapFiller_" .. tabpage, { clear = true })
+
+  -- Track last known widths
+  local last_left_width = vim.api.nvim_win_is_valid(left_win) and vim.api.nvim_win_get_width(left_win) or 0
+  local last_right_width = vim.api.nvim_win_is_valid(right_win) and vim.api.nvim_win_get_width(right_win) or 0
+
+  vim.api.nvim_create_autocmd("WinResized", {
+    group = group,
+    callback = function()
+      -- Check if windows are still valid
+      if not vim.api.nvim_win_is_valid(left_win) or not vim.api.nvim_win_is_valid(right_win) then
+        pcall(vim.api.nvim_del_augroup_by_id, group)
+        return
+      end
+
+      -- Check if width changed
+      local new_left_width = vim.api.nvim_win_get_width(left_win)
+      local new_right_width = vim.api.nvim_win_get_width(right_win)
+
+      if new_left_width == last_left_width and new_right_width == last_right_width then
+        return
+      end
+
+      last_left_width = new_left_width
+      last_right_width = new_right_width
+
+      -- Get current state and recalculate
+      local state = get_state_fn()
+      if state and state.left_lines and state.right_lines then
+        M.apply_merge_wrap_fillers(left_bufnr, right_bufnr, state.left_lines, state.right_lines, left_win, right_win)
+      end
+    end,
+  })
+
+  return group
+end
+
+-- Cleanup merge resize handler
+---@param tabpage number Tabpage handle
+function M.cleanup_merge_resize_handler(tabpage)
+  pcall(vim.api.nvim_del_augroup_by_name, "CodeDiffMergeWrapFiller_" .. tabpage)
+end
+
 return M

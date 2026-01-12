@@ -475,7 +475,12 @@ end
 -- base_lines: array of base content lines
 -- left_lines_content: array of input1 content lines
 -- right_lines_content: array of input2 content lines
-function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
+-- opts: optional parameters
+--   - wrap: boolean Enable wrap-aware filler calculation
+--   - left_win: number Left window handle (required for wrap mode)
+--   - right_win: number Right window handle (required for wrap mode)
+function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content, opts)
+  opts = opts or {}
   local merge_alignment = require("codediff.ui.merge_alignment")
 
   -- Clear existing highlights and fillers
@@ -542,10 +547,29 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
     total_right_fillers = total_right_fillers + filler.count
   end
 
+  -- Apply wrap-aware fillers if wrap mode is enabled
+  local wrap_stats = nil
+  if opts.wrap and opts.left_win and opts.right_win then
+    local wrap_filler_ok, wrap_filler = pcall(require, "codediff.ui.wrap_filler")
+    if wrap_filler_ok then
+      if vim.api.nvim_win_is_valid(opts.left_win) and vim.api.nvim_win_is_valid(opts.right_win) then
+        wrap_stats = wrap_filler.apply_merge_wrap_fillers(
+          left_bufnr,
+          right_bufnr,
+          left_lines_content,
+          right_lines_content,
+          opts.left_win,
+          opts.right_win
+        )
+      end
+    end
+  end
+
   return {
     left_fillers = total_left_fillers,
     right_fillers = total_right_fillers,
     conflict_blocks = alignments.conflict_blocks,
+    wrap_stats = wrap_stats,
   }
 end
 

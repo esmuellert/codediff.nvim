@@ -147,8 +147,21 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
     return nil
   end
 
+  -- Check if wrap mode is enabled
+  local wrap_enabled = config.options.diff.wrap == true
+
+  -- Build render options for wrap support
+  local render_opts = nil
+  if wrap_enabled and original_win and modified_win then
+    render_opts = {
+      wrap = true,
+      left_win = original_win,
+      right_win = modified_win,
+    }
+  end
+
   -- Render merge view with alignment and filler lines
-  local render_result = core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines)
+  local render_result = core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines, render_opts)
 
   -- Apply semantic tokens (both are virtual buffers in conflict mode)
   semantic.apply_semantic_tokens(original_buf, modified_buf)
@@ -156,10 +169,26 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
 
   -- Setup window options with scrollbind (filler lines enable proper alignment)
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
-    -- Note: Wrap mode is not currently supported in conflict view
-    -- TODO: Add wrap support for 3-way merge when needed
-    vim.wo[original_win].wrap = false
-    vim.wo[modified_win].wrap = false
+    -- Set wrap mode based on config
+    if wrap_enabled then
+      vim.wo[original_win].wrap = true
+      vim.wo[modified_win].wrap = true
+
+      -- Setup resize handler for wrap mode
+      local wrap_filler_ok, wrap_filler = pcall(require, "codediff.ui.wrap_filler")
+      if wrap_filler_ok then
+        local tabpage = vim.api.nvim_win_get_tabpage(original_win)
+        wrap_filler.setup_merge_resize_handler(tabpage, original_buf, modified_buf, original_win, modified_win, function()
+          return {
+            left_lines = original_lines,
+            right_lines = modified_lines,
+          }
+        end)
+      end
+    else
+      vim.wo[original_win].wrap = false
+      vim.wo[modified_win].wrap = false
+    end
 
     -- Reset scroll position and enable scrollbind
     vim.api.nvim_win_set_cursor(original_win, { 1, 0 })

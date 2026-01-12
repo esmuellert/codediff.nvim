@@ -608,4 +608,184 @@ describe("Wrap Filler", function()
       assert.is_table(fillers, "Should return fillers table for different widths")
     end)
   end)
+
+  -- ============================================================================
+  -- 3-way Merge Wrap Filler Tests
+  -- ============================================================================
+
+  describe("calculate_merge_wrap_fillers (3-way merge)", function()
+    -- Helper: Verify merge alignment (both sides have equal total visual height)
+    local function verify_merge_alignment(left_lines, right_lines, width)
+      local fillers = wrap_filler.calculate_merge_wrap_fillers(left_lines, right_lines, width, width)
+
+      local left_visual = calc_total_visual(left_lines, width)
+      local right_visual = calc_total_visual(right_lines, width)
+
+      -- Add filler counts
+      local left_filler_total = 0
+      local right_filler_total = 0
+      for _, f in ipairs(fillers.left_fillers) do
+        left_filler_total = left_filler_total + f.count
+      end
+      for _, f in ipairs(fillers.right_fillers) do
+        right_filler_total = right_filler_total + f.count
+      end
+
+      local left_total = left_visual + left_filler_total
+      local right_total = right_visual + right_filler_total
+
+      return left_total == right_total, {
+        left_visual = left_visual,
+        right_visual = right_visual,
+        left_fillers = left_filler_total,
+        right_fillers = right_filler_total,
+        left_total = left_total,
+        right_total = right_total,
+      }
+    end
+
+    it("handles identical content (no fillers needed)", function()
+      local left = { "Line 1", "Line 2", "Line 3" }
+      local right = { "Line 1", "Line 2", "Line 3" }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, "Identical content should be aligned")
+      assert.equal(0, stats.left_fillers, "No left fillers needed")
+      assert.equal(0, stats.right_fillers, "No right fillers needed")
+    end)
+
+    it("adds fillers when left side wraps more", function()
+      local left = {
+        "Short line",
+        "This is a very long line that will definitely wrap around at eighty columns because it is much longer than that",
+        "Another short line",
+      }
+      local right = {
+        "Short line",
+        "Short",
+        "Another short line",
+      }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, "Visual heights should match")
+      assert.is_true(stats.right_fillers > 0, "Right should have fillers")
+    end)
+
+    it("adds fillers when right side wraps more", function()
+      local left = {
+        "Short line",
+        "Short",
+        "Another short line",
+      }
+      local right = {
+        "Short line",
+        "This is a very long line that will definitely wrap around at eighty columns because it is much longer than that",
+        "Another short line",
+      }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, "Visual heights should match")
+      assert.is_true(stats.left_fillers > 0, "Left should have fillers")
+    end)
+
+    it("handles multiple wrapping lines on both sides", function()
+      local left = {
+        "Header",
+        "Left has a moderately long line that wraps once at eighty columns width",
+        "Middle",
+        "Another left line that is also quite long and wraps around at the width",
+        "Footer",
+      }
+      local right = {
+        "Header",
+        "Right has an extremely long line that will wrap multiple times at eighty columns because it contains a lot more text and just keeps going on and on",
+        "Middle",
+        "Short",
+        "Footer",
+      }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, string.format(
+        "Visual heights should match. Left: %d, Right: %d",
+        stats.left_total, stats.right_total
+      ))
+    end)
+
+    it("handles different line counts between left and right", function()
+      -- In actual merge view, alignment fillers handle line count differences
+      -- Wrap fillers only handle visual line differences from wrapping
+      local left = {
+        "Line 1",
+        "Line 2",
+        "Line 3",
+        "Line 4",
+        "Line 5",
+      }
+      local right = {
+        "Line 1",
+        "Very long line two that will wrap around at eighty columns because it is significantly longer",
+        "Line 3",
+      }
+
+      local fillers = wrap_filler.calculate_merge_wrap_fillers(left, right, TEST_WIDTH, TEST_WIDTH)
+
+      -- Should not crash and return valid structure
+      assert.is_table(fillers, "Should return fillers table")
+      assert.is_table(fillers.left_fillers, "Should have left_fillers")
+      assert.is_table(fillers.right_fillers, "Should have right_fillers")
+    end)
+
+    it("handles unicode/CJK characters in merge", function()
+      local left = {
+        "Header",
+        "日本語のテスト: この行は日本語のダブル幅文字を含んでおり、折り返しの計算に影響を与えます。",
+        "Footer",
+      }
+      local right = {
+        "Header",
+        "Short",
+        "Footer",
+      }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, "CJK characters should align properly")
+    end)
+
+    it("handles empty lines in merge", function()
+      local left = {
+        "Header",
+        "",
+        "Content",
+        "",
+        "Footer",
+      }
+      local right = {
+        "Header",
+        "",
+        "This content line is very long and will wrap at eighty columns because it has so much text",
+        "",
+        "Footer",
+      }
+
+      local aligned, stats = verify_merge_alignment(left, right, TEST_WIDTH)
+
+      assert.is_true(aligned, "Empty lines should be handled correctly")
+    end)
+
+    it("handles different widths for left and right windows", function()
+      local left = { "Short line", "Another line" }
+      local right = { "Short line", "Another line that is longer" }
+
+      local fillers = wrap_filler.calculate_merge_wrap_fillers(left, right, 40, 60)
+
+      assert.is_table(fillers, "Should handle different widths")
+      assert.is_table(fillers.left_fillers, "Should have left_fillers")
+      assert.is_table(fillers.right_fillers, "Should have right_fillers")
+    end)
+  end)
 end)
