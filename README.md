@@ -110,6 +110,13 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
         },
       },
 
+      -- History panel configuration (for :CodeDiff history)
+      history = {
+        position = "bottom",  -- "left" or "bottom" (default: bottom)
+        width = 40,           -- Width when position is "left" (columns)
+        height = 15,          -- Height when position is "bottom" (lines)
+      },
+
       -- Keymaps in diff view
       keymaps = {
         view = {
@@ -298,6 +305,29 @@ Compare two directories without git:
 ```
 
 Shows files as Added (A), Deleted (D), or Modified (M) based on file size and modification time. Select a file to view its diff.
+
+### File History Mode
+
+Review commits on a per-commit basis:
+
+```vim
+" Show last 50 commits
+:CodeDiff history
+
+" Show last N commits
+:CodeDiff history HEAD~10
+
+" Show commits in a range (great for PR review)
+:CodeDiff history origin/main..HEAD
+
+" Show commits for current file only
+:CodeDiff history HEAD~20 %
+
+" Show commits for a specific file
+:CodeDiff history HEAD~10 path/to/file.lua
+```
+
+The history panel shows a list of commits. Each commit can be expanded to show its changed files. Select a file to view the diff between the commit and its parent (`commit^` vs `commit`).
 
 ### Git Merge Tool
 
@@ -505,6 +535,7 @@ codediff.nvim/
 │   │       ├── highlights.lua # Highlight setup
 │   │       ├── view/          # View management
 │   │       ├── explorer/      # Git status explorer
+│   │       ├── history/       # Commit history panel
 │   │       ├── lifecycle/     # Lifecycle management
 │   │       └── conflict/      # Conflict resolution
 │   └── vscode-diff/       # Backward compatibility shims
@@ -530,6 +561,7 @@ codediff.nvim/
 - [x] Read-only buffers with virtual filler lines for alignment
 - [x] Flexible highlight configuration (colorscheme-aware)
 - [x] Integration tests (C + Lua with plenary.nvim)
+- [x] File history mode (per-commit review, similar to DiffviewFileHistory)
 
 ### Future Enhancements
 

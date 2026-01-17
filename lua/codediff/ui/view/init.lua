@@ -22,7 +22,7 @@ local setup_conflict_result_window = conflict_window.setup_conflict_result_windo
 local setup_all_keymaps = view_keymaps.setup_all_keymaps
 
 ---@class SessionConfig
----@field mode "standalone"|"explorer"
+---@field mode "standalone"|"explorer"|"history"
 ---@field git_root string?
 ---@field original_path string
 ---@field modified_path string
@@ -30,6 +30,7 @@ local setup_all_keymaps = view_keymaps.setup_all_keymaps
 ---@field modified_revision string?
 ---@field conflict boolean? For merge conflict mode: render both sides against base
 ---@field explorer_data table? For explorer mode: { status_result }
+---@field history_data table? For history mode: { commits, range, file_path }
 
 ---@param session_config SessionConfig Session configuration
 ---@param filetype? string Optional filetype for syntax highlighting
@@ -42,9 +43,11 @@ function M.create(session_config, filetype, on_ready)
   local tabpage = vim.api.nvim_get_current_tabpage()
 
   -- For explorer mode with empty paths OR dir mode (git_root == nil with explorer_data),
-  -- create empty panes and skip buffer setup
+  -- or history mode, create empty panes and skip buffer setup
   local is_explorer_placeholder = session_config.mode == "explorer"
     and ((session_config.original_path == "" or session_config.original_path == nil) or (not session_config.git_root and session_config.explorer_data))
+
+  local is_history_placeholder = session_config.mode == "history" and session_config.history_data
 
   local original_win, modified_win, original_info, modified_info, initial_buf
 
@@ -53,9 +56,9 @@ function M.create(session_config, filetype, on_ready)
   -- We want modified (new) on RIGHT when original_position == "left"
   local split_cmd = config.options.diff.original_position == "right" and "leftabove vsplit" or "rightbelow vsplit"
 
-  if is_explorer_placeholder then
-    -- Explorer mode: Create empty split panes, skip buffer loading
-    -- Explorer will populate via first file selection
+  if is_explorer_placeholder or is_history_placeholder then
+    -- Explorer/History mode: Create empty split panes, skip buffer loading
+    -- Panel will populate via first file selection
     initial_buf = vim.api.nvim_get_current_buf()
     original_win = vim.api.nvim_get_current_win()
     vim.cmd(split_cmd)
@@ -118,8 +121,8 @@ function M.create(session_config, filetype, on_ready)
   -- For virtual files, filetype is set in the virtual_file module
 
   -- For explorer placeholder, create minimal session without rendering
-  if is_explorer_placeholder then
-    -- Create minimal lifecycle session for explorer (update will populate it)
+  if is_explorer_placeholder or is_history_placeholder then
+    -- Create minimal lifecycle session for explorer/history (update will populate it)
     lifecycle.create_session(
       tabpage,
       session_config.mode,
@@ -364,6 +367,36 @@ function M.create(session_config, filetype, on_ready)
       local total_width = vim.o.columns
       local explorer_width = explorer_config.width or 40
       local remaining_width = total_width - explorer_width
+      local diff_width = math.floor(remaining_width / 2)
+
+      vim.api.nvim_win_set_width(original_win, diff_width)
+      vim.api.nvim_win_set_width(modified_win, diff_width)
+    end
+  end
+
+  -- For history mode, create the history panel after diff windows are set up
+  if session_config.mode == "history" and session_config.history_data then
+    local history_config = config.options.history or {}
+    local position = history_config.position or "bottom"
+
+    local history = require("codediff.ui.history")
+    local commits = session_config.history_data.commits
+
+    local history_obj = history.create(commits, session_config.git_root, tabpage, nil, {
+      range = session_config.history_data.range,
+      file_path = session_config.history_data.file_path,
+    })
+
+    -- Store history panel reference in lifecycle (reuse explorer slot)
+    lifecycle.set_explorer(tabpage, history_obj)
+
+    -- Adjust diff window sizes based on panel position
+    if position == "bottom" then
+      vim.cmd("wincmd =")
+    else
+      local total_width = vim.o.columns
+      local panel_width = history_config.width or 40
+      local remaining_width = total_width - panel_width
       local diff_width = math.floor(remaining_width / 2)
 
       vim.api.nvim_win_set_width(original_win, diff_width)

@@ -52,6 +52,13 @@ M.defaults = {
     },
   },
 
+  -- History panel configuration (for :CodeDiff history)
+  history = {
+    position = "bottom", -- "left" or "bottom" (default: bottom)
+    width = 40, -- Width when position is "left" (columns)
+    height = 15, -- Height when position is "bottom" (lines)
+  },
+
   -- Keymaps
   keymaps = {
     view = {

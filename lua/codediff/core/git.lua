@@ -598,6 +598,112 @@ function M.delete_untracked(git_root, rel_path, callback)
   end)
 end
 
+-- Get commit list for file history (async)
+-- range: git range expression (e.g., "origin/main..HEAD", "HEAD~10..HEAD")
+-- git_root: absolute path to git repository root
+-- opts: optional table with keys:
+--   path: file path to filter commits (relative to git_root)
+--   limit: maximum number of commits to return
+--   no_merges: exclude merge commits
+--   reverse: reverse order (oldest first)
+-- callback: function(err, commits) where commits is array of:
+--   { hash, short_hash, author, date, date_relative, subject }
+function M.get_commit_list(range, git_root, opts, callback)
+  opts = opts or {}
+  local args = {
+    "log",
+    "--pretty=format:%H%x00%h%x00%an%x00%at%x00%ar%x00%s",
+  }
+
+  if opts.no_merges then
+    table.insert(args, "--no-merges")
+  end
+
+  if opts.limit then
+    table.insert(args, "-n")
+    table.insert(args, tostring(opts.limit))
+  end
+
+  if opts.reverse then
+    table.insert(args, "--reverse")
+  end
+
+  if range and range ~= "" then
+    table.insert(args, range)
+  end
+
+  if opts.path then
+    table.insert(args, "--")
+    table.insert(args, opts.path)
+  end
+
+  run_git_async(args, { cwd = git_root }, function(err, output)
+    if err then
+      callback(err, nil)
+      return
+    end
+
+    local commits = {}
+    for line in output:gmatch("[^\n]+") do
+      local parts = vim.split(line, "\0")
+      if #parts >= 6 then
+        table.insert(commits, {
+          hash = parts[1],
+          short_hash = parts[2],
+          author = parts[3],
+          date = tonumber(parts[4]),
+          date_relative = parts[5],
+          subject = parts[6],
+        })
+      end
+    end
+
+    callback(nil, commits)
+  end)
+end
+
+-- Get files changed in a specific commit (async)
+-- commit_hash: full or short commit hash
+-- git_root: absolute path to git repository root
+-- callback: function(err, files) where files is array of:
+--   { path, status, old_path }
+function M.get_commit_files(commit_hash, git_root, callback)
+  run_git_async(
+    { "diff-tree", "--no-commit-id", "--name-status", "-r", "-M", commit_hash },
+    { cwd = git_root },
+    function(err, output)
+      if err then
+        callback(err, nil)
+        return
+      end
+
+      local files = {}
+      for line in output:gmatch("[^\n]+") do
+        local parts = vim.split(line, "\t")
+        if #parts >= 2 then
+          local status = parts[1]:sub(1, 1)
+          local path = parts[2]
+          local old_path = nil
+
+          -- Handle renames (R100 or similar)
+          if status == "R" and #parts >= 3 then
+            old_path = parts[2]
+            path = parts[3]
+          end
+
+          table.insert(files, {
+            path = path,
+            status = status,
+            old_path = old_path,
+          })
+        end
+      end
+
+      callback(nil, files)
+    end
+  )
+end
+
 -- Get revision candidates for command completion (sync)
 -- Returns list of branches, tags, remotes, and special refs
 function M.get_rev_candidates(git_root)

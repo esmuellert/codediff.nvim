@@ -106,6 +106,13 @@ function M.parse_url(url)
     return git_root, commit, filepath
   end
 
+  -- Try SHA with ^ suffix (parent commit reference)
+  local pattern_parent = "^codediff:///(.-)///([a-fA-F0-9]+%^)/(.+)$"
+  git_root, commit, filepath = url:match(pattern_parent)
+  if git_root and commit and filepath then
+    return git_root, commit, filepath
+  end
+
   -- Try symbolic ref pattern (HEAD, branch names, etc.)
   local pattern_symbolic = "^codediff:///(.-)///([A-Za-z][A-Za-z0-9_~^%-]*)/(.+)$"
   git_root, commit, filepath = url:match(pattern_symbolic)
