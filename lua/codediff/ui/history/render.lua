@@ -243,6 +243,16 @@ function M.create(commits, git_root, tabpage, width, opts)
     local old_path = file_data.old_path
     local commit_hash = file_data.commit_hash
 
+    if not file_path or file_path == "" then
+      vim.notify("[CodeDiff] No file path for selection", vim.log.levels.WARN)
+      return
+    end
+
+    if not commit_hash or commit_hash == "" then
+      vim.notify("[CodeDiff] No commit hash for selection", vim.log.levels.WARN)
+      return
+    end
+
     -- Check if already displaying same file
     local session = lifecycle.get_session(tabpage)
     if session and session.original_revision == commit_hash .. "^" and session.modified_revision == commit_hash then
@@ -276,6 +286,7 @@ function M.create(commits, git_root, tabpage, width, opts)
 
   -- Keymaps
   local map_options = { noremap = true, silent = true, nowait = true }
+  local is_single_file_mode = opts.file_path and opts.file_path ~= ""
 
   -- Toggle expand/collapse or select file
   if config.options.keymaps.explorer.select then
@@ -286,7 +297,15 @@ function M.create(commits, git_root, tabpage, width, opts)
       end
 
       if node.data and node.data.type == "commit" then
-        if node:is_expanded() then
+        if is_single_file_mode then
+          -- Single file mode: directly show diff for the file at this commit
+          local file_data = {
+            path = opts.file_path,
+            commit_hash = node.data.hash,
+            git_root = git_root,
+          }
+          history.on_file_select(file_data)
+        elseif node:is_expanded() then
           node:collapse()
           tree:render()
         else
@@ -308,7 +327,15 @@ function M.create(commits, git_root, tabpage, width, opts)
     if node.data and node.data.type == "file" then
       history.on_file_select(node.data)
     elseif node.data and node.data.type == "commit" then
-      if node:is_expanded() then
+      if is_single_file_mode then
+        -- Single file mode: directly show diff for the file at this commit
+        local file_data = {
+          path = opts.file_path,
+          commit_hash = node.data.hash,
+          git_root = git_root,
+        }
+        history.on_file_select(file_data)
+      elseif node:is_expanded() then
         node:collapse()
         tree:render()
       else
@@ -334,18 +361,28 @@ function M.create(commits, git_root, tabpage, width, opts)
   -- Auto-expand first commit and select first file
   if first_commit_node then
     vim.defer_fn(function()
-      load_commit_files(first_commit_node, function()
-        -- Select first file after loading
-        if first_commit_node:has_children() then
-          local child_ids = first_commit_node:get_child_ids()
-          if #child_ids > 0 then
-            local first_file = tree:get_node(child_ids[1])
-            if first_file and first_file.data then
-              history.on_file_select(first_file.data)
+      if is_single_file_mode then
+        -- Single file mode: directly select the file at first commit
+        local file_data = {
+          path = opts.file_path,
+          commit_hash = first_commit_node.data.hash,
+          git_root = git_root,
+        }
+        history.on_file_select(file_data)
+      else
+        -- Multi-file mode: expand first commit and select first file
+        load_commit_files(first_commit_node, function()
+          if first_commit_node:has_children() then
+            local child_ids = first_commit_node:get_child_ids()
+            if #child_ids > 0 then
+              local first_file = tree:get_node(child_ids[1])
+              if first_file and first_file.data then
+                history.on_file_select(first_file.data)
+              end
             end
           end
-        end
-      end)
+        end)
+      end
     end, 100)
   end
 

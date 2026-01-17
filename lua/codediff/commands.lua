@@ -157,21 +157,29 @@ local function handle_history(range, file_path)
   local current_file = vim.api.nvim_buf_get_name(current_buf)
   local cwd = vim.fn.getcwd()
 
+  -- Expand file_path before async context (vim.fn.expand can't be called in fast event)
+  local expanded_file_path = nil
+  if file_path then
+    expanded_file_path = vim.fn.expand(file_path)
+    if vim.fn.filereadable(expanded_file_path) ~= 1 then
+      expanded_file_path = file_path
+    end
+  end
+
   local function open_history(git_root)
     -- Build options for commit list
     local history_opts = {
-      limit = 50, -- Default limit
       no_merges = true,
     }
 
+    -- Only apply default limit when no range specified
+    if not range or range == "" then
+      history_opts.limit = 100
+    end
+
     -- If file_path specified, filter by that file
-    if file_path then
-      local expanded = vim.fn.expand(file_path)
-      if vim.fn.filereadable(expanded) == 1 then
-        history_opts.path = git.get_relative_path(expanded, git_root)
-      else
-        history_opts.path = file_path
-      end
+    if expanded_file_path then
+      history_opts.path = git.get_relative_path(expanded_file_path, git_root)
     end
 
     git.get_commit_list(range or "", git_root, history_opts, function(err, commits)
@@ -203,7 +211,7 @@ local function handle_history(range, file_path)
           history_data = {
             commits = commits,
             range = range,
-            file_path = file_path,
+            file_path = history_opts.path,
           },
         }
 
