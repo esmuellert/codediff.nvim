@@ -56,6 +56,9 @@ function M.create(commits, git_root, tabpage, width, opts)
   local selected_commit = nil
   local selected_file = nil
 
+  -- Check if single file mode
+  local is_single_file_mode = opts.file_path and opts.file_path ~= ""
+
   -- Calculate max widths for alignment
   local max_files = 0
   local max_insertions = 0
@@ -116,6 +119,7 @@ function M.create(commits, git_root, tabpage, width, opts)
         git_root = git_root,
         files_loaded = false,
         -- File path at this commit (for single file mode with renames)
+        -- Also used to detect single file mode in nodes.lua
         file_path = commit.file_path,
         -- Alignment info
         max_files_width = max_files_width,
@@ -288,7 +292,6 @@ function M.create(commits, git_root, tabpage, width, opts)
 
   -- Keymaps
   local map_options = { noremap = true, silent = true, nowait = true }
-  local is_single_file_mode = opts.file_path and opts.file_path ~= ""
 
   -- Toggle expand/collapse or select file
   if config.options.keymaps.explorer.select then

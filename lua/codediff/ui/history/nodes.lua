@@ -110,12 +110,14 @@ function M.prepare_node(node, max_width, selected_commit, selected_file)
     local expand_icon = is_expanded and " " or " "
     line:append(expand_icon, get_hl("NonText"))
 
-    -- File count (padded to align)
-    local file_count = data.file_count or data.files_changed or 0
-    local file_word = file_count == 1 and "file " or "files"
-    local files_width = data.max_files_width or 2
-    local file_str = string.format("%" .. files_width .. "d %s ", file_count, file_word)
-    line:append(file_str, get_hl("NonText"))
+    -- File count (padded to align) - skip in single file mode (when file_path is set)
+    if not data.file_path then
+      local file_count = data.file_count or data.files_changed or 0
+      local file_word = file_count == 1 and "file " or "files"
+      local files_width = data.max_files_width or 2
+      local file_str = string.format("%" .. files_width .. "d %s ", file_count, file_word)
+      line:append(file_str, get_hl("NonText"))
+    end
 
     -- Stats with pipe separators: | <ins> <del> |
     -- One space after |, numbers left-aligned to max width, one space between, one before |
