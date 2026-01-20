@@ -231,6 +231,17 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     vim.api.nvim_echo({ { string.format("Put hunk %d", hunk_idx), "None" } }, false, {})
   end
 
+  -- Helper: Toggle staged
+  local function toggle_staged()
+    local explorer_obj = lifecycle.get_explorer(tabpage)
+    if not explorer_obj then
+      vim.notify("No explorer found for this tab", vim.log.levels.WARN)
+      return
+    end
+    local explorer = require("codediff.ui.explorer")
+    explorer.toggle_stage_entry(explorer_obj, explorer_obj.tree)
+  end
+
   -- ========================================================================
   -- Bind all keymaps using unified API (one place for all keymaps!)
   -- ========================================================================
@@ -269,6 +280,11 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
   end
   if keymaps.diff_put then
     lifecycle.set_tab_keymap(tabpage, "n", keymaps.diff_put, diff_put, { desc = "Put change to other buffer" })
+  end
+
+  -- Toggle stage/unstage (- key, like diffview)
+  if config.options.keymaps.explorer.toggle_stage then
+    lifecycle.set_tab_keymap(tabpage, "n", config.options.keymaps.explorer.toggle_stage, toggle_staged, { desc = "Toggle stage/unstage" })
   end
 end
 

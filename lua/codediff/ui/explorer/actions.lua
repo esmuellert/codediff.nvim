@@ -173,12 +173,13 @@ function M.toggle_stage_entry(explorer, tree)
   end
 
   local node = tree:get_node()
-  if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then
+
+  if not node or not node.data then
     return
   end
 
-  local file_path = node.data.path
-  local group = node.data.group
+  local file_path = node.data.path or explorer.current_file_path
+  local group = node.data.group or explorer.current_file_group
 
   if group == "staged" then
     -- Unstage file
