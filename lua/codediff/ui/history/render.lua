@@ -204,7 +204,7 @@ function M.create(commits, git_root, tabpage, width, opts)
         -- Create file nodes based on view_mode
         local history_config = config.options.history or {}
         local view_mode = history_config.view_mode or "list"
-        
+
         local file_nodes
         if view_mode == "tree" then
           file_nodes = nodes_module.create_tree_file_nodes(files, data.hash, git_root)

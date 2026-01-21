@@ -370,7 +370,6 @@ function M.prepare_node(node, max_width, selected_commit, selected_file)
         line:append(string.rep(" ", max_width - current_len), get_hl("Normal"))
       end
     end
-
   elseif data.type == "directory" then
     -- Directory node format (tree mode only):
     -- [tree chars] [folder icon] [name]
