@@ -53,3 +53,31 @@ vim.cmd('runtime! plugin/*.lua plugin/*.vim')
 
 -- Setup plugin
 require("codediff").setup()
+
+-- Pre-load ALL modules to ensure they're in package.loaded before tests change cwd.
+-- Tests change to temp directories, and lazy-loaded modules inside async callbacks
+-- (vim.schedule) would fail to load via package.path after cwd changes.
+local modules_to_preload = {
+  "codediff.config",
+  "codediff.core.diff",
+  "codediff.core.dir",
+  "codediff.core.git",
+  "codediff.core.path",
+  "codediff.core.virtual_file",
+  "codediff.ui",
+  "codediff.ui.auto_refresh",
+  "codediff.ui.conflict",
+  "codediff.ui.core",
+  "codediff.ui.explorer",
+  "codediff.ui.highlights",
+  "codediff.ui.history",
+  "codediff.ui.lifecycle",
+  "codediff.ui.merge_alignment",
+  "codediff.ui.semantic_tokens",
+  "codediff.ui.view",
+  "codediff.version",
+}
+
+for _, mod in ipairs(modules_to_preload) do
+  pcall(require, mod)
+end
