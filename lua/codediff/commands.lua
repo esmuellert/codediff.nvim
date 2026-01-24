@@ -258,6 +258,12 @@ local function handle_explorer(revision, revision2)
   local cwd = vim.fn.getcwd()
 
   local function open_explorer(git_root)
+    -- Compute focus_file (relative path to current buffer) for focusing in explorer
+    local focus_file = nil
+    if current_file ~= "" then
+      focus_file = git.get_relative_path(current_file, git_root)
+    end
+
     local function process_status(err_status, status_result, original_rev, modified_rev)
       vim.schedule(function()
         if err_status then
@@ -285,6 +291,7 @@ local function handle_explorer(revision, revision2)
           modified_revision = modified_rev,
           explorer_data = {
             status_result = status_result,
+            focus_file = focus_file, -- Focus on current file if changed
           },
         }
 

@@ -10,6 +10,19 @@ M._set_refresh_module = function(r)
   refresh_module = r
 end
 
+-- Find line number for a file node by scanning the tree
+-- Returns the line number or nil if not found
+local function find_node_line(explorer, path, group)
+  local line_count = vim.api.nvim_buf_line_count(explorer.bufnr)
+  for line = 1, line_count do
+    local node = explorer.tree:get_node(line)
+    if node and node.data and node.data.path == path and node.data.group == group then
+      return line
+    end
+  end
+  return nil
+end
+
 -- Navigate to next file in explorer
 function M.navigate_next(explorer)
   local all_files = refresh_module.get_all_files(explorer.tree)
@@ -45,9 +58,12 @@ function M.navigate_next(explorer)
   -- Update tree selection visually (switch to explorer window temporarily)
   local current_win = vim.api.nvim_get_current_win()
   if vim.api.nvim_win_is_valid(explorer.winid) then
-    vim.api.nvim_set_current_win(explorer.winid)
-    vim.api.nvim_win_set_cursor(explorer.winid, { next_file.node._line or 1, 0 })
-    vim.api.nvim_set_current_win(current_win)
+    local line = find_node_line(explorer, next_file.data.path, next_file.data.group)
+    if line then
+      vim.api.nvim_set_current_win(explorer.winid)
+      vim.api.nvim_win_set_cursor(explorer.winid, { line, 0 })
+      vim.api.nvim_set_current_win(current_win)
+    end
   end
 
   -- Trigger file select
@@ -93,9 +109,12 @@ function M.navigate_prev(explorer)
   -- Update tree selection visually (switch to explorer window temporarily)
   local current_win = vim.api.nvim_get_current_win()
   if vim.api.nvim_win_is_valid(explorer.winid) then
-    vim.api.nvim_set_current_win(explorer.winid)
-    vim.api.nvim_win_set_cursor(explorer.winid, { prev_file.node._line or 1, 0 })
-    vim.api.nvim_set_current_win(current_win)
+    local line = find_node_line(explorer, prev_file.data.path, prev_file.data.group)
+    if line then
+      vim.api.nvim_set_current_win(explorer.winid)
+      vim.api.nvim_win_set_cursor(explorer.winid, { line, 0 })
+      vim.api.nvim_set_current_win(current_win)
+    end
   end
 
   -- Trigger file select

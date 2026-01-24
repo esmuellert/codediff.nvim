@@ -337,28 +337,58 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   -- Setup keymaps (delegated to keymaps module)
   keymaps_module.setup(explorer)
 
-  -- Select first file by default (conflicts first, then unstaged, then staged)
-  local first_file = nil
-  local first_file_group = nil
-  if status_result.conflicts and #status_result.conflicts > 0 then
-    first_file = status_result.conflicts[1]
-    first_file_group = "conflicts"
-  elseif #status_result.unstaged > 0 then
-    first_file = status_result.unstaged[1]
-    first_file_group = "unstaged"
-  elseif #status_result.staged > 0 then
-    first_file = status_result.staged[1]
-    first_file_group = "staged"
+  -- Find a file in the status lists, returns (file, group) or (nil, nil)
+  local function find_file_in_status(path)
+    if status_result.conflicts then
+      for _, f in ipairs(status_result.conflicts) do
+        if f.path == path then return f, "conflicts" end
+      end
+    end
+    for _, f in ipairs(status_result.unstaged) do
+      if f.path == path then return f, "unstaged" end
+    end
+    for _, f in ipairs(status_result.staged) do
+      if f.path == path then return f, "staged" end
+    end
+    return nil, nil
   end
 
-  if first_file then
-    -- Defer to allow explorer to be fully set up
+  -- Select initial file: prefer focus_file (current buffer) if changed, else first file
+  local initial_file, initial_file_group
+  local focus_file = opts and opts.focus_file
+  if focus_file then
+    initial_file, initial_file_group = find_file_in_status(focus_file)
+  end
+  if not initial_file then
+    if status_result.conflicts and #status_result.conflicts > 0 then
+      initial_file, initial_file_group = status_result.conflicts[1], "conflicts"
+    elseif #status_result.unstaged > 0 then
+      initial_file, initial_file_group = status_result.unstaged[1], "unstaged"
+    elseif #status_result.staged > 0 then
+      initial_file, initial_file_group = status_result.staged[1], "staged"
+    end
+  end
+
+  if initial_file then
     vim.defer_fn(function()
+      -- Scroll explorer to the selected file using tree:get_node(line) lookup
+      if vim.api.nvim_win_is_valid(explorer.winid) and vim.api.nvim_buf_is_valid(explorer.bufnr) then
+        local line_count = vim.api.nvim_buf_line_count(explorer.bufnr)
+        for line = 1, line_count do
+          local node = explorer.tree:get_node(line)
+          if node and node.data and node.data.path == initial_file.path and node.data.group == initial_file_group then
+            vim.api.nvim_win_set_cursor(explorer.winid, { line, 0 })
+            break
+          end
+        end
+      end
+
       explorer.on_file_select({
-        path = first_file.path,
-        status = first_file.status,
+        path = initial_file.path,
+        old_path = initial_file.old_path,
+        status = initial_file.status,
         git_root = git_root,
-        group = first_file_group,
+        group = initial_file_group,
       })
     end, 100)
   end

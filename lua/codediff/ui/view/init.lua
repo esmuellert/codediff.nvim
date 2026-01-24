@@ -343,12 +343,14 @@ function M.create(session_config, filetype, on_ready)
     local status_result = session_config.explorer_data.status_result
 
     -- For dir mode (git_root == nil), pass original_path and modified_path as dir roots
-    local explorer_opts = nil
+    local explorer_opts = {}
     if not session_config.git_root then
-      explorer_opts = {
-        dir1 = session_config.original_path,
-        dir2 = session_config.modified_path,
-      }
+      explorer_opts.dir1 = session_config.original_path
+      explorer_opts.dir2 = session_config.modified_path
+    end
+    -- Pass focus_file to auto-select current file if it's in the changed list
+    if session_config.explorer_data.focus_file then
+      explorer_opts.focus_file = session_config.explorer_data.focus_file
     end
 
     local explorer_obj = explorer.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)
