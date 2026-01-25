@@ -272,7 +272,10 @@ local function calculate_fillers(mapping, original_lines, _modified_lines, last_
     end
 
     local orig_line_len = original_lines[inner.original.end_line] and #original_lines[inner.original.end_line] or 0
-    if inner.original.end_col <= orig_line_len then
+    -- Allow end_col to be one past the end of the line (valid insertion point).
+    -- This fixes the issue where insertions at empty lines (len=0, end_col=1) would not emit alignments,
+    -- causing filler lines to not be calculated correctly.
+    if inner.original.end_col <= orig_line_len + 1 then
       emit_alignment(inner.original.end_line, inner.modified.end_line)
     end
   end
