@@ -493,4 +493,41 @@ describe("Render Core", function()
 
     vim.api.nvim_buf_delete(buf, {force = true})
   end)
+
+  -- Test 20: Insertions at empty lines produce filler lines (regression test for issue)
+  it("Inserts filler lines for insertions at empty line positions", function()
+    local left_buf = vim.api.nvim_create_buf(false, true)
+    local right_buf = vim.api.nvim_create_buf(false, true)
+
+    -- Test case: insertion after an empty line
+    -- This was the bug: empty lines (len=0) with end_col=1 failed the condition
+    -- and prevented filler lines from being calculated
+    local original = {"line 1", "line 2", "", "line 4"}
+    local modified = {"line 1", "line 2", "", "NEW line 3", "NEW line 4", "NEW line 5", "", "line 4"}
+
+    vim.api.nvim_buf_set_lines(left_buf, 0, -1, false, original)
+    vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, modified)
+
+    local lines_diff = diff.compute_diff(original, modified)
+    core.render_diff(left_buf, right_buf, original, modified, lines_diff)
+
+    -- Left buffer MUST have filler extmarks to align with the new lines in right
+    local left_fillers = vim.api.nvim_buf_get_extmarks(left_buf, highlights.ns_filler, 0, -1, {details = true})
+    assert.is_true(#left_fillers > 0, "Left buffer must have filler lines for insertions at empty line")
+    
+    -- Verify the filler has the correct number of virtual lines
+    local filler_found = false
+    for _, mark in ipairs(left_fillers) do
+      local details = mark[4]
+      if details.virt_lines and #details.virt_lines > 0 then
+        filler_found = true
+        -- We inserted 3 new lines, so we need at least 3 filler lines
+        assert.is_true(#details.virt_lines >= 3, "Filler should have at least 3 virtual lines")
+      end
+    end
+    assert.is_true(filler_found, "Should have found filler with virt_lines")
+
+    vim.api.nvim_buf_delete(left_buf, {force = true})
+    vim.api.nvim_buf_delete(right_buf, {force = true})
+  end)
 end)
