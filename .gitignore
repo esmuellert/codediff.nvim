@@ -30,3 +30,7 @@ Thumbs.db
 tests/plenary.nvim
 compile_commands.json
 build/include/version.h
+
+# Downloaded neovim binary for testing
+nvim-linux-x86_64/
+nvim-linux-x86_64.tar.gz
