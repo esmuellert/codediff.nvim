@@ -131,3 +131,8 @@ e2e.exec("CodeDiff HEAD~1")
 - Always use the test init: `nvim --headless -u tests/init.lua`
 - Create scenario files in `/tmp/`, never in the repo
 - Clean up temp repos in the cleanup phase
+- **NEVER commit test artifacts, downloaded binaries, or temporary files**
+  - Always check `.gitignore` before committing
+  - Downloaded binaries (like `nvim-linux-x86_64/`) should never be committed
+  - Test artifacts and build outputs should be excluded
+  - Use `git status` to verify only intended files are staged
