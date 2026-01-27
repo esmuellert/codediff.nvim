@@ -386,6 +386,7 @@ end
 -- git_root: absolute path to git repository root
 -- callback: function(err, status_result) where status_result has same format as get_status
 function M.get_diff_revision(revision, git_root, callback)
+  -- First get tracked file changes
   run_git_async({ "diff", "--name-status", "-M", revision }, { cwd = git_root }, function(err, output)
     if err then
       callback(err, nil)
@@ -420,7 +421,27 @@ function M.get_diff_revision(revision, git_root, callback)
       end
     end
 
-    callback(nil, result)
+    -- Now get untracked files (they don't exist in the revision, so they're "new")
+    run_git_async({ "ls-files", "--others", "--exclude-standard" }, { cwd = git_root }, function(err_untracked, output_untracked)
+      if err_untracked then
+        -- If getting untracked files fails, just return what we have
+        callback(nil, result)
+        return
+      end
+
+      -- Add untracked files as new files with "??" status
+      for line in output_untracked:gmatch("[^\r\n]+") do
+        if #line > 0 then
+          table.insert(result.unstaged, {
+            path = line,
+            status = "??",
+            old_path = nil,
+          })
+        end
+      end
+
+      callback(nil, result)
+    end)
   end)
 end
 
