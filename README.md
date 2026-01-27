@@ -130,6 +130,7 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
         prev_file = "[f",   -- Previous file in explorer mode
         diff_get = "do",    -- Get change from other buffer (like vimdiff)
         diff_put = "dp",    -- Put change to other buffer (like vimdiff)
+        open_in_prev_tab = "gf", -- Open current buffer in previous tab (or create one before)
         toggle_stage = "-", -- Stage/unstage current file (works in explorer and diff buffers)
       },
       explorer = {

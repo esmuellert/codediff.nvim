@@ -287,6 +287,78 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     -- Case 3: Other buffers (history, etc.) - do nothing silently
   end
 
+  -- Helper: Open the current real buffer in the previous tab (or create one before)
+  local function open_in_prev_tab()
+    local session = lifecycle.get_session(tabpage)
+    if not session then
+      return
+    end
+
+    local current_buf = vim.api.nvim_get_current_buf()
+    local side = nil
+    if current_buf == original_bufnr then
+      side = "original"
+    elseif current_buf == modified_bufnr then
+      side = "modified"
+    end
+
+    -- Only operate on diff buffers; ignore explorer/history/result silently
+    if not side then
+      return
+    end
+
+    local is_virtual = (side == "original" and lifecycle.is_original_virtual(tabpage)) or (side == "modified" and lifecycle.is_modified_virtual(tabpage))
+    if is_virtual then
+      vim.notify("Current buffer is virtual; nothing to open in a tab", vim.log.levels.WARN)
+      return
+    end
+
+    local buf_name = vim.api.nvim_buf_get_name(current_buf)
+    if buf_name == "" then
+      vim.notify("Buffer has no name; cannot open in previous tab", vim.log.levels.WARN)
+      return
+    end
+
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local current_tab = vim.api.nvim_get_current_tabpage()
+    local tabs = vim.api.nvim_list_tabpages()
+
+    local current_index = nil
+    for i, tab in ipairs(tabs) do
+      if tab == current_tab then
+        current_index = i
+        break
+      end
+    end
+
+    local target_tab
+    if current_index and current_index > 1 then
+      target_tab = tabs[current_index - 1]
+    else
+      vim.cmd("tabnew")
+      target_tab = vim.api.nvim_get_current_tabpage()
+      vim.cmd("tabmove 0")
+    end
+
+    if vim.api.nvim_get_current_tabpage() ~= target_tab then
+      vim.api.nvim_set_current_tabpage(target_tab)
+    end
+
+    local target_win = vim.api.nvim_get_current_win()
+    if not vim.api.nvim_win_is_valid(target_win) then
+      vim.notify("No valid window in target tab to open buffer", vim.log.levels.ERROR)
+      return
+    end
+
+    local ok, err = pcall(vim.api.nvim_win_set_buf, target_win, current_buf)
+    if not ok then
+      vim.notify("Failed to open buffer in previous tab: " .. err, vim.log.levels.ERROR)
+      return
+    end
+
+    pcall(vim.api.nvim_win_set_cursor, target_win, cursor)
+  end
+
   -- ========================================================================
   -- Bind all keymaps using unified API (one place for all keymaps!)
   -- ========================================================================
@@ -326,6 +398,9 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
   if keymaps.diff_put then
     lifecycle.set_tab_keymap(tabpage, "n", keymaps.diff_put, diff_put, { desc = "Put change to other buffer" })
   end
+  if keymaps.open_in_prev_tab then
+    lifecycle.set_tab_keymap(tabpage, "n", keymaps.open_in_prev_tab, open_in_prev_tab, { desc = "Open buffer in previous tab" })
+  end
 
   -- Toggle stage/unstage (- key) - only in explorer mode
   -- Support legacy config: keymaps.explorer.toggle_stage (deprecated)
@@ -337,10 +412,7 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     if not toggle_stage_key and explorer_keymaps.toggle_stage then
       toggle_stage_key = explorer_keymaps.toggle_stage
       vim.schedule(function()
-        vim.notify(
-          "[codediff] keymaps.explorer.toggle_stage is deprecated. Please use keymaps.view.toggle_stage instead.",
-          vim.log.levels.WARN
-        )
+        vim.notify("[codediff] keymaps.explorer.toggle_stage is deprecated. Please use keymaps.view.toggle_stage instead.", vim.log.levels.WARN)
       end)
     end
 

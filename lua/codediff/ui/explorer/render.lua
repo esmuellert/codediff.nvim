@@ -341,14 +341,20 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   local function find_file_in_status(path)
     if status_result.conflicts then
       for _, f in ipairs(status_result.conflicts) do
-        if f.path == path then return f, "conflicts" end
+        if f.path == path then
+          return f, "conflicts"
+        end
       end
     end
     for _, f in ipairs(status_result.unstaged) do
-      if f.path == path then return f, "unstaged" end
+      if f.path == path then
+        return f, "unstaged"
+      end
     end
     for _, f in ipairs(status_result.staged) do
-      if f.path == path then return f, "staged" end
+      if f.path == path then
+        return f, "staged"
+      end
     end
     return nil, nil
   end

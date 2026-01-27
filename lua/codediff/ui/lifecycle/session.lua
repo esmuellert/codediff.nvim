@@ -4,6 +4,7 @@ local M = {}
 
 local config = require("codediff.config")
 local virtual_file = require("codediff.core.virtual_file")
+local accessors = require("codediff.ui.lifecycle.accessors")
 
 -- Import from sibling modules (will be set by init.lua)
 local state = nil
@@ -67,7 +68,8 @@ function M.create_session(
   modified_bufnr,
   original_win,
   modified_win,
-  lines_diff
+  lines_diff,
+  reapply_keymaps
 )
   -- Save buffer states
   local original_state = state.save_buffer_state(original_bufnr)
@@ -110,6 +112,7 @@ function M.create_session(
     result_bufnr = nil,
     result_win = nil,
     conflict_files = {}, -- Tracks files opened in conflict mode for unsaved warning
+    reapply_keymaps = reapply_keymaps,
   }
 
   -- Mark windows with restore flag
@@ -152,6 +155,7 @@ function M.create_session(
     callback = function()
       local current_tab = vim.api.nvim_get_current_tabpage()
       if current_tab == tabpage then
+        accessors.clear_tab_keymaps(tabpage)
         state.suspend_diff(tabpage)
       end
     end,
@@ -163,6 +167,10 @@ function M.create_session(
       vim.schedule(function()
         local current_tab = vim.api.nvim_get_current_tabpage()
         if current_tab == tabpage and active_diffs[tabpage] then
+          local sess = active_diffs[tabpage]
+          if sess.reapply_keymaps then
+            pcall(sess.reapply_keymaps)
+          end
           state.resume_diff(tabpage)
         end
       end)

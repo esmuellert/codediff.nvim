@@ -73,6 +73,7 @@ M.defaults = {
       prev_file = "[f",
       diff_get = "do", -- Get change from other buffer (like vimdiff)
       diff_put = "dp", -- Put change to other buffer (like vimdiff)
+      open_in_prev_tab = "gf", -- Open current buffer in previous tab (or new tab before current)
       toggle_stage = "-", -- Stage/unstage current file (works in explorer and diff buffers)
     },
     explorer = {

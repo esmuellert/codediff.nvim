@@ -1,7 +1,7 @@
 -- Cleanup and autocmd management for diff views
 local M = {}
 
-local config = require("codediff.config")
+local accessors = require("codediff.ui.lifecycle.accessors")
 
 -- Will be injected by init.lua
 local session = nil
@@ -43,34 +43,12 @@ local function cleanup_diff(tabpage)
   state.restore_buffer_state(diff.original_bufnr, diff.original_state)
   state.restore_buffer_state(diff.modified_bufnr, diff.modified_state)
 
-  -- Clean view keymaps from diff buffers
-  for _, bufnr in ipairs({ diff.original_bufnr, diff.modified_bufnr }) do
-    if vim.api.nvim_buf_is_valid(bufnr) then
-      for _, key in pairs(config.options.keymaps.view) do
-        if key then
-          pcall(vim.keymap.del, "n", key, { buffer = bufnr })
-        end
-      end
-    end
-  end
+  -- Remove tab-scoped keymaps from all tracked buffers
+  accessors.clear_tab_keymaps(tabpage)
 
-  -- Clean view and explorer keymaps from explorer buffer
-  if diff.explorer and diff.explorer.bufnr and vim.api.nvim_buf_is_valid(diff.explorer.bufnr) then
-    for _, key in pairs(config.options.keymaps.view) do
-      if key then
-        pcall(vim.keymap.del, "n", key, { buffer = diff.explorer.bufnr })
-      end
-    end
-    for _, key in pairs(config.options.keymaps.explorer) do
-      if key then
-        pcall(vim.keymap.del, "n", key, { buffer = diff.explorer.bufnr })
-      end
-    end
-
-    -- Call explorer's cleanup function to stop file watchers
-    if diff.explorer._cleanup_auto_refresh then
-      pcall(diff.explorer._cleanup_auto_refresh)
-    end
+  -- Call explorer's cleanup function to stop file watchers
+  if diff.explorer and diff.explorer._cleanup_auto_refresh then
+    pcall(diff.explorer._cleanup_auto_refresh)
   end
 
   -- Send didClose notifications for virtual buffers

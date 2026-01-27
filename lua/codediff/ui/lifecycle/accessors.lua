@@ -1,5 +1,6 @@
 -- Accessor functions (getters and setters) for diff sessions
 local M = {}
+local config = require("codediff.config")
 
 -- Will be injected by init.lua
 local session = nil
@@ -416,7 +417,6 @@ function M.set_tab_keymap(tabpage, mode, lhs, rhs, opts)
   opts = opts or {}
   local base_opts = { noremap = true, silent = true, nowait = true }
 
-  -- Set on both diff buffers
   if vim.api.nvim_buf_is_valid(sess.original_bufnr) then
     vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.original_bufnr }))
   end
@@ -425,18 +425,48 @@ function M.set_tab_keymap(tabpage, mode, lhs, rhs, opts)
     vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.modified_bufnr }))
   end
 
-  -- Set on explorer buffer if exists
   local explorer = sess.explorer
   if explorer and explorer.bufnr and vim.api.nvim_buf_is_valid(explorer.bufnr) then
     vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = explorer.bufnr }))
   end
 
-  -- Set on result buffer if exists (conflict mode)
   if sess.result_bufnr and vim.api.nvim_buf_is_valid(sess.result_bufnr) then
     vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", base_opts, opts, { buffer = sess.result_bufnr }))
   end
 
   return true
+end
+
+--- Remove codediff keymaps from a session's buffers
+function M.clear_tab_keymaps(tabpage)
+  local active_diffs = session.get_active_diffs()
+  local sess = active_diffs[tabpage]
+  if not sess then
+    return
+  end
+
+  local function del_buf_keymaps(bufnr, keys)
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+    for _, key in pairs(keys) do
+      if key then
+        pcall(vim.keymap.del, "n", key, { buffer = bufnr })
+      end
+    end
+  end
+
+  del_buf_keymaps(sess.original_bufnr, config.options.keymaps.view)
+  del_buf_keymaps(sess.modified_bufnr, config.options.keymaps.view)
+
+  if sess.explorer and sess.explorer.bufnr then
+    del_buf_keymaps(sess.explorer.bufnr, config.options.keymaps.view)
+    del_buf_keymaps(sess.explorer.bufnr, config.options.keymaps.explorer or {})
+  end
+
+  if sess.result_bufnr then
+    del_buf_keymaps(sess.result_bufnr, config.options.keymaps.view)
+  end
 end
 
 --- Setup auto-sync on file switch: automatically update diff when user edits a different file in working buffer

@@ -123,6 +123,7 @@ Setup entry point:
         prev_file = "[f",
         diff_get = "do",
         diff_put = "dp",
+        open_in_prev_tab = "gf",
         toggle_stage = "-",
       },
       explorer = {
