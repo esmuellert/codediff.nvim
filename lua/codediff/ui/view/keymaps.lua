@@ -307,8 +307,7 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
       return
     end
 
-    local is_virtual = (side == "original" and lifecycle.is_original_virtual(tabpage))
-      or (side == "modified" and lifecycle.is_modified_virtual(tabpage))
+    local is_virtual = (side == "original" and lifecycle.is_original_virtual(tabpage)) or (side == "modified" and lifecycle.is_modified_virtual(tabpage))
     if is_virtual then
       vim.notify("Current buffer is virtual; nothing to open in a tab", vim.log.levels.WARN)
       return
@@ -400,13 +399,7 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     lifecycle.set_tab_keymap(tabpage, "n", keymaps.diff_put, diff_put, { desc = "Put change to other buffer" })
   end
   if keymaps.open_in_prev_tab then
-    lifecycle.set_tab_keymap(
-      tabpage,
-      "n",
-      keymaps.open_in_prev_tab,
-      open_in_prev_tab,
-      { desc = "Open buffer in previous tab" }
-    )
+    lifecycle.set_tab_keymap(tabpage, "n", keymaps.open_in_prev_tab, open_in_prev_tab, { desc = "Open buffer in previous tab" })
   end
 
   -- Toggle stage/unstage (- key) - only in explorer mode
@@ -419,10 +412,7 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     if not toggle_stage_key and explorer_keymaps.toggle_stage then
       toggle_stage_key = explorer_keymaps.toggle_stage
       vim.schedule(function()
-        vim.notify(
-          "[codediff] keymaps.explorer.toggle_stage is deprecated. Please use keymaps.view.toggle_stage instead.",
-          vim.log.levels.WARN
-        )
+        vim.notify("[codediff] keymaps.explorer.toggle_stage is deprecated. Please use keymaps.view.toggle_stage instead.", vim.log.levels.WARN)
       end)
     end
 
