@@ -127,8 +127,15 @@ function M.setup()
 
   -- Filler lines (no highlight, inherits editor default background)
   vim.api.nvim_set_hl(0, "CodeDiffFiller", {
-    fg = "#444444", -- Subtle gray for the slash character
+    fg = "#444444",
     ctermfg = base256_greyscale(8),
+    default = true,
+  })
+
+  vim.api.nvim_set_hl(0, "CodeDiffUnifiedHeader", {
+    fg = "#58a6ff",
+    ctermfg = base256_color(1, 3, 5),
+    bold = true,
     default = true,
   })
 

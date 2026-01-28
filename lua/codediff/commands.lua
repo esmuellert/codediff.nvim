@@ -70,7 +70,6 @@ local function handle_git_diff(revision, revision2)
           end
 
           vim.schedule(function()
-            local view = require("codediff.ui.view")
             ---@type SessionConfig
             local session_config = {
               mode = "standalone",
@@ -80,13 +79,19 @@ local function handle_git_diff(revision, revision2)
               original_revision = commit_hash,
               modified_revision = commit_hash2,
             }
-            view.create(session_config, filetype)
+
+            if _G._codediff_use_unified then
+              local unified_view = require("codediff.ui.unified.view")
+              unified_view.create(session_config, filetype)
+            else
+              local view = require("codediff.ui.view")
+              view.create(session_config, filetype)
+            end
           end)
         end)
       else
         -- Compare revision vs working tree
         vim.schedule(function()
-          local view = require("codediff.ui.view")
           ---@type SessionConfig
           local session_config = {
             mode = "standalone",
@@ -96,7 +101,14 @@ local function handle_git_diff(revision, revision2)
             original_revision = commit_hash,
             modified_revision = "WORKING",
           }
-          view.create(session_config, filetype)
+
+          if _G._codediff_use_unified then
+            local unified_view = require("codediff.ui.unified.view")
+            unified_view.create(session_config, filetype)
+          else
+            local view = require("codediff.ui.view")
+            view.create(session_config, filetype)
+          end
         end)
       end
     end)
@@ -108,17 +120,23 @@ local function handle_file_diff(file_a, file_b)
   local filetype = vim.filetype.match({ filename = file_a }) or ""
 
   -- Create diff view (no pre-reading needed, :edit will load content)
-  local view = require("codediff.ui.view")
   ---@type SessionConfig
   local session_config = {
     mode = "standalone",
     git_root = nil,
     original_path = file_a,
     modified_path = file_b,
-    original_revision = nil,
-    modified_revision = nil,
+    original_revision = "WORKING",
+    modified_revision = "WORKING",
   }
-  view.create(session_config, filetype)
+
+  if _G._codediff_use_unified then
+    local unified_view = require("codediff.ui.unified.view")
+    unified_view.create(session_config, filetype)
+  else
+    local view = require("codediff.ui.view")
+    view.create(session_config, filetype)
+  end
 end
 
 local function handle_dir_diff(dir1, dir2)
@@ -553,18 +571,33 @@ function M.vscode_merge(opts)
 end
 
 function M.vscode_diff(opts)
-  -- Check if current tab is a diff view and toggle (close) it if so
   local current_tab = vim.api.nvim_get_current_tabpage()
   if lifecycle.get_session(current_tab) then
-    -- Check for unsaved conflict files before closing
     if not lifecycle.confirm_close_with_unsaved(current_tab) then
-      return -- User cancelled
+      return
     end
     vim.cmd("tabclose")
     return
   end
 
   local args = opts.fargs
+  local use_unified = false
+  local filtered_args = {}
+
+  for _, arg in ipairs(args) do
+    if arg == "--unified" then
+      use_unified = true
+    else
+      table.insert(filtered_args, arg)
+    end
+  end
+
+  if not use_unified and config.options.diff.default_layout == "unified" then
+    use_unified = true
+  end
+
+  _G._codediff_use_unified = use_unified
+  args = filtered_args
 
   if #args == 0 then
     -- :CodeDiff without arguments opens explorer mode
@@ -681,6 +714,11 @@ function M.vscode_diff(opts)
     end
   else
     -- :CodeDiff <revision> [revision2] - opens explorer mode
+    if _G._codediff_use_unified then
+      vim.notify("Use ':CodeDiff --unified file <rev1> [rev2]' for unified diff mode", vim.log.levels.ERROR)
+      return
+    end
+
     -- Check for triple-dot syntax: :CodeDiff main...
     local base, target = parse_triple_dot(subcommand)
     if base then
