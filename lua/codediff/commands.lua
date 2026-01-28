@@ -70,7 +70,6 @@ local function handle_git_diff(revision, revision2)
           end
 
           vim.schedule(function()
-            local view = require("codediff.ui.view")
             ---@type SessionConfig
             local session_config = {
               mode = "standalone",
@@ -93,7 +92,6 @@ local function handle_git_diff(revision, revision2)
       else
         -- Compare revision vs working tree
         vim.schedule(function()
-          local view = require("codediff.ui.view")
           ---@type SessionConfig
           local session_config = {
             mode = "standalone",
@@ -716,12 +714,12 @@ function M.vscode_diff(opts)
     end
   else
     -- :CodeDiff <revision> [revision2] - opens explorer mode
-    -- Check for triple-dot syntax: :CodeDiff main...
     if _G._codediff_use_unified then
       vim.notify("Use ':CodeDiff --unified file <rev1> [rev2]' for unified diff mode", vim.log.levels.ERROR)
       return
     end
 
+    -- Check for triple-dot syntax: :CodeDiff main...
     local base, target = parse_triple_dot(subcommand)
     if base then
       handle_explorer_merge_base(base, target)
