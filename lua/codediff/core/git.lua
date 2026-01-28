@@ -786,6 +786,22 @@ function M.get_commit_files(commit_hash, git_root, callback)
   end)
 end
 
+-- Get merge-base between two revisions (async)
+-- rev1: first revision (e.g., "main", "origin/main")
+-- rev2: second revision (e.g., "HEAD", branch name)
+-- git_root: absolute path to git repository root
+-- callback: function(err, merge_base_hash)
+function M.get_merge_base(rev1, rev2, git_root, callback)
+  run_git_async({ "merge-base", rev1, rev2 }, { cwd = git_root }, function(err, output)
+    if err then
+      callback(string.format("Failed to find merge-base between '%s' and '%s': %s", rev1, rev2, err), nil)
+    else
+      local merge_base = vim.trim(output)
+      callback(nil, merge_base)
+    end
+  end)
+end
+
 -- Get revision candidates for command completion (sync)
 -- Returns list of branches, tags, remotes, and special refs
 function M.get_rev_candidates(git_root)

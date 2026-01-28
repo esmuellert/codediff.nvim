@@ -177,4 +177,31 @@ describe("Full Integration Suite", function()
     assert_explorer_opened()
   end)
 
+  -- 12. Merge-base Mode (PR-like diff)
+  it("Runs :CodeDiff main... (merge-base)", function()
+    -- Create a feature branch from commit 1
+    local safe_temp_dir
+    if vim.fn.has("win32") == 1 then
+      safe_temp_dir = '"' .. temp_dir .. '"'
+    else
+      safe_temp_dir = vim.fn.shellescape(temp_dir)
+    end
+    
+    -- Go back to first commit and create feature branch
+    vim.fn.system(string.format('git -C %s checkout %s', safe_temp_dir, commit_hash_1))
+    vim.fn.system(string.format('git -C %s checkout -b feature-branch', safe_temp_dir))
+    vim.fn.writefile({"feature line 1", "feature line 2"}, temp_dir .. "/feature.txt")
+    vim.fn.system(string.format('git -C %s add feature.txt', safe_temp_dir))
+    vim.fn.system(string.format('git -C %s commit -m "feature commit"', safe_temp_dir))
+    
+    -- Now we have:
+    -- main: commit_hash_1 -> commit_hash_2
+    -- feature-branch: commit_hash_1 -> feature_commit
+    -- merge-base(main, HEAD) = commit_hash_1
+    -- So :CodeDiff main... should show only the feature.txt change
+    
+    vim.cmd("CodeDiff main...")
+    assert_explorer_opened()
+  end)
+
 end)

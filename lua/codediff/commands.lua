@@ -8,6 +8,20 @@ local git = require("codediff.core.git")
 local lifecycle = require("codediff.ui.lifecycle")
 local config = require("codediff.config")
 
+--- Parse triple-dot syntax for merge-base comparisons.
+-- @param arg string: The argument to parse
+-- @return string|nil, string|nil: base_rev, target_rev (nil if not triple-dot syntax)
+local function parse_triple_dot(arg)
+  if not arg then
+    return nil, nil
+  end
+  local base, target = arg:match("^(.+)%.%.%.(.*)$")
+  if base then
+    return base, target ~= "" and target or nil
+  end
+  return nil, nil
+end
+
 --- Handles diffing the current buffer against a given git revision.
 -- @param revision string: The git revision (e.g., "HEAD", commit hash, branch name) to compare the current file against.
 -- @param revision2 string?: Optional second revision. If provided, compares revision vs revision2.
@@ -382,6 +396,75 @@ local function handle_explorer(revision, revision2)
   end
 end
 
+-- Wrapper for merge-base explorer mode: computes merge-base first, then opens explorer
+local function handle_explorer_merge_base(base_rev, target_rev)
+  local current_buf = vim.api.nvim_get_current_buf()
+  local current_file = vim.api.nvim_buf_get_name(current_buf)
+  local cwd = vim.fn.getcwd()
+  local path_for_root = current_file ~= "" and current_file or cwd
+
+  git.get_git_root(path_for_root, function(err_root, git_root)
+    if err_root then
+      vim.schedule(function()
+        vim.notify(err_root, vim.log.levels.ERROR)
+      end)
+      return
+    end
+
+    local actual_target = target_rev or "HEAD"
+    git.get_merge_base(base_rev, actual_target, git_root, function(err_mb, merge_base_hash)
+      if err_mb then
+        vim.schedule(function()
+          vim.notify(err_mb, vim.log.levels.ERROR)
+        end)
+        return
+      end
+
+      -- Schedule the explorer call to run in main context (handle_explorer uses nvim_get_current_buf)
+      vim.schedule(function()
+        if target_rev then
+          handle_explorer(merge_base_hash, target_rev)
+        else
+          handle_explorer(merge_base_hash) -- vs working tree
+        end
+      end)
+    end)
+  end)
+end
+
+-- Wrapper for merge-base single-file diff: computes merge-base first, then opens diff
+local function handle_git_diff_merge_base(base_rev, target_rev)
+  local current_file = vim.api.nvim_buf_get_name(0)
+  if current_file == "" then
+    vim.notify("Current buffer is not a file", vim.log.levels.ERROR)
+    return
+  end
+
+  git.get_git_root(current_file, function(err_root, git_root)
+    if err_root then
+      vim.schedule(function()
+        vim.notify(err_root, vim.log.levels.ERROR)
+      end)
+      return
+    end
+
+    local actual_target = target_rev or "HEAD"
+    git.get_merge_base(base_rev, actual_target, git_root, function(err_mb, merge_base_hash)
+      if err_mb then
+        vim.schedule(function()
+          vim.notify(err_mb, vim.log.levels.ERROR)
+        end)
+        return
+      end
+
+      -- Schedule the diff call to run in main context (handle_git_diff uses nvim_buf_get_name)
+      vim.schedule(function()
+        handle_git_diff(merge_base_hash, target_rev)
+      end)
+    end)
+  end)
+end
+
 function M.vscode_merge(opts)
   local args = opts.fargs
   if #args == 0 then
@@ -510,8 +593,14 @@ function M.vscode_diff(opts)
     M.vscode_merge({ fargs = { args[2] } })
   elseif subcommand == "file" then
     if #args == 2 then
-      -- :CodeDiff file HEAD
-      handle_git_diff(args[2])
+      -- Check for triple-dot syntax: :CodeDiff file main...
+      local base, target = parse_triple_dot(args[2])
+      if base then
+        handle_git_diff_merge_base(base, target)
+      else
+        -- :CodeDiff file HEAD
+        handle_git_diff(args[2])
+      end
     elseif #args == 3 then
       -- Check if arguments are files or revisions
       local arg1 = args[2]
@@ -592,7 +681,11 @@ function M.vscode_diff(opts)
     end
   else
     -- :CodeDiff <revision> [revision2] - opens explorer mode
-    if #args == 2 then
+    -- Check for triple-dot syntax: :CodeDiff main...
+    local base, target = parse_triple_dot(subcommand)
+    if base then
+      handle_explorer_merge_base(base, target)
+    elseif #args == 2 then
       handle_explorer(args[1], args[2])
     else
       handle_explorer(subcommand)

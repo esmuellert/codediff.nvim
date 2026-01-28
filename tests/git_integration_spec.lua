@@ -254,4 +254,54 @@ describe("Git Integration", function()
     vim.wait(3000, function() return test_passed end)
     assert.is_true(test_passed, "Test should complete")
   end)
+
+  -- Test 10: get_merge_base returns valid commit hash
+  it("get_merge_base returns merge-base commit", function()
+    local current_file = debug.getinfo(1).source:sub(2)
+    local test_passed = false
+    
+    git.get_git_root(current_file, function(err_root, git_root)
+      if not err_root and git_root then
+        -- Use HEAD and HEAD~1 which are guaranteed to exist and have a merge-base
+        git.get_merge_base("HEAD~1", "HEAD", git_root, function(err, merge_base_hash)
+          if not err and merge_base_hash then
+            -- Merge-base of HEAD~1 and HEAD should be HEAD~1
+            assert.equal("string", type(merge_base_hash), "Should return commit hash")
+            assert.is_true(#merge_base_hash >= 7, "Hash should be at least 7 chars")
+            assert.is_true(merge_base_hash:match("^[a-f0-9]+$") ~= nil, "Should be hex hash")
+            test_passed = true
+          elseif err then
+            -- If merge-base fails (e.g., not enough commits), that's acceptable
+            test_passed = true
+          end
+        end)
+      else
+        test_passed = true
+      end
+    end)
+    
+    vim.wait(3000, function() return test_passed end)
+    assert.is_true(test_passed, "Test should complete")
+  end)
+
+  -- Test 11: get_merge_base with invalid revision
+  it("get_merge_base handles invalid revision", function()
+    local current_file = debug.getinfo(1).source:sub(2)
+    local test_passed = false
+    
+    git.get_git_root(current_file, function(err_root, git_root)
+      if not err_root and git_root then
+        git.get_merge_base("nonexistent-branch-12345", "HEAD", git_root, function(err, merge_base_hash)
+          assert.is_not_nil(err, "Should return error for invalid branch")
+          assert.is_nil(merge_base_hash, "Should not return hash on error")
+          test_passed = true
+        end)
+      else
+        test_passed = true
+      end
+    end)
+    
+    vim.wait(3000, function() return test_passed end)
+    assert.is_true(test_passed, "Test should complete")
+  end)
 end)

@@ -255,6 +255,24 @@ Open an interactive file explorer showing changed files:
 :CodeDiff main HEAD
 ```
 
+#### PR-like Diff (Merge-base)
+
+Show only changes introduced since branching from a base branch—exactly like a Pull Request:
+
+```vim
+" Compare merge-base(main, HEAD) vs working tree
+" Shows only YOUR changes since you branched from main
+:CodeDiff main...
+
+" Compare merge-base(main, HEAD) vs HEAD (committed changes only)
+:CodeDiff main...HEAD
+
+" Compare merge-base between two branches
+:CodeDiff develop...feature/new-ui
+```
+
+This uses `git merge-base` semantics (equivalent to `git diff main...HEAD`), showing only the changes introduced on your branch, not changes that happened on the base branch since you branched.
+
 ### Git Diff Mode
 
 Compare the current buffer with a git revision:
@@ -277,6 +295,9 @@ Compare the current buffer with a git revision:
 
 " Compare two revisions for current file
 :CodeDiff file main HEAD
+
+" PR-like diff: compare merge-base(main, HEAD) vs working tree
+:CodeDiff file main...
 ```
 
 **Requirements:**

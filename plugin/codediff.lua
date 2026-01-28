@@ -71,9 +71,25 @@ local function complete_codediff(arg_lead, cmd_line, cursor_pos)
     local git_root = git.get_git_root_sync(cwd)
     local rev_candidates = get_cached_rev_candidates(git_root)
     local filtered = {}
+
+    -- Check if user is typing a triple-dot pattern (e.g., "main...")
+    local base_rev = arg_lead:match("^(.+)%.%.%.$")
+    if base_rev then
+      -- User typed "main...", suggest completing with refs or leave as-is
+      for _, candidate in ipairs(rev_candidates) do
+        table.insert(filtered, base_rev .. "..." .. candidate)
+      end
+      -- Also include the bare triple-dot (compares to working tree)
+      table.insert(filtered, 1, arg_lead)
+      return filtered
+    end
+
+    -- Normal completion: match refs and also suggest triple-dot variants
     for _, candidate in ipairs(rev_candidates) do
       if candidate:find(arg_lead, 1, true) == 1 then
         table.insert(filtered, candidate)
+        -- Also suggest the merge-base variant
+        table.insert(filtered, candidate .. "...")
       end
     end
     if #filtered > 0 then
