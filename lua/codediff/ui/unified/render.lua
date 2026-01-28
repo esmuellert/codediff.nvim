@@ -85,12 +85,7 @@ function M.render(buf, original_lines, modified_lines, diff_result, opts)
       end
     end
 
-    if change.inner_changes and #change.inner_changes > 0 then
-      vim.schedule(function()
-        print(string.format("Change has %d inner_changes", #change.inner_changes))
-        print("deletion_line_map:", vim.inspect(deletion_line_map))
-        print("insertion_line_map:", vim.inspect(insertion_line_map))
-      end)
+    if change.inner_changes then
       for _, inner in ipairs(change.inner_changes) do
         if inner.original then
           local orig_range = inner.original
@@ -166,10 +161,6 @@ function M.render(buf, original_lines, modified_lines, diff_result, opts)
       priority = 200,
     })
   end
-
-  vim.schedule(function()
-    print(string.format("Applied %d line highlights, %d char highlights", #highlights_queue, #char_highlights_queue))
-  end)
 
   return diff_result
 end
