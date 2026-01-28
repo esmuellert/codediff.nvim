@@ -401,7 +401,9 @@ local function handle_explorer_merge_base(base_rev, target_rev)
   local current_buf = vim.api.nvim_get_current_buf()
   local current_file = vim.api.nvim_buf_get_name(current_buf)
   local cwd = vim.fn.getcwd()
-  local path_for_root = current_file ~= "" and current_file or cwd
+  local buftype = vim.api.nvim_get_option_value("buftype", { buf = current_buf })
+  -- A file usually has a buftype of "" so filter out `nofile` or dashboards etc
+  local path_for_root = buftype == "" and current_file ~= "" and current_file or cwd
 
   git.get_git_root(path_for_root, function(err_root, git_root)
     if err_root then
