@@ -132,6 +132,13 @@ function M.setup()
     default = true,
   })
 
+  vim.api.nvim_set_hl(0, "CodeDiffUnifiedHeader", {
+    fg = "#58a6ff",
+    ctermfg = base256_color(1, 3, 5),
+    bold = true,
+    default = true,
+  })
+
   -- Explorer directory text (smaller and dimmed)
   vim.api.nvim_set_hl(0, "ExplorerDirectorySmall", {
     link = "Comment",

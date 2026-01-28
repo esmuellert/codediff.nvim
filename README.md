@@ -311,6 +311,31 @@ Compare the current buffer with a git revision:
 - Opens in a new tab automatically
 - Async operation - won't block Neovim
 
+### Unified Diff Mode
+
+Display diffs in single-pane patch format:
+
+```vim
+" Unified view for any diff command
+:CodeDiff --unified main HEAD
+:CodeDiff --unified file HEAD~1
+:CodeDiff --unified file a.lua b.lua
+
+" Set as default in config
+lua << EOF
+require("codediff").setup({
+  diff = {
+    default_layout = "unified",
+    unified_context = 3,  -- lines of context
+  }
+})
+EOF
+```
+
+**Navigation:**
+- `]c` / `[c` - Next/previous hunk
+- `q` - Close tab
+
 ### File Comparison Mode
 
 Compare two arbitrary files side-by-side:
