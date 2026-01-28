@@ -23,6 +23,24 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
 
     local current_buf = vim.api.nvim_get_current_buf()
     local is_original = current_buf == original_bufnr
+    local is_modified = current_buf == modified_bufnr
+    local is_result = session.result_bufnr and current_buf == session.result_bufnr
+
+    -- If cursor is in result buffer (conflict mode), use modified side line numbers
+    -- but stay in current window
+    if is_result then
+      is_original = false
+    -- If cursor is not in any diff buffer (e.g., in explorer/history), switch to modified window
+    elseif not is_original and not is_modified then
+      is_original = false -- Use modified side for line numbers
+      local target_win = session.modified_win
+      if target_win and vim.api.nvim_win_is_valid(target_win) then
+        vim.api.nvim_set_current_win(target_win)
+      else
+        return
+      end
+    end
+
     local cursor = vim.api.nvim_win_get_cursor(0)
     local current_line = cursor[1]
 
@@ -56,6 +74,24 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
 
     local current_buf = vim.api.nvim_get_current_buf()
     local is_original = current_buf == original_bufnr
+    local is_modified = current_buf == modified_bufnr
+    local is_result = session.result_bufnr and current_buf == session.result_bufnr
+
+    -- If cursor is in result buffer (conflict mode), use modified side line numbers
+    -- but stay in current window
+    if is_result then
+      is_original = false
+    -- If cursor is not in any diff buffer (e.g., in explorer/history), switch to modified window
+    elseif not is_original and not is_modified then
+      is_original = false -- Use modified side for line numbers
+      local target_win = session.modified_win
+      if target_win and vim.api.nvim_win_is_valid(target_win) then
+        vim.api.nvim_set_current_win(target_win)
+      else
+        return
+      end
+    end
+
     local cursor = vim.api.nvim_win_get_cursor(0)
     local current_line = cursor[1]
 
