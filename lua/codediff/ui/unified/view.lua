@@ -19,8 +19,11 @@ function M.create(session_config, filetype, on_ready)
   vim.api.nvim_win_set_buf(win, buf)
 
   vim.bo[buf].buftype = "nofile"
-  vim.bo[buf].filetype = "diff"
   vim.bo[buf].bufhidden = "wipe"
+
+  if filetype and filetype ~= "" then
+    vim.bo[buf].filetype = filetype
+  end
 
   keymaps.setup(buf)
 
