@@ -10,6 +10,10 @@ local config = require("codediff.config")
 function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explorer_mode)
   local keymaps = config.options.keymaps.view
 
+  -- Check if this is history mode
+  local session = lifecycle.get_session(tabpage)
+  local is_history_mode = session and session.mode == "history"
+
   -- Helper: Navigate to next hunk
   local function navigate_next_hunk()
     local session = lifecycle.get_session(tabpage)
@@ -113,26 +117,44 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     vim.api.nvim_echo({ { string.format("Hunk %d of %d", #diff_result.changes, #diff_result.changes), "None" } }, false, {})
   end
 
-  -- Helper: Navigate to next file (explorer mode only)
+  -- Helper: Navigate to next file (works in both explorer and history mode)
+  -- In single-file history mode, navigates commits instead
   local function navigate_next_file()
-    local explorer_obj = lifecycle.get_explorer(tabpage)
-    if not explorer_obj then
-      vim.notify("No explorer found for this tab", vim.log.levels.WARN)
+    local panel_obj = lifecycle.get_explorer(tabpage)
+    if not panel_obj then
       return
     end
-    local explorer = require("codediff.ui.explorer")
-    explorer.navigate_next(explorer_obj)
+    if is_history_mode then
+      local history = require("codediff.ui.history")
+      if panel_obj.is_single_file_mode then
+        history.navigate_next_commit(panel_obj)
+      else
+        history.navigate_next(panel_obj)
+      end
+    else
+      local explorer = require("codediff.ui.explorer")
+      explorer.navigate_next(panel_obj)
+    end
   end
 
-  -- Helper: Navigate to previous file (explorer mode only)
+  -- Helper: Navigate to previous file (works in both explorer and history mode)
+  -- In single-file history mode, navigates commits instead
   local function navigate_prev_file()
-    local explorer_obj = lifecycle.get_explorer(tabpage)
-    if not explorer_obj then
-      vim.notify("No explorer found for this tab", vim.log.levels.WARN)
+    local panel_obj = lifecycle.get_explorer(tabpage)
+    if not panel_obj then
       return
     end
-    local explorer = require("codediff.ui.explorer")
-    explorer.navigate_prev(explorer_obj)
+    if is_history_mode then
+      local history = require("codediff.ui.history")
+      if panel_obj.is_single_file_mode then
+        history.navigate_prev_commit(panel_obj)
+      else
+        history.navigate_prev(panel_obj)
+      end
+    else
+      local explorer = require("codediff.ui.explorer")
+      explorer.navigate_prev(panel_obj)
+    end
   end
 
   -- Helper: Quit diff view
@@ -417,16 +439,6 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     lifecycle.set_tab_keymap(tabpage, "n", keymaps.toggle_explorer, toggle_explorer, { desc = "Toggle explorer visibility" })
   end
 
-  -- File navigation (]f, [f) - only in explorer mode
-  if is_explorer_mode then
-    if keymaps.next_file then
-      lifecycle.set_tab_keymap(tabpage, "n", keymaps.next_file, navigate_next_file, { desc = "Next file in explorer" })
-    end
-    if keymaps.prev_file then
-      lifecycle.set_tab_keymap(tabpage, "n", keymaps.prev_file, navigate_prev_file, { desc = "Previous file in explorer" })
-    end
-  end
-
   -- Diff get/put (do, dp) - like vimdiff
   if keymaps.diff_get then
     lifecycle.set_tab_keymap(tabpage, "n", keymaps.diff_get, diff_get, { desc = "Get change from other buffer" })
@@ -454,6 +466,16 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
 
     if toggle_stage_key then
       lifecycle.set_tab_keymap(tabpage, "n", toggle_stage_key, toggle_stage, { desc = "Toggle stage/unstage" })
+    end
+  end
+
+  -- File navigation (]f, [f) - works in both explorer and history mode
+  if is_explorer_mode or is_history_mode then
+    if keymaps.next_file then
+      lifecycle.set_tab_keymap(tabpage, "n", keymaps.next_file, navigate_next_file, { desc = "Next file" })
+    end
+    if keymaps.prev_file then
+      lifecycle.set_tab_keymap(tabpage, "n", keymaps.prev_file, navigate_prev_file, { desc = "Previous file" })
     end
   end
 end

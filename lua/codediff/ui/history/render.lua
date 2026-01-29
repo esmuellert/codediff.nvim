@@ -168,6 +168,7 @@ function M.create(commits, git_root, tabpage, width, opts)
     current_commit = nil,
     current_file = nil,
     is_hidden = false,
+    is_single_file_mode = is_single_file_mode,
   }
 
   -- Load files for a commit and update its children
@@ -482,6 +483,130 @@ function M.navigate_prev(history)
   end
 
   history.on_file_select(prev_file.data)
+end
+
+-- Get all commit nodes from tree (for navigation in single-file mode)
+function M.get_all_commits(tree)
+  local commits = {}
+  local nodes = tree:get_nodes()
+  for _, node in ipairs(nodes) do
+    if node.data and node.data.type == "commit" then
+      table.insert(commits, {
+        node = node,
+        data = node.data,
+      })
+    end
+  end
+  return commits
+end
+
+-- Navigate to next commit (single-file history mode)
+function M.navigate_next_commit(history)
+  local all_commits = M.get_all_commits(history.tree)
+  if #all_commits == 0 then
+    vim.notify("No commits in history", vim.log.levels.WARN)
+    return
+  end
+
+  local current_commit = history.current_commit
+
+  if not current_commit then
+    -- Select first commit
+    local first_commit = all_commits[1]
+    local file_path = first_commit.data.file_path or history.opts.file_path
+    local file_data = {
+      path = file_path,
+      commit_hash = first_commit.data.hash,
+      git_root = history.git_root,
+    }
+    history.on_file_select(file_data)
+    return
+  end
+
+  -- Find current index
+  local current_index = 0
+  for i, commit in ipairs(all_commits) do
+    if commit.data.hash == current_commit then
+      current_index = i
+      break
+    end
+  end
+
+  local next_index = current_index % #all_commits + 1
+  local next_commit = all_commits[next_index]
+
+  -- Update cursor position in history panel
+  local current_win = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_is_valid(history.winid) then
+    vim.api.nvim_set_current_win(history.winid)
+    vim.api.nvim_win_set_cursor(history.winid, { next_commit.node._line or 1, 0 })
+    vim.api.nvim_set_current_win(current_win)
+  end
+
+  -- Select file at this commit
+  local file_path = next_commit.data.file_path or history.opts.file_path
+  local file_data = {
+    path = file_path,
+    commit_hash = next_commit.data.hash,
+    git_root = history.git_root,
+  }
+  history.on_file_select(file_data)
+end
+
+-- Navigate to previous commit (single-file history mode)
+function M.navigate_prev_commit(history)
+  local all_commits = M.get_all_commits(history.tree)
+  if #all_commits == 0 then
+    vim.notify("No commits in history", vim.log.levels.WARN)
+    return
+  end
+
+  local current_commit = history.current_commit
+
+  if not current_commit then
+    -- Select last commit
+    local last_commit = all_commits[#all_commits]
+    local file_path = last_commit.data.file_path or history.opts.file_path
+    local file_data = {
+      path = file_path,
+      commit_hash = last_commit.data.hash,
+      git_root = history.git_root,
+    }
+    history.on_file_select(file_data)
+    return
+  end
+
+  local current_index = 0
+  for i, commit in ipairs(all_commits) do
+    if commit.data.hash == current_commit then
+      current_index = i
+      break
+    end
+  end
+
+  local prev_index = current_index - 2
+  if prev_index < 0 then
+    prev_index = #all_commits + prev_index
+  end
+  prev_index = prev_index % #all_commits + 1
+  local prev_commit = all_commits[prev_index]
+
+  -- Update cursor position in history panel
+  local current_win = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_is_valid(history.winid) then
+    vim.api.nvim_set_current_win(history.winid)
+    vim.api.nvim_win_set_cursor(history.winid, { prev_commit.node._line or 1, 0 })
+    vim.api.nvim_set_current_win(current_win)
+  end
+
+  -- Select file at this commit
+  local file_path = prev_commit.data.file_path or history.opts.file_path
+  local file_data = {
+    path = file_path,
+    commit_hash = prev_commit.data.hash,
+    git_root = history.git_root,
+  }
+  history.on_file_select(file_data)
 end
 
 -- Toggle visibility
