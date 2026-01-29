@@ -449,6 +449,9 @@ function M.create(session_config, filetype, on_ready)
       vim.api.nvim_win_set_width(original_win, diff_width)
       vim.api.nvim_win_set_width(modified_win, diff_width)
     end
+
+    -- Setup keymaps for history mode (needs to be after session is created with mode="history")
+    setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, false)
   end
 
   return {

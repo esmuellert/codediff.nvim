@@ -135,6 +135,10 @@ Setup entry point:
         unstage_all = "U",
         restore = "X",
       },
+      history = {
+        select = "<CR>",
+        toggle_view_mode = "i",
+      },
       conflict = {
         accept_incoming = "<leader>ct",
         accept_current = "<leader>co",

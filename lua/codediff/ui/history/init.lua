@@ -12,9 +12,13 @@ local render = require("codediff.ui.history.render")
 -- opts: { range, path, ... } original options
 M.create = render.create
 
--- Navigation
+-- Navigation (files within expanded commits)
 M.navigate_next = render.navigate_next
 M.navigate_prev = render.navigate_prev
+
+-- Navigation (commits in single-file mode)
+M.navigate_next_commit = render.navigate_next_commit
+M.navigate_prev_commit = render.navigate_prev_commit
 
 -- Toggle visibility
 M.toggle_visibility = render.toggle_visibility
