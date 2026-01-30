@@ -80,9 +80,15 @@ M.defaults = {
     },
     explorer = {
       select = "<CR>",
+      open = "o",                     -- Alias for select (open file or toggle group)
+      focus_file = "l",               -- Jump to modified pane if file is open, otherwise open file
       hover = "K",
       refresh = "R",
-      toggle_view_mode = "i", -- Toggle between 'list' and 'tree' views
+      toggle_view_mode = "i",  -- Toggle between 'list' and 'tree' views
+      stage_file = "a",              -- Stage file under cursor (git add)
+      stage_file_alt = "s",          -- Alternative binding for stage
+      unstage_file = "u",            -- Unstage file under cursor (git restore --staged)
+      discard_file = "d",            -- Discard changes or delete untracked (with confirmation)
       stage_all = "S", -- Stage all files
       unstage_all = "U", -- Unstage all files
       restore = "X", -- Discard changes to file (restore to index/HEAD)

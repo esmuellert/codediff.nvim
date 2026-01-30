@@ -508,34 +508,202 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
           return f, "conflicts"
         end
       end
-    end
-    for _, f in ipairs(status_result.unstaged) do
-      if f.path == path then
-        return f, "unstaged"
-      end
-    end
-    for _, f in ipairs(status_result.staged) do
-      if f.path == path then
-        return f, "staged"
-      end
-    end
-    return nil, nil
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
   end
 
-  -- Select initial file: prefer focus_file (current buffer) if changed, else first file
-  local initial_file, initial_file_group
-  local focus_file = opts and opts.focus_file
-  if focus_file then
-    initial_file, initial_file_group = find_file_in_status(focus_file)
+  -- Double click also works for files
+  vim.keymap.set("n", "<2-LeftMouse>", function()
+    local node = tree:get_node()
+    if not node or not node.data or node.data.type == "group" or node.data.type == "directory" then return end
+    explorer.on_file_select(node.data)
+  end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+
+  -- Close explorer (disabled)
+  -- vim.keymap.set("n", "q", function()
+  --   split:unmount()
+  -- end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  
+  -- Hover to show full path (K key, like LSP hover)
+  local hover_win = nil
+  if config.options.keymaps.explorer.hover then
+    vim.keymap.set("n", config.options.keymaps.explorer.hover, function()
+      -- Close existing hover window
+      if hover_win and vim.api.nvim_win_is_valid(hover_win) then
+        vim.api.nvim_win_close(hover_win, true)
+        hover_win = nil
+        return
+      end
+      
+      local node = tree:get_node()
+      if not node or not node.data or node.data.type == "group" then return end
+      
+      local full_path = node.data.path
+      local display_text = git_root .. "/" .. full_path
+      
+      -- Create hover buffer
+      local hover_buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(hover_buf, 0, -1, false, { display_text })
+      vim.bo[hover_buf].modifiable = false
+      
+      -- Calculate window position (next to cursor)
+      local cursor = vim.api.nvim_win_get_cursor(0)
+      local row = cursor[1] - 1
+      local col = vim.api.nvim_win_get_width(0)
+      
+      -- Calculate window dimensions with wrapping
+      local max_width = 80
+      local text_len = #display_text
+      local width = math.min(text_len + 2, max_width)
+      local height = math.ceil(text_len / (max_width - 2))  -- Account for padding
+      
+      -- Create floating window with wrap enabled
+      hover_win = vim.api.nvim_open_win(hover_buf, false, {
+        relative = "win",
+        row = row,
+        col = col,
+        width = width,
+        height = height,
+        style = "minimal",
+        border = "rounded",
+      })
+      
+      -- Enable wrap in hover window
+      vim.wo[hover_win].wrap = true
+      
+      -- Auto-close on cursor move or buffer leave
+      vim.api.nvim_create_autocmd({"CursorMoved", "BufLeave"}, {
+        buffer = split.bufnr,
+        once = true,
+        callback = function()
+          if hover_win and vim.api.nvim_win_is_valid(hover_win) then
+            vim.api.nvim_win_close(hover_win, true)
+            hover_win = nil
+          end
+        end,
+      })
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
   end
-  if not initial_file then
-    if status_result.conflicts and #status_result.conflicts > 0 then
-      initial_file, initial_file_group = status_result.conflicts[1], "conflicts"
-    elseif #status_result.unstaged > 0 then
-      initial_file, initial_file_group = status_result.unstaged[1], "unstaged"
-    elseif #status_result.staged > 0 then
-      initial_file, initial_file_group = status_result.staged[1], "staged"
+  
+  -- Refresh explorer (R key)
+  if config.options.keymaps.explorer.refresh then
+    vim.keymap.set("n", config.options.keymaps.explorer.refresh, function()
+      refresh_module.refresh(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Toggle view mode (i key) - switch between 'list' and 'tree'
+  if config.options.keymaps.explorer.toggle_view_mode then
+    vim.keymap.set("n", config.options.keymaps.explorer.toggle_view_mode, function()
+      actions_module.toggle_view_mode(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Navigate to next file
+  if config.options.keymaps.view.next_file then
+    vim.keymap.set("n", config.options.keymaps.view.next_file, function()
+      M.navigate_next(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Navigate to previous file
+  if config.options.keymaps.view.prev_file then
+    vim.keymap.set("n", config.options.keymaps.view.prev_file, function()
+      M.navigate_prev(explorer)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Open (alias for select)
+  if config.options.keymaps.explorer.open then
+    vim.keymap.set("n", config.options.keymaps.explorer.open, function()
+      local node = tree:get_node()
+      if not node then return end
+      if node.data and (node.data.type == "group" or node.data.type == "directory") then
+        if node:is_expanded() then
+          node:collapse()
+        else
+          node:expand()
+        end
+        tree:render()
+      elseif node.data then
+        explorer.on_file_select(node.data)
+      end
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Focus file: jump to modified pane if file is already open, otherwise open it
+  if config.options.keymaps.explorer.focus_file then
+    vim.keymap.set("n", config.options.keymaps.explorer.focus_file, function()
+      local node = tree:get_node()
+      if not node or not node.data then return end
+
+      -- If cursor is on the already-open file, jump to the modified (right) pane
+      if node.data.path and node.data.path == explorer.current_file_path
+          and (node.data.group or "unstaged") == explorer.current_file_group then
+        local lifecycle = require('codediff.ui.lifecycle')
+        local _, mod_win = lifecycle.get_windows(tabpage)
+        if mod_win and vim.api.nvim_win_is_valid(mod_win) then
+          vim.api.nvim_set_current_win(mod_win)
+          return
+        end
+      end
+
+      -- Otherwise open the file (same as select for files, toggle for groups)
+      if node.data.type == "group" or node.data.type == "directory" then
+        if node:is_expanded() then
+          node:collapse()
+        else
+          node:expand()
+        end
+        tree:render()
+      elseif node.data.path then
+        explorer.on_file_select(node.data)
+      end
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Stage file (git add)
+  local function bind_stage_file(key)
+    if key then
+      vim.keymap.set("n", key, function()
+        local node = tree:get_node()
+        if not node or not node.data or not node.data.path then return end
+        actions_module.stage_file(explorer, node.data)
+      end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
     end
+  end
+  bind_stage_file(config.options.keymaps.explorer.stage_file)
+  bind_stage_file(config.options.keymaps.explorer.stage_file_alt)
+
+  -- Unstage file (git restore --staged)
+  if config.options.keymaps.explorer.unstage_file then
+    vim.keymap.set("n", config.options.keymaps.explorer.unstage_file, function()
+      local node = tree:get_node()
+      if not node or not node.data or not node.data.path then return end
+      actions_module.unstage_file(explorer, node.data)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Discard file changes (with confirmation)
+  if config.options.keymaps.explorer.discard_file then
+    vim.keymap.set("n", config.options.keymaps.explorer.discard_file, function()
+      local node = tree:get_node()
+      if not node or not node.data or not node.data.path then return end
+      actions_module.discard_file(explorer, node.data)
+    end, vim.tbl_extend("force", map_options, { buffer = split.bufnr }))
+  end
+
+  -- Select first file by default (conflicts first, then unstaged, then staged)
+  local first_file = nil
+  local first_file_group = nil
+  if status_result.conflicts and #status_result.conflicts > 0 then
+    first_file = status_result.conflicts[1]
+    first_file_group = "conflicts"
+  elseif #status_result.unstaged > 0 then
+    first_file = status_result.unstaged[1]
+    first_file_group = "unstaged"
+  elseif #status_result.staged > 0 then
+    first_file = status_result.staged[1]
+    first_file_group = "staged"
   end
 
   if initial_file then
