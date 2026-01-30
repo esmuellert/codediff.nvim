@@ -506,6 +506,88 @@ function M.get_diff_revisions(rev1, rev2, git_root, callback)
   end)
 end
 
+-- Apply a unified diff patch to the git index (async)
+-- Used for hunk-level staging: generates a patch for a single hunk and applies it
+-- to the index without touching the working tree.
+--
+-- git_root: absolute path to git repository root
+-- patch: string containing a valid unified diff patch
+-- reverse: if true, reverse-apply the patch (used for unstaging)
+-- callback: function(err) - nil err on success
+function M.apply_patch(git_root, patch, reverse, callback)
+  local args = { "apply", "--cached", "--unidiff-zero", "-" }
+  if reverse then
+    table.insert(args, 3, "--reverse")
+  end
+
+  if vim.system then
+    if git_root and vim.fn.isdirectory(git_root) == 0 then
+      callback("Directory does not exist: " .. git_root)
+      return
+    end
+
+    vim.system(
+      vim.list_extend({ "git" }, args),
+      {
+        cwd = git_root,
+        stdin = patch,
+        text = true,
+      },
+      function(result)
+        vim.schedule(function()
+          if result.code == 0 then
+            callback(nil)
+          else
+            callback(result.stderr or "git apply failed")
+          end
+        end)
+      end
+    )
+  else
+    -- Fallback for older Neovim (< 0.10)
+    local stderr_data = {}
+    local stdin_pipe = vim.loop.new_pipe(false)
+    local stderr_pipe = vim.loop.new_pipe(false)
+
+    local handle
+    ---@diagnostic disable-next-line: missing-fields
+    handle = vim.loop.spawn("git", {
+      args = args,
+      cwd = git_root,
+      stdio = { stdin_pipe, nil, stderr_pipe },
+    }, function(code)
+      if stdin_pipe then stdin_pipe:close() end
+      if stderr_pipe then stderr_pipe:close() end
+      if handle then handle:close() end
+
+      vim.schedule(function()
+        if code == 0 then
+          callback(nil)
+        else
+          callback(table.concat(stderr_data) or "git apply failed")
+        end
+      end)
+    end)
+
+    if not handle then
+      callback("Failed to spawn git process")
+      return
+    end
+
+    if stderr_pipe then
+      stderr_pipe:read_start(function(err, data)
+        if data then
+          table.insert(stderr_data, data)
+        end
+      end)
+    end
+
+    -- Write patch to stdin and close
+    stdin_pipe:write(patch)
+    stdin_pipe:shutdown()
+  end
+end
+
 -- Run a git command synchronously
 -- Returns output string or nil on error
 local function run_git_sync(args, opts)
