@@ -336,6 +336,12 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
             lifecycle.update_paths(tabpage, "", abs_path)
             lifecycle.update_revisions(tabpage, nil, nil)
             lifecycle.update_diff_result(tabpage, {})  -- Empty diff for untracked
+
+            -- Re-apply keymaps (q to quit, etc.) on the new buffer
+            lifecycle.set_tab_keymap(tabpage, 'n',
+              require('codediff.config').options.keymaps.view.quit,
+              function() vim.cmd('tabclose') end,
+              { desc = 'Close diff view' })
           end
         end
       end)
