@@ -70,4 +70,8 @@ M.set_tab_keymap = accessors.set_tab_keymap
 M.clear_tab_keymaps = accessors.clear_tab_keymaps
 M.setup_auto_sync_on_file_switch = accessors.setup_auto_sync_on_file_switch
 
+-- Single-pane mode support (for untracked files)
+M.update_windows = session.update_windows
+M.is_single_pane_mode = session.is_single_pane_mode
+
 return M

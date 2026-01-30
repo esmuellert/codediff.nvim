@@ -64,9 +64,17 @@ function M.create(session_config, filetype, on_ready)
     vim.cmd(split_cmd)
     modified_win = vim.api.nvim_get_current_win()
 
+    -- Create separate scratch buffers for each window (so initial_buf can be deleted)
+    local orig_scratch = vim.api.nvim_create_buf(false, true)
+    local mod_scratch = vim.api.nvim_create_buf(false, true)
+    vim.bo[orig_scratch].buftype = 'nofile'
+    vim.bo[mod_scratch].buftype = 'nofile'
+    vim.api.nvim_win_set_buf(original_win, orig_scratch)
+    vim.api.nvim_win_set_buf(modified_win, mod_scratch)
+
     -- Create placeholder buffer info (will be updated by explorer)
-    original_info = { bufnr = vim.api.nvim_win_get_buf(original_win) }
-    modified_info = { bufnr = vim.api.nvim_win_get_buf(modified_win) }
+    original_info = { bufnr = orig_scratch }
+    modified_info = { bufnr = mod_scratch }
   else
     -- Normal mode: Full buffer setup
     local original_is_virtual = is_virtual_revision(session_config.original_revision)
@@ -482,6 +490,18 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   local old_original_buf, old_modified_buf = lifecycle.get_buffers(tabpage)
   local original_win, modified_win = lifecycle.get_windows(tabpage)
 
+  -- Handle single-pane mode recovery (coming from untracked file view)
+  local was_single_pane = lifecycle.is_single_pane_mode(tabpage)
+  if was_single_pane and modified_win and vim.api.nvim_win_is_valid(modified_win) then
+    -- Recreate the original window by splitting from the modified window
+    vim.api.nvim_set_current_win(modified_win)
+    vim.cmd('leftabove vsplit')
+    original_win = vim.api.nvim_get_current_win()
+    -- Update session with new window reference
+    lifecycle.update_windows(tabpage, original_win, nil)
+    vim.cmd('wincmd =')
+  end
+
   if not old_original_buf or not old_modified_buf or not original_win or not modified_win then
     vim.notify("Invalid diff session state", vim.log.levels.ERROR)
     return false
@@ -506,6 +526,19 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     -- The buffer remains (real file), just close the window
     vim.api.nvim_win_close(old_result_win, false)
     lifecycle.set_result(tabpage, nil, nil)
+  end
+
+  -- IMPORTANT: Restore window widths BEFORE loading buffers
+  -- Loading virtual files with :edit! in a 1-column window can fail
+  if vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder then
+    vim.w[original_win].codediff_placeholder = nil
+    -- Clear the skip autocmd group
+    pcall(vim.api.nvim_del_augroup_by_name, 'codediff_skip_placeholder_' .. tabpage)
+    -- Equalize diff window widths BEFORE loading buffers
+    local total_width = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
+    local half_width = math.floor(total_width / 2)
+    vim.api.nvim_win_set_width(original_win, half_width)
+    vim.api.nvim_win_set_width(modified_win, half_width)
   end
 
   -- Determine if new buffers are virtual
@@ -613,6 +646,18 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         -- Restore focus to the window that was active before update
         if saved_current_win and vim.api.nvim_win_is_valid(saved_current_win) then
           vim.api.nvim_set_current_win(saved_current_win)
+        end
+
+        -- Restore window widths if coming from untracked file view (placeholder mode)
+        if vim.api.nvim_win_is_valid(original_win) and vim.w[original_win].codediff_placeholder then
+          vim.w[original_win].codediff_placeholder = nil
+          -- Clear the skip autocmd group
+          pcall(vim.api.nvim_del_augroup_by_name, 'codediff_skip_placeholder_' .. tabpage)
+          -- Equalize diff window widths
+          local total_width = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
+          local half_width = math.floor(total_width / 2)
+          vim.api.nvim_win_set_width(original_win, half_width)
+          vim.api.nvim_win_set_width(modified_win, half_width)
         end
       end
     end
@@ -760,11 +805,15 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   lifecycle.update_paths(tabpage, session_config.original_path, session_config.modified_path)
 
   -- Delete old virtual buffers if they were virtual AND are not reused in either new window
-  if lifecycle.is_original_virtual(tabpage) and old_original_buf ~= original_info.bufnr and old_original_buf ~= modified_info.bufnr then
+  if lifecycle.is_original_virtual(tabpage) and
+     old_original_buf ~= original_info.bufnr and
+     old_original_buf ~= modified_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_original_buf, { force = true })
   end
 
-  if lifecycle.is_modified_virtual(tabpage) and old_modified_buf ~= modified_info.bufnr and old_modified_buf ~= original_info.bufnr then
+  if lifecycle.is_modified_virtual(tabpage) and
+     old_modified_buf ~= modified_info.bufnr and
+     old_modified_buf ~= original_info.bufnr then
     pcall(vim.api.nvim_buf_delete, old_modified_buf, { force = true })
   end
 

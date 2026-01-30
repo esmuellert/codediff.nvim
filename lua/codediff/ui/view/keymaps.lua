@@ -418,6 +418,307 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
   end
 
   -- ========================================================================
+  -- Hunk-level staging (S, U)
+  -- Generates a unified diff patch for the hunk under cursor and applies it
+  -- to the git index via `git apply --cached --unidiff-zero`.
+  -- Stage (S): applies the hunk's changes to the index (working → staged)
+  -- Unstage (U): reverse-applies to remove the hunk from the index
+  -- ========================================================================
+
+  --- Build a minimal unified diff patch string for a single hunk.
+  --- The patch has no context lines (used with --unidiff-zero).
+  --- @param file_path string relative path from git root
+  --- @param orig_lines string[] lines from the original (HEAD) buffer for this hunk
+  --- @param mod_lines string[] lines from the modified (working/staged) buffer for this hunk
+  --- @param orig_start number 1-based start line in original file
+  --- @param mod_start number 1-based start line in modified file
+  --- @return string patch valid unified diff patch
+  local function build_hunk_patch(file_path, orig_lines, mod_lines, orig_start, mod_start)
+    local orig_count = #orig_lines
+    local mod_count = #mod_lines
+
+    -- For pure insertions with 0 original lines, git expects start to be
+    -- the line AFTER which content is inserted (0 if at very start)
+    local hdr_orig_start = orig_count == 0 and (orig_start > 0 and orig_start - 1 or 0) or orig_start
+    local hdr_mod_start = mod_count == 0 and (mod_start > 0 and mod_start - 1 or 0) or mod_start
+
+    local parts = {
+      string.format("--- a/%s", file_path),
+      string.format("+++ b/%s", file_path),
+      string.format("@@ -%d,%d +%d,%d @@", hdr_orig_start, orig_count, hdr_mod_start, mod_count),
+    }
+
+    for _, line in ipairs(orig_lines) do
+      table.insert(parts, "-" .. line)
+    end
+    for _, line in ipairs(mod_lines) do
+      table.insert(parts, "+" .. line)
+    end
+
+    -- Patch must end with a newline
+    return table.concat(parts, "\n") .. "\n"
+  end
+
+  -- Helper: Stage hunk under cursor to git index
+  local function stage_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.git_root then
+      vim.notify("Not in a git repository", vim.log.levels.WARN)
+      return
+    end
+
+    local hunk, hunk_idx = find_hunk_at_cursor()
+    if not hunk then
+      vim.notify("No hunk at cursor position", vim.log.levels.WARN)
+      return
+    end
+
+    -- Get the file path relative to git root
+    local file_path = session.original_path or session.modified_path
+    if not file_path or file_path == "" then
+      vim.notify("No file path for staging", vim.log.levels.WARN)
+      return
+    end
+
+    -- Read lines from both buffers for this hunk
+    local orig_lines = vim.api.nvim_buf_get_lines(
+      original_bufnr,
+      hunk.original.start_line - 1,
+      hunk.original.end_line - 1,
+      false
+    )
+    local mod_lines = vim.api.nvim_buf_get_lines(
+      modified_bufnr,
+      hunk.modified.start_line - 1,
+      hunk.modified.end_line - 1,
+      false
+    )
+
+    local patch = build_hunk_patch(file_path, orig_lines, mod_lines,
+      hunk.original.start_line, hunk.modified.start_line)
+
+    -- Capture hunk count before async call (stored_diff_result may change)
+    local total_hunks = session.stored_diff_result and #session.stored_diff_result.changes or 0
+    local is_unstaged_view = session.modified_revision == nil
+
+    local git = require('codediff.core.git')
+    git.apply_patch(session.git_root, patch, false, function(err)
+      if err then
+        vim.notify("Failed to stage hunk: " .. err, vim.log.levels.ERROR)
+        return
+      end
+
+      -- Refresh explorer to reflect staging change
+      local explorer_obj = lifecycle.get_explorer(tabpage)
+      if explorer_obj then
+        local explorer = require('codediff.ui.explorer')
+        explorer.refresh(explorer_obj)
+      end
+
+      if total_hunks == 1 and is_unstaged_view and explorer_obj and explorer_obj.on_file_select then
+        -- Last unstaged hunk staged: switch to staged view
+        explorer_obj.on_file_select({
+          path = file_path,
+          group = "staged",
+          status = "M",
+        })
+        vim.notify("All hunks staged — switched to staged view", vim.log.levels.INFO)
+      else
+        vim.notify(string.format("Staged hunk %d", hunk_idx), vim.log.levels.INFO)
+
+        -- Refresh diff view: reload virtual buffers and recompute diff
+        -- For unstaged views where original was HEAD, switch to :0 (index)
+        -- so the staged hunk disappears from the diff (matches VS Code behavior)
+        local view = require('codediff.ui.view')
+        local refresh_config = {
+          mode = session.mode,
+          git_root = session.git_root,
+          original_path = session.original_path,
+          modified_path = session.modified_path,
+          original_revision = session.original_revision,
+          modified_revision = session.modified_revision,
+        }
+        if is_unstaged_view and session.original_revision ~= ":0" then
+          refresh_config.original_revision = ":0"
+        end
+        -- Save current window so view.update() doesn't move cursor
+        -- (creating a new virtual buffer uses :edit! which switches window)
+        local current_win = vim.api.nvim_get_current_win()
+        view.update(tabpage, refresh_config, false)
+        if vim.api.nvim_win_is_valid(current_win) then
+          vim.api.nvim_set_current_win(current_win)
+        end
+      end
+    end)
+  end
+
+  -- Helper: Unstage hunk under cursor from git index
+  local function unstage_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.git_root then
+      vim.notify("Not in a git repository", vim.log.levels.WARN)
+      return
+    end
+
+    local hunk, hunk_idx = find_hunk_at_cursor()
+    if not hunk then
+      vim.notify("No hunk at cursor position", vim.log.levels.WARN)
+      return
+    end
+
+    local file_path = session.original_path or session.modified_path
+    if not file_path or file_path == "" then
+      vim.notify("No file path for unstaging", vim.log.levels.WARN)
+      return
+    end
+
+    -- Read lines from both buffers for this hunk
+    local orig_lines = vim.api.nvim_buf_get_lines(
+      original_bufnr,
+      hunk.original.start_line - 1,
+      hunk.original.end_line - 1,
+      false
+    )
+    local mod_lines = vim.api.nvim_buf_get_lines(
+      modified_bufnr,
+      hunk.modified.start_line - 1,
+      hunk.modified.end_line - 1,
+      false
+    )
+
+    local patch = build_hunk_patch(file_path, orig_lines, mod_lines,
+      hunk.original.start_line, hunk.modified.start_line)
+
+    -- Capture hunk count before async call (stored_diff_result may change)
+    local total_hunks = session.stored_diff_result and #session.stored_diff_result.changes or 0
+    local is_staged_view = session.modified_revision == ":0"
+
+    local git = require('codediff.core.git')
+    git.apply_patch(session.git_root, patch, true, function(err)
+      if err then
+        vim.notify("Failed to unstage hunk: " .. err, vim.log.levels.ERROR)
+        return
+      end
+
+      -- Refresh explorer to reflect unstaging change
+      local explorer_obj = lifecycle.get_explorer(tabpage)
+      if explorer_obj then
+        local explorer = require('codediff.ui.explorer')
+        explorer.refresh(explorer_obj)
+      end
+
+      if total_hunks == 1 and is_staged_view and explorer_obj and explorer_obj.on_file_select then
+        -- Last staged hunk unstaged: switch to unstaged view
+        explorer_obj.on_file_select({
+          path = file_path,
+          group = "unstaged",
+          status = "M",
+        })
+        vim.notify("All hunks unstaged — switched to unstaged view", vim.log.levels.INFO)
+      else
+        vim.notify(string.format("Unstaged hunk %d", hunk_idx), vim.log.levels.INFO)
+
+        -- Refresh diff view: reload virtual buffers and recompute diff
+        local view = require('codediff.ui.view')
+        local current_win = vim.api.nvim_get_current_win()
+        view.update(tabpage, {
+          mode = session.mode,
+          git_root = session.git_root,
+          original_path = session.original_path,
+          modified_path = session.modified_path,
+          original_revision = session.original_revision,
+          modified_revision = session.modified_revision,
+        }, false)
+        if vim.api.nvim_win_is_valid(current_win) then
+          vim.api.nvim_set_current_win(current_win)
+        end
+      end
+    end)
+  end
+
+  -- Helper: Discard hunk under cursor from working tree
+  local function discard_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.git_root then
+      vim.notify("Not in a git repository", vim.log.levels.WARN)
+      return
+    end
+
+    -- Only allow discarding in unstaged views (working tree changes)
+    if session.modified_revision ~= nil then
+      vim.notify("Discard only works on unstaged changes (working tree)", vim.log.levels.WARN)
+      return
+    end
+
+    local hunk, hunk_idx = find_hunk_at_cursor()
+    if not hunk then
+      vim.notify("No hunk at cursor position", vim.log.levels.WARN)
+      return
+    end
+
+    local file_path = session.original_path or session.modified_path
+    if not file_path or file_path == "" then
+      vim.notify("No file path for discarding", vim.log.levels.WARN)
+      return
+    end
+
+    -- Prompt for confirmation before discarding (destructive operation)
+    local prompt = string.format("Discard hunk %d? This cannot be undone.", hunk_idx)
+    vim.ui.select({ 'Yes', 'No' }, { prompt = prompt }, function(choice)
+      if choice ~= 'Yes' then return end
+
+      -- Read lines from both buffers for this hunk
+      local orig_lines = vim.api.nvim_buf_get_lines(
+        original_bufnr,
+        hunk.original.start_line - 1,
+        hunk.original.end_line - 1,
+        false
+      )
+      local mod_lines = vim.api.nvim_buf_get_lines(
+        modified_bufnr,
+        hunk.modified.start_line - 1,
+        hunk.modified.end_line - 1,
+        false
+      )
+
+      local patch = build_hunk_patch(file_path, orig_lines, mod_lines,
+        hunk.original.start_line, hunk.modified.start_line)
+
+      local git = require('codediff.core.git')
+      git.discard_hunk_patch(session.git_root, patch, function(err)
+        if err then
+          vim.notify("Failed to discard hunk: " .. err, vim.log.levels.ERROR)
+          return
+        end
+
+        -- Refresh explorer to reflect discard
+        local explorer_obj = lifecycle.get_explorer(tabpage)
+        if explorer_obj then
+          local explorer = require('codediff.ui.explorer')
+          explorer.refresh(explorer_obj)
+        end
+
+        vim.notify(string.format("Discarded hunk %d", hunk_idx), vim.log.levels.INFO)
+
+        -- Refresh diff view: reload virtual buffers and recompute diff
+        local view = require('codediff.ui.view')
+        local current_win = vim.api.nvim_get_current_win()
+        view.update(tabpage, {
+          mode = session.mode,
+          git_root = session.git_root,
+          original_path = session.original_path,
+          modified_path = session.modified_path,
+          original_revision = session.original_revision,
+          modified_revision = session.modified_revision,
+        }, false)
+        if vim.api.nvim_win_is_valid(current_win) then
+          vim.api.nvim_set_current_win(current_win)
+        end
+      end)
+    end)
+  end
+
+  -- ========================================================================
   -- Bind all keymaps using unified API (one place for all keymaps!)
   -- ========================================================================
 
@@ -477,6 +778,17 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     if keymaps.prev_file then
       lifecycle.set_tab_keymap(tabpage, "n", keymaps.prev_file, navigate_prev_file, { desc = "Previous file" })
     end
+  end
+
+  -- Hunk-level staging (S, U, D) - stage/unstage/discard individual hunks via git apply
+  if keymaps.stage_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.stage_hunk, stage_hunk, { desc = 'Stage hunk under cursor' })
+  end
+  if keymaps.unstage_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.unstage_hunk, unstage_hunk, { desc = 'Unstage hunk under cursor' })
+  end
+  if keymaps.discard_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.discard_hunk, discard_hunk, { desc = 'Discard hunk under cursor' })
   end
 end
 

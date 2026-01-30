@@ -165,6 +165,90 @@ function M.toggle_visibility(explorer)
   end
 end
 
+-- Stage file under cursor (git add)
+function M.stage_file(explorer, node_data)
+  if not explorer or not explorer.git_root then return end
+  if not node_data or not node_data.path then
+    vim.notify("No file under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local path = node_data.path
+  vim.system({'git', '-C', explorer.git_root, 'add', '--', path}, {}, function(result)
+    vim.schedule(function()
+      if result.code == 0 then
+        vim.notify("Staged: " .. path, vim.log.levels.INFO)
+        refresh_module.refresh(explorer)
+      else
+        vim.notify("Failed to stage: " .. path, vim.log.levels.ERROR)
+      end
+    end)
+  end)
+end
+
+-- Unstage file under cursor (git restore --staged)
+function M.unstage_file(explorer, node_data)
+  if not explorer or not explorer.git_root then return end
+  if not node_data or not node_data.path then
+    vim.notify("No file under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local path = node_data.path
+  vim.system({'git', '-C', explorer.git_root, 'restore', '--staged', '--', path}, {}, function(result)
+    vim.schedule(function()
+      if result.code == 0 then
+        vim.notify("Unstaged: " .. path, vim.log.levels.INFO)
+        refresh_module.refresh(explorer)
+      else
+        vim.notify("Failed to unstage: " .. path, vim.log.levels.ERROR)
+      end
+    end)
+  end)
+end
+
+-- Discard file changes or delete untracked file (with confirmation)
+function M.discard_file(explorer, node_data)
+  if not explorer or not explorer.git_root then return end
+  if not node_data or not node_data.path then
+    vim.notify("No file under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local path = node_data.path
+  local short = vim.fn.fnamemodify(path, ':t')
+  local is_untracked = node_data.status == '??'
+  local prompt = is_untracked
+    and ('Delete untracked file ' .. short .. '? This cannot be undone.')
+    or ('Discard changes to ' .. short .. '? This cannot be undone.')
+
+  vim.ui.select({ 'Yes', 'No' }, { prompt = prompt }, function(choice)
+    if choice ~= 'Yes' then return end
+
+    if is_untracked then
+      local abs_path = explorer.git_root .. '/' .. path
+      local ok, err = os.remove(abs_path)
+      if ok then
+        vim.notify('Deleted: ' .. path, vim.log.levels.INFO)
+        refresh_module.refresh(explorer)
+      else
+        vim.notify('Failed to delete: ' .. (err or path), vim.log.levels.ERROR)
+      end
+    else
+      vim.system({'git', '-C', explorer.git_root, 'checkout', 'HEAD', '--', path}, {}, function(result)
+        vim.schedule(function()
+          if result.code == 0 then
+            vim.notify('Discarded: ' .. path, vim.log.levels.INFO)
+            refresh_module.refresh(explorer)
+          else
+            vim.notify('Failed to discard: ' .. path, vim.log.levels.ERROR)
+          end
+        end)
+      end)
+    end
+  end)
+end
+
 -- Toggle view mode between 'list' and 'tree'
 function M.toggle_view_mode(explorer)
   if not explorer then

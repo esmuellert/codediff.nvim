@@ -50,7 +50,8 @@ local function load_virtual_buffer_content(buf, git_root, commit, filepath)
       vim.bo[buf].readonly = true
 
       -- Detect filetype from the original file path (for TreeSitter only)
-      local ft = vim.filetype.match({ filename = filepath })
+      -- Pass buf for proper detection of some filetypes like .ts
+      local ft = vim.filetype.match({ filename = filepath, buf = buf })
       if ft then
         vim.bo[buf].filetype = ft
       end
