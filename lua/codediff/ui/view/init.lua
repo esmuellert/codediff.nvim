@@ -359,95 +359,108 @@ function M.create(session_config, filetype, on_ready)
 
   -- For explorer mode, create the explorer sidebar after diff windows are set up
   if session_config.mode == "explorer" and session_config.explorer_data then
-    -- Get explorer position from config
     local explorer_config = config.options.explorer or {}
-    local position = explorer_config.position or "left"
-
-    -- Create explorer (explorer manages its own lifecycle and callbacks)
-    local explorer = require("codediff.ui.explorer")
+    local backend = explorer_config.backend or "quickfix"
     local status_result = session_config.explorer_data.status_result
 
-    -- For dir mode (git_root == nil), pass original_path and modified_path as dir roots
-    local explorer_opts = {}
-    if not session_config.git_root then
-      explorer_opts.dir1 = session_config.original_path
-      explorer_opts.dir2 = session_config.modified_path
-    end
-    -- Pass focus_file to auto-select current file if it's in the changed list
-    if session_config.explorer_data.focus_file then
-      explorer_opts.focus_file = session_config.explorer_data.focus_file
-    end
+    if backend == "nui" then
+      local ok, explorer = pcall(require, "codediff.ui.explorer")
+      if not ok then
+        vim.notify("nui.nvim required for backend='nui'. Install it or set explorer.backend='quickfix'", vim.log.levels.ERROR)
+        return
+      end
 
-    local explorer_obj = explorer.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)
+      local position = explorer_config.position or "left"
 
-    -- Store explorer reference in lifecycle
-    lifecycle.set_explorer(tabpage, explorer_obj)
+      local explorer_opts = {}
+      if not session_config.git_root then
+        explorer_opts.dir1 = session_config.original_path
+        explorer_opts.dir2 = session_config.modified_path
+      end
+      if session_config.explorer_data.focus_file then
+        explorer_opts.focus_file = session_config.explorer_data.focus_file
+      end
 
-    -- Set initial focus based on config
-    local initial_focus = explorer_config.initial_focus or "explorer"
-    if initial_focus == "explorer" and explorer_obj and explorer_obj.winid and vim.api.nvim_win_is_valid(explorer_obj.winid) then
-      vim.api.nvim_set_current_win(explorer_obj.winid)
-    elseif initial_focus == "original" and vim.api.nvim_win_is_valid(original_win) then
-      vim.api.nvim_set_current_win(original_win)
-    elseif initial_focus == "modified" and vim.api.nvim_win_is_valid(modified_win) then
-      vim.api.nvim_set_current_win(modified_win)
-    end
+      local explorer_obj = explorer.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)
 
-    -- Note: Keymaps will be set when first file is selected via update()
+      lifecycle.set_explorer(tabpage, explorer_obj)
 
-    -- Adjust diff window sizes based on explorer position
-    if position == "bottom" then
-      -- For bottom position, diff windows take full width, equalize them
-      vim.cmd("wincmd =")
+      local initial_focus = explorer_config.initial_focus or "explorer"
+      if initial_focus == "explorer" and explorer_obj and explorer_obj.winid and vim.api.nvim_win_is_valid(explorer_obj.winid) then
+        vim.api.nvim_set_current_win(explorer_obj.winid)
+      elseif initial_focus == "original" and vim.api.nvim_win_is_valid(original_win) then
+        vim.api.nvim_set_current_win(original_win)
+      elseif initial_focus == "modified" and vim.api.nvim_win_is_valid(modified_win) then
+        vim.api.nvim_set_current_win(modified_win)
+      end
+
+      if position == "bottom" then
+        vim.cmd("wincmd =")
+      else
+        local total_width = vim.o.columns
+        local explorer_width = explorer_config.width or 40
+        local remaining_width = total_width - explorer_width
+        local diff_width = math.floor(remaining_width / 2)
+
+        vim.api.nvim_win_set_width(original_win, diff_width)
+        vim.api.nvim_win_set_width(modified_win, diff_width)
+      end
     else
-      -- For left position, calculate remaining width and split equally
-      local total_width = vim.o.columns
-      local explorer_width = explorer_config.width or 40
-      local remaining_width = total_width - explorer_width
-      local diff_width = math.floor(remaining_width / 2)
-
-      vim.api.nvim_win_set_width(original_win, diff_width)
-      vim.api.nvim_win_set_width(modified_win, diff_width)
+      local quickfix = require("codediff.ui.explorer.quickfix")
+      quickfix.create(status_result, session_config.git_root, tabpage, session_config.original_revision, session_config.modified_revision, {
+        focus_file = session_config.explorer_data.focus_file,
+      })
     end
   end
 
   -- For history mode, create the history panel after diff windows are set up
   if session_config.mode == "history" and session_config.history_data then
     local history_config = config.options.history or {}
-    local position = history_config.position or "bottom"
-
-    local history = require("codediff.ui.history")
+    local backend = history_config.backend or "quickfix"
     local commits = session_config.history_data.commits
 
-    local history_obj = history.create(commits, session_config.git_root, tabpage, nil, {
-      range = session_config.history_data.range,
-      file_path = session_config.history_data.file_path,
-    })
+    if backend == "nui" then
+      local ok, history = pcall(require, "codediff.ui.history")
+      if not ok then
+        vim.notify("nui.nvim required for backend='nui'. Install it or set history.backend='quickfix'", vim.log.levels.ERROR)
+        return
+      end
 
-    -- Store history panel reference in lifecycle (reuse explorer slot)
-    lifecycle.set_explorer(tabpage, history_obj)
+      local position = history_config.position or "bottom"
 
-    -- Set initial focus based on config
-    local initial_focus = history_config.initial_focus or "history"
-    if initial_focus == "history" and history_obj and history_obj.winid and vim.api.nvim_win_is_valid(history_obj.winid) then
-      vim.api.nvim_set_current_win(history_obj.winid)
-    elseif initial_focus == "original" and vim.api.nvim_win_is_valid(original_win) then
-      vim.api.nvim_set_current_win(original_win)
-    elseif initial_focus == "modified" and vim.api.nvim_win_is_valid(modified_win) then
-      vim.api.nvim_set_current_win(modified_win)
-    end
+      local history_obj = history.create(commits, session_config.git_root, tabpage, nil, {
+        range = session_config.history_data.range,
+        file_path = session_config.history_data.file_path,
+      })
 
-    -- Adjust diff window sizes based on panel position
-    if position == "bottom" then
-      vim.cmd("wincmd =")
+      lifecycle.set_explorer(tabpage, history_obj)
+
+      local initial_focus = history_config.initial_focus or "history"
+      if initial_focus == "history" and history_obj and history_obj.winid and vim.api.nvim_win_is_valid(history_obj.winid) then
+        vim.api.nvim_set_current_win(history_obj.winid)
+      elseif initial_focus == "original" and vim.api.nvim_win_is_valid(original_win) then
+        vim.api.nvim_set_current_win(original_win)
+      elseif initial_focus == "modified" and vim.api.nvim_win_is_valid(modified_win) then
+        vim.api.nvim_set_current_win(modified_win)
+      end
+
+      if position == "bottom" then
+        vim.cmd("wincmd =")
+      else
+        local total_width = vim.o.columns
+        local panel_width = history_config.width or 40
+        local remaining_width = total_width - panel_width
+        local diff_width = math.floor(remaining_width / 2)
+
+        vim.api.nvim_win_set_width(original_win, diff_width)
+        vim.api.nvim_win_set_width(modified_win, diff_width)
+      end
     else
-      local total_width = vim.o.columns
-      local panel_width = history_config.width or 40
-      local remaining_width = total_width - panel_width
-      local diff_width = math.floor(remaining_width / 2)
-
-      vim.api.nvim_win_set_width(original_win, diff_width)
-      vim.api.nvim_win_set_width(modified_win, diff_width)
+      local quickfix = require("codediff.ui.history.quickfix")
+      quickfix.create(commits, session_config.git_root, tabpage, {
+        range = session_config.history_data.range,
+        file_path = session_config.history_data.file_path,
+      })
     end
   end
 

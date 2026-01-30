@@ -38,7 +38,8 @@ M.defaults = {
 
   -- Explorer panel configuration
   explorer = {
-    position = "left", -- "left" or "bottom"
+    backend = "quickfix", -- "quickfix" (no deps) or "nui" (requires nui.nvim)
+    position = "left", -- "left" or "bottom" (nui backend only)
     width = 40, -- Width when position is "left" (columns)
     height = 15, -- Height when position is "bottom" (lines)
     view_mode = "list", -- "list" (flat file list) or "tree" (directory tree)
@@ -55,7 +56,8 @@ M.defaults = {
 
   -- History panel configuration (for :CodeDiff history)
   history = {
-    position = "bottom", -- "left" or "bottom" (default: bottom)
+    backend = "quickfix", -- "quickfix" (no deps) or "nui" (requires nui.nvim)
+    position = "bottom", -- "left" or "bottom" (nui backend only)
     width = 40, -- Width when position is "left" (columns)
     height = 15, -- Height when position is "bottom" (lines)
     initial_focus = "history", -- Initial focus: "history", "original", or "modified"

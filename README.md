@@ -36,13 +36,16 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 - Neovim >= 0.7.0 (for Lua FFI support; 0.10+ recommended for vim.system)
 - Git (for git diff features)
 - `curl` or `wget` (for automatic binary download)
-- `nui.nvim` (for explorer UI)
+
+**Optional:**
+- `nui.nvim` - for tree-style file explorer sidebar (default)
 
 **No compiler required!** The plugin automatically downloads pre-built binaries from GitHub releases.
 
 ### Using lazy.nvim
 
 **Minimal installation:**
+
 ```lua
 {
   "esmuellert/codediff.nvim",
@@ -57,7 +60,8 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 ```lua
 {
   "esmuellert/codediff.nvim",
-  dependencies = { "MunifTanjim/nui.nvim" },
+  -- required if using backend = "nui"
+  -- dependencies = { "MunifTanjim/nui.nvim" },
   cmd = "CodeDiff",
   opts = {
     -- Highlight configuration
@@ -95,10 +99,11 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 
     -- Explorer panel configuration
     explorer = {
-      position = "left",  -- "left" or "bottom"
-      width = 40,         -- Width when position is "left" (columns)
-      height = 15,        -- Height when position is "bottom" (lines)
-      indent_markers = true,  -- Show indent markers in tree view (│, ├, └)
+      backend = "quickfix",  -- "quickfix" (no deps) or "nui" (requires nui.nvim)
+      position = "left",  -- "left" or "bottom" (nui backend only)
+      width = 40,         -- Width when position is "left" (nui backend only)
+      height = 15,        -- Height when position is "bottom" (nui backend only)
+      indent_markers = true,  -- Show indent markers in tree view (nui backend only)
       initial_focus = "explorer",  -- Initial focus: "explorer", "original", or "modified"
       icons = {
         folder_closed = "",  -- Nerd Font folder icon (customize as needed)
@@ -112,11 +117,12 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
 
     -- History panel configuration (for :CodeDiff history)
     history = {
-      position = "bottom",  -- "left" or "bottom" (default: bottom)
-      width = 40,           -- Width when position is "left" (columns)
-      height = 15,          -- Height when position is "bottom" (lines)
+      backend = "quickfix",  -- "quickfix" (no deps) or "nui" (requires nui.nvim)
+      position = "bottom",  -- "left" or "bottom" (nui backend only)
+      width = 40,           -- Width when position is "left" (nui backend only)
+      height = 15,          -- Height when position is "bottom" (nui backend only)
       initial_focus = "history",  -- Initial focus: "history", "original", or "modified"
-      view_mode = "list",   -- "list" or "tree" for files under commits
+      view_mode = "list",   -- "list" or "tree" for files under commits (nui backend only)
     },
 
     -- Keymaps in diff view
