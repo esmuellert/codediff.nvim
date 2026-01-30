@@ -134,6 +134,7 @@ https://github.com/user-attachments/assets/64c41f01-dffe-4318-bce4-16eec8de356e
         toggle_stage = "-", -- Stage/unstage current file (works in explorer and diff buffers)
         stage_hunk = "S",   -- Stage hunk under cursor to git index
         unstage_hunk = "U", -- Unstage hunk under cursor from git index
+        discard_hunk = "D", -- Discard hunk under cursor (working tree only)
       },
       explorer = {
         select = "<CR>",    -- Open diff for selected file

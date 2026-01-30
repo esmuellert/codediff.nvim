@@ -636,6 +636,88 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     end)
   end
 
+  -- Helper: Discard hunk under cursor from working tree
+  local function discard_hunk()
+    local session = lifecycle.get_session(tabpage)
+    if not session or not session.git_root then
+      vim.notify("Not in a git repository", vim.log.levels.WARN)
+      return
+    end
+
+    -- Only allow discarding in unstaged views (working tree changes)
+    if session.modified_revision ~= nil then
+      vim.notify("Discard only works on unstaged changes (working tree)", vim.log.levels.WARN)
+      return
+    end
+
+    local hunk, hunk_idx = find_hunk_at_cursor()
+    if not hunk then
+      vim.notify("No hunk at cursor position", vim.log.levels.WARN)
+      return
+    end
+
+    local file_path = session.original_path or session.modified_path
+    if not file_path or file_path == "" then
+      vim.notify("No file path for discarding", vim.log.levels.WARN)
+      return
+    end
+
+    -- Prompt for confirmation before discarding (destructive operation)
+    local prompt = string.format("Discard hunk %d? This cannot be undone.", hunk_idx)
+    vim.ui.select({ 'Yes', 'No' }, { prompt = prompt }, function(choice)
+      if choice ~= 'Yes' then return end
+
+      -- Read lines from both buffers for this hunk
+      local orig_lines = vim.api.nvim_buf_get_lines(
+        original_bufnr,
+        hunk.original.start_line - 1,
+        hunk.original.end_line - 1,
+        false
+      )
+      local mod_lines = vim.api.nvim_buf_get_lines(
+        modified_bufnr,
+        hunk.modified.start_line - 1,
+        hunk.modified.end_line - 1,
+        false
+      )
+
+      local patch = build_hunk_patch(file_path, orig_lines, mod_lines,
+        hunk.original.start_line, hunk.modified.start_line)
+
+      local git = require('codediff.core.git')
+      git.discard_hunk_patch(session.git_root, patch, function(err)
+        if err then
+          vim.notify("Failed to discard hunk: " .. err, vim.log.levels.ERROR)
+          return
+        end
+
+        -- Refresh explorer to reflect discard
+        local explorer_obj = lifecycle.get_explorer(tabpage)
+        if explorer_obj then
+          local explorer = require('codediff.ui.explorer')
+          explorer.refresh(explorer_obj)
+        end
+
+        vim.notify(string.format("Discarded hunk %d", hunk_idx), vim.log.levels.INFO)
+
+        -- Refresh diff view: reload virtual buffers and recompute diff
+        local view = require('codediff.ui.view')
+        local current_win = vim.api.nvim_get_current_win()
+        view.update(tabpage, {
+          mode = session.mode,
+          git_root = session.git_root,
+          original_path = session.original_path,
+          modified_path = session.modified_path,
+          original_revision = session.original_revision,
+          modified_revision = session.modified_revision,
+        }, false)
+        if vim.api.nvim_win_is_valid(current_win) then
+          vim.api.nvim_set_current_win(current_win)
+        end
+      end)
+    end)
+  end
+
   -- ========================================================================
   -- Bind all keymaps using unified API (one place for all keymaps!)
   -- ========================================================================
@@ -698,12 +780,15 @@ function M.setup_all_keymaps(tabpage, original_bufnr, modified_bufnr, is_explore
     end
   end
 
-  -- Hunk-level staging (S, U) - stage/unstage individual hunks via git apply
+  -- Hunk-level staging (S, U, D) - stage/unstage/discard individual hunks via git apply
   if keymaps.stage_hunk then
     lifecycle.set_tab_keymap(tabpage, 'n', keymaps.stage_hunk, stage_hunk, { desc = 'Stage hunk under cursor' })
   end
   if keymaps.unstage_hunk then
     lifecycle.set_tab_keymap(tabpage, 'n', keymaps.unstage_hunk, unstage_hunk, { desc = 'Unstage hunk under cursor' })
+  end
+  if keymaps.discard_hunk then
+    lifecycle.set_tab_keymap(tabpage, 'n', keymaps.discard_hunk, discard_hunk, { desc = 'Discard hunk under cursor' })
   end
 end
 
