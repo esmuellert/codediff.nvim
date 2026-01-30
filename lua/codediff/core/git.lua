@@ -2,6 +2,19 @@
 -- All operations are async and atomic
 local M = {}
 
+-- Unquote git C-quoted paths (e.g., "my file.md" -> my file.md)
+local function unquote_path(path)
+  if path:sub(1, 1) == '"' and path:sub(-1) == '"' then
+    local unquoted = path:sub(2, -2)
+    unquoted = unquoted:gsub('\\(.)', function(char)
+      local escapes = { a = '\a', b = '\b', t = '\t', n = '\n', v = '\v', f = '\f', r = '\r', ['\\'] = '\\', ['"'] = '"' }
+      return escapes[char] or char
+    end)
+    return unquoted
+  end
+  return path
+end
+
 -- LRU Cache for git file content
 -- Stores recently fetched file content to avoid redundant git calls
 local ContentCache = {}
@@ -340,7 +353,7 @@ function M.get_status(git_root, callback)
         if #line >= 3 then
           local index_status = line:sub(1, 1)
           local worktree_status = line:sub(2, 2)
-          local path_part = line:sub(4)
+          local path_part = unquote_path(line:sub(4))
 
           -- Handle renames: "old_path -> new_path"
           local old_path, new_path = path_part:match("^(.+) %-> (.+)$")
@@ -398,19 +411,19 @@ function M.get_diff_revision(revision, git_root, callback)
       staged = {},
     }
 
-    for line in output:gmatch("[^\r\n]+") do
-      if #line > 0 then
-        local parts = vim.split(line, "\t")
-        if #parts >= 2 then
-          local status = parts[1]:sub(1, 1)
-          local path = parts[2]
-          local old_path = nil
+      for line in output:gmatch("[^\r\n]+") do
+        if #line > 0 then
+          local parts = vim.split(line, "\t")
+          if #parts >= 2 then
+            local status = parts[1]:sub(1, 1)
+            local path = unquote_path(parts[2])
+            local old_path = nil
 
-          -- Handle renames (R100 or similar)
-          if status == "R" and #parts >= 3 then
-            old_path = parts[2]
-            path = parts[3]
-          end
+            -- Handle renames (R100 or similar)
+            if status == "R" and #parts >= 3 then
+              old_path = unquote_path(parts[2])
+              path = unquote_path(parts[3])
+            end
 
           table.insert(result.unstaged, {
             path = path,
@@ -462,23 +475,23 @@ function M.get_diff_revisions(rev1, rev2, git_root, callback)
       staged = {},
     }
 
-    -- For revision comparison, we treat everything as "unstaged" for explorer compatibility
-    -- But to keep explorer compatible, we'll put them in 'staged' as they are committed changes
-    -- relative to each other.
+      -- For revision comparison, we treat everything as "unstaged" for explorer compatibility
+      -- But to keep explorer compatible, we'll put them in 'staged' as they are committed changes
+      -- relative to each other.
+      
+      for line in output:gmatch("[^\r\n]+") do
+        if #line > 0 then
+          local parts = vim.split(line, "\t")
+          if #parts >= 2 then
+            local status = parts[1]:sub(1, 1)
+            local path = unquote_path(parts[2])
+            local old_path = nil
 
-    for line in output:gmatch("[^\r\n]+") do
-      if #line > 0 then
-        local parts = vim.split(line, "\t")
-        if #parts >= 2 then
-          local status = parts[1]:sub(1, 1)
-          local path = parts[2]
-          local old_path = nil
-
-          -- Handle renames (R100 or similar)
-          if status == "R" and #parts >= 3 then
-            old_path = parts[2]
-            path = parts[3]
-          end
+            -- Handle renames (R100 or similar)
+            if status == "R" and #parts >= 3 then
+              old_path = unquote_path(parts[2])
+              path = unquote_path(parts[3])
+            end
 
           table.insert(result.unstaged, {
             path = path,
