@@ -275,7 +275,7 @@ function M.prepare_node(node, max_width, selected_commit, selected_file, is_sing
 
     line:append("| ", get_hl("NonText"))
     line:append(ins_str, get_hl("DiagnosticOk"))
-    line:append(" ")
+    line:append(" ", get_hl("Normal"))
     line:append(del_str, get_hl("DiagnosticError"))
     line:append(" | ", get_hl("NonText"))
 
@@ -303,6 +303,14 @@ function M.prepare_node(node, max_width, selected_commit, selected_file, is_sing
 
     -- Author, date at end (dimmed)
     line:append(" " .. data.author .. ", " .. data.date_relative, get_hl("Comment"))
+
+    -- Pad with spaces to fill full line width when selected
+    if is_selected and max_width then
+      local current_len = #line:content()
+      if current_len < max_width then
+        line:append(string.rep(" ", max_width - current_len), get_hl("Normal"))
+      end
+    end
   elseif data.type == "file" then
     -- File node format (diffview style):
     -- [tree char] [status] [icon] [path/]filename
