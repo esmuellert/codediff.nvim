@@ -216,7 +216,7 @@ end
 
 -- Prepare node for rendering (format display)
 -- Match diffview format: [fold] [file count] | [adds] [dels] | hash subject author, date
-function M.prepare_node(node, max_width, selected_commit, selected_file)
+function M.prepare_node(node, max_width, selected_commit, selected_file, is_single_file_mode)
   local line = NuiLine()
   local data = node.data or {}
 
@@ -226,7 +226,9 @@ function M.prepare_node(node, max_width, selected_commit, selected_file)
   elseif data.type == "commit" then
     -- Commit node format (diffview style):
     -- [fold icon] N file(s) | +adds -dels | hash subject author, date
-    local is_selected = data.hash == selected_commit and not selected_file
+    -- In single-file mode, highlight commit when hash matches (no file nodes exist)
+    -- In multi-file mode, highlight commit only when no file is selected
+    local is_selected = data.hash == selected_commit and (is_single_file_mode or not selected_file)
     local is_expanded = node:is_expanded()
 
     -- Get selected background color once
@@ -273,7 +275,7 @@ function M.prepare_node(node, max_width, selected_commit, selected_file)
 
     line:append("| ", get_hl("NonText"))
     line:append(ins_str, get_hl("DiagnosticOk"))
-    line:append(" ")
+    line:append(" ", get_hl("Normal"))
     line:append(del_str, get_hl("DiagnosticError"))
     line:append(" | ", get_hl("NonText"))
 
@@ -301,6 +303,14 @@ function M.prepare_node(node, max_width, selected_commit, selected_file)
 
     -- Author, date at end (dimmed)
     line:append(" " .. data.author .. ", " .. data.date_relative, get_hl("Comment"))
+
+    -- Pad with spaces to fill full line width when selected
+    if is_selected and max_width then
+      local current_len = #line:content()
+      if current_len < max_width then
+        line:append(string.rep(" ", max_width - current_len), get_hl("Normal"))
+      end
+    end
   elseif data.type == "file" then
     -- File node format (diffview style):
     -- [tree char] [status] [icon] [path/]filename

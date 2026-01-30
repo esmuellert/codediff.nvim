@@ -149,7 +149,7 @@ function M.create(commits, git_root, tabpage, width, opts)
       if split.winid and vim.api.nvim_win_is_valid(split.winid) then
         current_width = vim.api.nvim_win_get_width(split.winid)
       end
-      return nodes_module.prepare_node(node, current_width, selected_commit, selected_file)
+      return nodes_module.prepare_node(node, current_width, selected_commit, selected_file, is_single_file_mode)
     end,
   })
 
