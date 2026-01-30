@@ -297,6 +297,9 @@ function M.create(commits, git_root, tabpage, width, opts)
     on_file_select(file_data)
   end
 
+  -- Store load_commit_files for navigation functions
+  history.load_commit_files = load_commit_files
+
   -- Setup keymaps
   keymaps_module.setup(history, {
     is_single_file_mode = is_single_file_mode,
@@ -372,117 +375,189 @@ function M.create(commits, git_root, tabpage, width, opts)
   return history
 end
 
--- Get all file nodes from tree (for navigation)
-function M.get_all_files(tree)
+-- Collect all files from a commit node (handles tree mode with nested directories)
+local function collect_commit_files(tree, commit_node)
   local files = {}
 
-  local function collect_files(parent_node)
-    if not parent_node:has_children() then
-      return
-    end
-    if not parent_node:is_expanded() then
-      return
-    end
-
-    for _, child_id in ipairs(parent_node:get_child_ids()) do
-      local node = tree:get_node(child_id)
-      if node and node.data and node.data.type == "file" then
-        table.insert(files, {
-          node = node,
-          data = node.data,
-        })
+  local function collect_recursive(node_ids)
+    for _, node_id in ipairs(node_ids) do
+      local node = tree:get_node(node_id)
+      if node and node.data then
+        if node.data.type == "file" then
+          table.insert(files, { node = node, data = node.data })
+        elseif node.data.type == "directory" then
+          collect_recursive(node:get_child_ids() or {})
+        end
       end
     end
   end
 
-  local nodes = tree:get_nodes()
-  for _, commit_node in ipairs(nodes) do
-    collect_files(commit_node)
+  if commit_node:has_children() then
+    collect_recursive(commit_node:get_child_ids() or {})
   end
 
   return files
 end
 
--- Navigate to next file
-function M.navigate_next(history)
-  local all_files = M.get_all_files(history.tree)
-  if #all_files == 0 then
-    vim.notify("No files in history", vim.log.levels.WARN)
-    return
-  end
-
-  local current_commit = history.current_commit
-  local current_file = history.current_file
-
-  if not current_commit or not current_file then
-    local first_file = all_files[1]
-    history.on_file_select(first_file.data)
-    return
-  end
-
-  -- Find current index
-  local current_index = 0
-  for i, file in ipairs(all_files) do
-    if file.data.commit_hash == current_commit and file.data.path == current_file then
-      current_index = i
-      break
+-- Get all file nodes from expanded commits (for navigation)
+function M.get_all_files(tree)
+  local files = {}
+  for _, node in ipairs(tree:get_nodes()) do
+    if node.data and node.data.type == "commit" and node:is_expanded() then
+      for _, file in ipairs(collect_commit_files(tree, node)) do
+        table.insert(files, file)
+      end
     end
   end
-
-  local next_index = current_index % #all_files + 1
-  local next_file = all_files[next_index]
-
-  -- Update cursor position
-  local current_win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_is_valid(history.winid) then
-    vim.api.nvim_set_current_win(history.winid)
-    vim.api.nvim_win_set_cursor(history.winid, { next_file.node._line or 1, 0 })
-    vim.api.nvim_set_current_win(current_win)
-  end
-
-  history.on_file_select(next_file.data)
+  return files
 end
 
--- Navigate to previous file
-function M.navigate_prev(history)
-  local all_files = M.get_all_files(history.tree)
-  if #all_files == 0 then
+-- Update cursor position in history panel
+local function update_cursor(history, node)
+  local current_win = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_is_valid(history.winid) then
+    vim.api.nvim_set_current_win(history.winid)
+    vim.api.nvim_win_set_cursor(history.winid, { node._line or 1, 0 })
+    vim.api.nvim_set_current_win(current_win)
+  end
+end
+
+-- Find current position: returns commit_idx, file_idx, commits list
+local function find_current_position(history)
+  local commits = {}
+  for _, node in ipairs(history.tree:get_nodes()) do
+    if node.data and node.data.type == "commit" then
+      table.insert(commits, node)
+    end
+  end
+
+  if #commits == 0 then
+    return nil, nil, commits
+  end
+
+  for commit_idx, commit_node in ipairs(commits) do
+    if commit_node.data.hash == history.current_commit and commit_node:is_expanded() then
+      local files = collect_commit_files(history.tree, commit_node)
+      for file_idx, file in ipairs(files) do
+        if file.data.path == history.current_file then
+          return commit_idx, file_idx, commits
+        end
+      end
+    end
+  end
+
+  return nil, nil, commits
+end
+
+-- Navigate to next file (auto-expands next commit at boundary)
+function M.navigate_next(history)
+  local commit_idx, file_idx, commits = find_current_position(history)
+
+  if #commits == 0 then
+    vim.notify("No commits in history", vim.log.levels.WARN)
+    return
+  end
+
+  -- No current selection: select first file of first expanded commit
+  if not commit_idx then
+    for _, commit_node in ipairs(commits) do
+      if commit_node:is_expanded() then
+        local files = collect_commit_files(history.tree, commit_node)
+        if #files > 0 then
+          update_cursor(history, files[1].node)
+          history.on_file_select(files[1].data)
+          return
+        end
+      end
+    end
     vim.notify("No files in history", vim.log.levels.WARN)
     return
   end
 
-  local current_commit = history.current_commit
-  local current_file = history.current_file
+  local current_commit = commits[commit_idx]
+  local files = collect_commit_files(history.tree, current_commit)
 
-  if not current_commit or not current_file then
-    local last_file = all_files[#all_files]
-    history.on_file_select(last_file.data)
+  -- Not at boundary: go to next file in same commit
+  if file_idx < #files then
+    local next_file = files[file_idx + 1]
+    update_cursor(history, next_file.node)
+    history.on_file_select(next_file.data)
     return
   end
 
-  local current_index = 0
-  for i, file in ipairs(all_files) do
-    if file.data.commit_hash == current_commit and file.data.path == current_file then
-      current_index = i
-      break
+  -- At boundary: go to next commit
+  local next_commit_idx = commit_idx % #commits + 1
+  local next_commit = commits[next_commit_idx]
+
+  local function select_first_file()
+    local next_files = collect_commit_files(history.tree, next_commit)
+    if #next_files > 0 then
+      update_cursor(history, next_files[1].node)
+      history.on_file_select(next_files[1].data)
     end
   end
 
-  local prev_index = current_index - 2
-  if prev_index < 0 then
-    prev_index = #all_files + prev_index
+  if next_commit:is_expanded() then
+    select_first_file()
+  elseif history.load_commit_files then
+    history.load_commit_files(next_commit, select_first_file)
   end
-  prev_index = prev_index % #all_files + 1
-  local prev_file = all_files[prev_index]
+end
 
-  local current_win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_is_valid(history.winid) then
-    vim.api.nvim_set_current_win(history.winid)
-    vim.api.nvim_win_set_cursor(history.winid, { prev_file.node._line or 1, 0 })
-    vim.api.nvim_set_current_win(current_win)
+-- Navigate to previous file (auto-expands previous commit at boundary)
+function M.navigate_prev(history)
+  local commit_idx, file_idx, commits = find_current_position(history)
+
+  if #commits == 0 then
+    vim.notify("No commits in history", vim.log.levels.WARN)
+    return
   end
 
-  history.on_file_select(prev_file.data)
+  -- No current selection: select last file of last expanded commit
+  if not commit_idx then
+    for i = #commits, 1, -1 do
+      local commit_node = commits[i]
+      if commit_node:is_expanded() then
+        local files = collect_commit_files(history.tree, commit_node)
+        if #files > 0 then
+          update_cursor(history, files[#files].node)
+          history.on_file_select(files[#files].data)
+          return
+        end
+      end
+    end
+    vim.notify("No files in history", vim.log.levels.WARN)
+    return
+  end
+
+  local current_commit = commits[commit_idx]
+  local files = collect_commit_files(history.tree, current_commit)
+
+  -- Not at boundary: go to previous file in same commit
+  if file_idx > 1 then
+    local prev_file = files[file_idx - 1]
+    update_cursor(history, prev_file.node)
+    history.on_file_select(prev_file.data)
+    return
+  end
+
+  -- At boundary: go to previous commit
+  local prev_commit_idx = (commit_idx - 2) % #commits + 1
+  local prev_commit = commits[prev_commit_idx]
+
+  local function select_last_file()
+    local prev_files = collect_commit_files(history.tree, prev_commit)
+    if #prev_files > 0 then
+      update_cursor(history, prev_files[#prev_files].node)
+      history.on_file_select(prev_files[#prev_files].data)
+    end
+  end
+
+  if prev_commit:is_expanded() then
+    select_last_file()
+  elseif history.load_commit_files then
+    history.load_commit_files(prev_commit, select_last_file)
+  end
 end
 
 -- Get all commit nodes from tree (for navigation in single-file mode)
