@@ -99,6 +99,10 @@ local function show_single_file(tabpage, opts)
     close_win = nil
   end
 
+  if not keep_win or not vim.api.nvim_win_is_valid(keep_win) then
+    keep_win = helpers.open_pane_from_panel(tabpage, session)
+  end
+
   -- Load the file into the kept window BEFORE closing the other one. Virtual
   -- buffers (from load_virtual_file) carry `bufhidden = "wipe"` so they get
   -- wiped as soon as they have no window; closing close_win first would leave

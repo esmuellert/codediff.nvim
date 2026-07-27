@@ -11,6 +11,7 @@ local tree_module = require("codediff.ui.explorer.tree")
 local keymaps_module = require("codediff.ui.explorer.keymaps")
 local refresh_module = require("codediff.ui.explorer.refresh")
 local welcome = require("codediff.ui.welcome")
+local view_helpers = require("codediff.ui.view.helpers")
 
 local function should_show_welcome(explorer)
   if not explorer or not explorer.git_root or explorer.dir1 or explorer.dir2 then
@@ -105,6 +106,9 @@ end
 --- @param group string "staged" | "unstaged" | "conflicts"
 --- @return boolean
 local function already_showing(session, explorer, file_path, abs_path, group)
+  if not view_helpers.has_visible_panes(session) then
+    return false
+  end
   local same_file = (session.modified and session.modified.absolute == abs_path) or (session.original and session.original.absolute == abs_path)
   if not same_file then
     return false
@@ -311,6 +315,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
 
       local session = lifecycle.get_session(tabpage)
       local showing_already = session
+        and view_helpers.has_visible_panes(session)
         and session.original
         and session.modified
         and session.original.absolute == original.absolute

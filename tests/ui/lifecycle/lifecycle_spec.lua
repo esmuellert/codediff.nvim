@@ -5,6 +5,122 @@ local lifecycle = require("codediff.ui.lifecycle")
 local highlights = require("codediff.ui.highlights")
 local diff = require('codediff.core.diff')
 
+describe("Automatic pane cleanup", function()
+  local function create_session(with_panel, layout)
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local original_win = vim.api.nvim_get_current_win()
+    local original_buf = vim.api.nvim_create_buf(false, true)
+    local modified_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(original_win, original_buf)
+    vim.cmd("vsplit")
+    local modified_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(modified_win, modified_buf)
+    lifecycle.create_session(tabpage, {
+      original = "original.txt",
+      modified = "modified.txt",
+      panel = with_panel and { name = "explorer" } or nil,
+    }, {
+      original_bufnr = original_buf,
+      modified_bufnr = modified_buf,
+      original_win = original_win,
+      modified_win = modified_win,
+      lines_diff = { changes = {}, moves = {} },
+    })
+    lifecycle.update_layout(tabpage, layout or "side-by-side")
+    local session = lifecycle.get_session(tabpage)
+    if with_panel then
+      vim.cmd("vsplit")
+      local panel_buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_win_set_buf(0, panel_buf)
+      lifecycle.set_panel_view(tabpage, {
+        winid = vim.api.nvim_get_current_win(),
+        bufnr = panel_buf,
+        on_file_select = function() end,
+      })
+    end
+    return tabpage, session
+  end
+
+  before_each(function()
+    lifecycle.setup()
+  end)
+
+  after_each(function()
+    lifecycle.cleanup_all()
+    vim.cmd("tabnew")
+    vim.cmd("tabonly!")
+    vim.wait(20)
+  end)
+
+  it("counts the owning tab when WinClosed runs after a tab switch", function()
+    local owner, session = create_session(false)
+    local other, other_session = create_session(false)
+    vim.api.nvim_set_current_tabpage(owner)
+    vim.api.nvim_win_close(session.original_win, false)
+    vim.api.nvim_set_current_tabpage(other)
+    assert.is_true(vim.wait(1000, function()
+      return lifecycle.get_session(owner) == nil
+    end, 10), "A different tab's panes must not prevent cleanup")
+    assert.equals(other_session, lifecycle.get_session(other))
+  end)
+
+  it("keeps a panel session when WinClosed runs in another tab", function()
+    local tabpage, session = create_session(true)
+    vim.api.nvim_win_close(session.original_win, false)
+    vim.api.nvim_win_close(session.modified_win, false)
+    vim.cmd("tabnew")
+    vim.wait(100)
+    assert.equals(session, lifecycle.get_session(tabpage))
+    vim.api.nvim_set_current_tabpage(tabpage)
+    vim.api.nvim_exec_autocmds("BufEnter", {})
+    vim.wait(100)
+    assert.equals(session, lifecycle.get_session(tabpage))
+  end)
+
+  for _, unusable in ipairs({ "hidden", "closed", "replaced", "no callback" }) do
+    it("cleans up when the panel is " .. unusable, function()
+      local tabpage, session = create_session(true)
+      local panel = session.panel.view
+      if unusable == "hidden" then
+        panel.is_hidden = true
+      elseif unusable == "closed" then
+        vim.api.nvim_win_close(panel.winid, false)
+      elseif unusable == "replaced" then
+        vim.api.nvim_win_set_buf(panel.winid, vim.api.nvim_create_buf(false, true))
+      else
+        panel.on_file_select = nil
+      end
+      vim.api.nvim_win_close(session.original_win, false)
+      assert.is_true(vim.wait(1000, function()
+        return lifecycle.get_session(tabpage) == nil
+      end, 10))
+    end)
+  end
+
+  it("still cleans up an inline session with a visible panel", function()
+    local tabpage, session = create_session(true, "inline")
+    vim.api.nvim_win_close(session.original_win, false)
+    vim.api.nvim_win_close(session.modified_win, false)
+    assert.is_true(vim.wait(1000, function()
+      return lifecycle.get_session(tabpage) == nil
+    end, 10))
+  end)
+
+  it("still cleans up a merge session when only its result remains", function()
+    local tabpage, session = create_session(true)
+    vim.cmd("split")
+    local result_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(0, result_buf)
+    lifecycle.set_result(tabpage, result_buf, vim.api.nvim_get_current_win())
+    vim.api.nvim_win_close(session.original_win, false)
+    vim.api.nvim_win_close(session.modified_win, false)
+    assert.is_true(vim.wait(1000, function()
+      return lifecycle.get_session(tabpage) == nil
+    end, 10))
+  end)
+end)
+
 describe("Render Lifecycle", function()
   before_each(function()
     highlights.setup()

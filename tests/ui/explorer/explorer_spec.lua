@@ -321,7 +321,178 @@ describe("Explorer Mode", function()
     assert.is_true(has_explorer, "Should have explorer window")
   end)
 
+  it("Recreates manually closed diff windows when another file is selected", function()
+    local lifecycle = require("codediff.ui.lifecycle")
+    vim.wait(200)
+    lifecycle.cleanup_all()
+
+    vim.fn.writefile({ "modified nested" }, temp_dir .. "/nested/deep.txt")
+    vim.cmd("edit " .. temp_dir .. "/file1.txt")
+    vim.cmd("CodeDiff")
+
+    local tabpage
+    local session
+    local explorer
+    local ready = vim.wait(6000, function()
+      for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
+        local candidate = lifecycle.get_session(tp)
+        local candidate_explorer = lifecycle.get_panel_view(tp)
+        if
+          candidate_explorer
+          and candidate_explorer.current_file_path ~= nil
+          and candidate.original_win
+          and candidate.modified_win
+          and vim.api.nvim_win_is_valid(candidate.original_win)
+          and vim.api.nvim_win_is_valid(candidate.modified_win)
+        then
+          tabpage = tp
+          session = candidate
+          explorer = candidate_explorer
+          return true
+        end
+      end
+      return false
+    end, 20)
+    assert.is_true(ready, "Explorer diff should be ready")
+
+    local target_line
+    local target_path
+    for line = 1, vim.api.nvim_buf_line_count(explorer.bufnr) do
+      local node = explorer.tree:get_node(line)
+      if node and node.data and node.data.path and node.data.path ~= explorer.current_file_path and node.data.status == "M" then
+        target_line = line
+        target_path = node.data.path
+        break
+      end
+    end
+    assert.is_not_nil(target_line, "Should find another modified file")
+
+    local closed_win = session.modified_win
+    vim.api.nvim_set_current_win(closed_win)
+    vim.cmd("close")
+    vim.wait(200)
+
+    assert.is_false(vim.api.nvim_win_is_valid(closed_win), "Modified window should be closed")
+    assert.is_not_nil(lifecycle.get_session(tabpage), "Explorer session should survive one closed diff window")
+    assert.is_true(vim.api.nvim_win_is_valid(explorer.winid), "Explorer window should remain open")
+
+    vim.api.nvim_set_current_win(explorer.winid)
+    vim.api.nvim_win_set_cursor(explorer.winid, { target_line, 0 })
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "tx", false)
+
+    local repaired = vim.wait(6000, function()
+      session = lifecycle.get_session(tabpage)
+      if
+        not session
+        or not session.original_win
+        or not session.modified_win
+        or not vim.api.nvim_win_is_valid(session.original_win)
+        or not vim.api.nvim_win_is_valid(session.modified_win)
+      then
+        return false
+      end
+      return session.modified.relative == target_path
+    end, 20)
+
+    assert.is_true(repaired, "Selecting another file should recreate both diff windows")
+    assert.is_true(vim.api.nvim_win_is_valid(explorer.winid), "Explorer should be preserved after repair")
+    assert.equals(3, #vim.api.nvim_tabpage_list_wins(tabpage), "Explorer and two diff windows should be open")
+
+    local next_line
+    local next_path
+    for line = 1, vim.api.nvim_buf_line_count(explorer.bufnr) do
+      local node = explorer.tree:get_node(line)
+      if node and node.data and node.data.path and node.data.path ~= explorer.current_file_path and node.data.status == "M" then
+        next_line = line
+        next_path = node.data.path
+        break
+      end
+    end
+    assert.is_not_nil(next_line, "Should find a file to select after both panes close")
+
+    local closed_original = session.original_win
+    local closed_modified = session.modified_win
+    vim.api.nvim_win_close(closed_original, false)
+    vim.api.nvim_win_close(closed_modified, false)
+    vim.wait(200)
+
+    assert.is_false(vim.api.nvim_win_is_valid(closed_original), "Original window should be closed")
+    assert.is_false(vim.api.nvim_win_is_valid(closed_modified), "Modified window should be closed")
+    assert.is_not_nil(lifecycle.get_session(tabpage), "Explorer session should survive both closed diff windows")
+    assert.is_true(vim.api.nvim_win_is_valid(explorer.winid), "Explorer should be the remaining window")
+
+    vim.api.nvim_set_current_win(explorer.winid)
+    vim.api.nvim_win_set_cursor(explorer.winid, { next_line, 0 })
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "tx", false)
+
+    local both_repaired = vim.wait(6000, function()
+      session = lifecycle.get_session(tabpage)
+      if
+        not session
+        or not session.original_win
+        or not session.modified_win
+        or not vim.api.nvim_win_is_valid(session.original_win)
+        or not vim.api.nvim_win_is_valid(session.modified_win)
+      then
+        return false
+      end
+      return session.modified.relative == next_path
+    end, 20)
+
+    assert.is_true(both_repaired, "Selecting another file should recreate both closed diff windows")
+    assert.is_true(vim.api.nvim_win_is_valid(explorer.winid), "Explorer should remain open after both panes are repaired")
+    assert.equals(3, #vim.api.nvim_tabpage_list_wins(tabpage), "Explorer and both recreated diff windows should be open")
+  end)
+
   -- Test 4: Window widths are properly distributed
+  for _, closed_side in ipairs({ "original", "modified", "both" }) do
+    it("Reopens the same file after closing " .. closed_side .. " panes", function()
+      local explorer, session = open_initial_explorer(temp_dir, "list")
+      assert.is_true(h.wait_for_diff_ready())
+      if closed_side ~= "modified" then
+        vim.api.nvim_win_close(session.original_win, false)
+      end
+      if closed_side ~= "original" then
+        vim.api.nvim_win_close(session.modified_win, false)
+      end
+      vim.wait(100)
+
+      explorer.on_file_select(vim.deepcopy(explorer.current_selection))
+      assert.is_true(vim.wait(2000, function()
+        return session.original_win and vim.api.nvim_win_is_valid(session.original_win)
+          and session.modified_win and vim.api.nvim_win_is_valid(session.modified_win)
+      end, 10), "Selecting the same file must restore its panes")
+      assert.is_true(h.wait_for_diff_ready())
+      assert.equals(3, #vim.api.nvim_tabpage_list_wins(explorer.tabpage))
+    end)
+  end
+
+  for _, target in ipairs({
+    { path = "file3.txt", status = "??", group = "unstaged", side = "modified", content = "untracked" },
+    { path = "file2.txt", status = "A", group = "staged", side = "modified", content = "new file" },
+    { path = "nested/deep.txt", status = "D", group = "unstaged", side = "original", content = "original nested" },
+  }) do
+    it("Opens a " .. target.status .. " file after both panes close", function()
+      local explorer, session = open_initial_explorer(temp_dir, "list")
+      assert.is_true(h.wait_for_diff_ready())
+      if target.status == "D" then
+        vim.fn.delete(temp_dir .. "/" .. target.path)
+      end
+      vim.api.nvim_win_close(session.original_win, false)
+      vim.api.nvim_win_close(session.modified_win, false)
+      vim.wait(100)
+
+      explorer.on_file_select(target)
+      assert.is_true(vim.wait(2000, function()
+        local win = session[target.side .. "_win"]
+        return win and vim.api.nvim_win_is_valid(win)
+          and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, 1, false)[1] == target.content
+      end, 10), "Selection must restore a pane with the file content")
+      assert.equals(2, #vim.api.nvim_tabpage_list_wins(explorer.tabpage))
+      assert.equals(target.side, session.single_side)
+    end)
+  end
+
   it("Distributes window widths correctly", function()
     vim.o.columns = 160  -- Set known terminal width
     
@@ -678,4 +849,3 @@ describe("Explorer Mode", function()
     end
   end)
 end)
-

@@ -318,7 +318,13 @@ function M.create(commits, git_root, tabpage, width, opts)
     -- Check if already displaying same file
     local target_hash = base_revision or (commit_hash .. "^")
     local session = lifecycle.get_session(tabpage)
-    if not opts.force and session and session.original_revision == target_hash and session.modified_revision == commit_hash then
+    if
+      not opts.force
+      and session
+      and require("codediff.ui.view.helpers").has_visible_panes(session)
+      and session.original_revision == target_hash
+      and session.modified_revision == commit_hash
+    then
       if (session.modified and session.modified.relative == file_path) or (session.original and session.original.relative == file_path) then
         return
       end
