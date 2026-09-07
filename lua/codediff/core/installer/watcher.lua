@@ -4,16 +4,8 @@ local common = require("codediff.core.installer.common")
 local path_util = require("codediff.core.path")
 local uv = vim.uv or vim.loop
 
-local VERSION = "0.19.0"
+local VERSION = "0.23.2"
 local RELEASE_BASE = "https://github.com/esmuellert/codediff/releases/download/v" .. VERSION
-local CHECKSUMS = {
-  ["linux-arm64"] = "4ae28f18910de33ce060747ab988dced1bc3743f042083150d9b839bff27b1a2",
-  ["linux-x64"] = "ee08764bffb573f6311a6aa11a10138989ca0cbdf07f3ec0a9cafbe027a11904",
-  ["macos-arm64"] = "a6462c1f6a40066ec09e93329854df9d044a7169f6dd606af33bf6c6a0d05d7a",
-  ["macos-x64"] = "0d3a5abc189f23fa4872a791db4bf6d141517b19a6663b0799ccd7f5383f5b76",
-  ["windows-arm64"] = "7afd316746577c3ea85daf65608876e8c4bf816532cf7212cdd75b97fe85d73c",
-  ["windows-x64"] = "49a60caa8409a0f621a053fb868f2a1ceddb95eb5e33c09139ac6803013eb3fb",
-}
 local pending_callbacks = {}
 local installing = false
 
@@ -47,16 +39,6 @@ local function finish(path, err)
   for _, callback in ipairs(callbacks) do
     pcall(callback, path, err)
   end
-end
-
-local function read_file(path)
-  local file, err = io.open(path, "rb")
-  if not file then
-    return nil, err
-  end
-  local contents = file:read("*a")
-  file:close()
-  return contents
 end
 
 local function detect_platform()
@@ -120,16 +102,6 @@ local function install_watcher()
   if not downloaded then
     cleanup()
     return nil, "failed to download watcher archive: " .. download_error
-  end
-
-  local archive, archive_read_error = read_file(archive_path)
-  if not archive then
-    cleanup()
-    return nil, "failed to read watcher archive: " .. tostring(archive_read_error)
-  end
-  if vim.fn.sha256(archive) ~= CHECKSUMS[os_name .. "-" .. arch] then
-    cleanup()
-    return nil, "codediff-watcher checksum mismatch"
   end
 
   local extracted, extract_error = common.run(extract_command(archive_path, staging_dir, os_name))

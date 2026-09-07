@@ -18,10 +18,10 @@ describe("watcher JSONL protocol", function()
     })
 
     decoder.feed('{"type":"rea')
-    decoder.feed('dy","protocol":1,"binary_version":"0.19.0"}\r\n{"type":"refresh","worktree":true,')
+    decoder.feed('dy","protocol":1,"binary_version":"0.23.2"}\r\n{"type":"refresh","worktree":true,')
     decoder.feed('"index":false,"head":false,"refs":false}\n')
 
-    assert.equals("0.19.0", ready.binary_version)
+    assert.equals("0.23.2", ready.binary_version)
     assert.equals(1, #refreshes)
     assert.is_true(refreshes[1].worktree)
     assert.equals(0, #errors)
@@ -50,7 +50,7 @@ describe("watcher JSONL protocol", function()
       end,
     })
 
-    decoder.feed('{"type":"ready","protocol":1,"binary_version":"0.19.0"}\n')
+    decoder.feed('{"type":"ready","protocol":1,"binary_version":"0.23.2"}\n')
     decoder.feed('{"type":"refresh","worktree":1,"index":false,"head":false,"refs":false}\n')
 
     assert.equals("watcher refresh fields must be boolean", err)
