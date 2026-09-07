@@ -34,7 +34,7 @@ describe("watcher installation location", function()
   end)
 
   it("uses the versioned executable from the plugin root", function()
-    local expected = plugin_root .. "/codediff-watcher_0.19.0" .. extension
+    local expected = plugin_root .. "/codediff-watcher_0.23.2" .. extension
     vim.fn.writefile({ "stub" }, expected)
     local resolved
 
@@ -47,7 +47,7 @@ describe("watcher installation location", function()
 
   it("prefers an unversioned manual build in the plugin root", function()
     local manual = plugin_root .. "/codediff-watcher" .. extension
-    local versioned = plugin_root .. "/codediff-watcher_0.19.0" .. extension
+    local versioned = plugin_root .. "/codediff-watcher_0.23.2" .. extension
     vim.fn.writefile({ "manual" }, manual)
     vim.fn.writefile({ "downloaded" }, versioned)
     local resolved
