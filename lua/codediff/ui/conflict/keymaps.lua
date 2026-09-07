@@ -88,6 +88,15 @@ function M.setup_keymaps(tabpage)
             extra = { desc = action.desc, expr = true },
           })
         end
+      else
+        lifecycle.set_buf_keymap(tabpage, bufnr, "n", "u", function()
+          if not session.result_bufnr or not vim.api.nvim_buf_is_valid(session.result_bufnr) then
+            return
+          end
+          vim.api.nvim_buf_call(session.result_bufnr, function()
+            vim.cmd("undo")
+          end)
+        end, vim.tbl_extend("force", base_opts, { desc = "Undo previous result edit" }))
       end
     end
   end

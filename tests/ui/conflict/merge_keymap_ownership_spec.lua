@@ -101,6 +101,26 @@ describe("merge view keymap ownership", function()
     assert.equals("Next conflict [buf]", effective(session.original_bufnr, "]x"), "conflict navigation must be bound on the diff panes")
   end)
 
+  it("undoes result changes with `u` from non-result conflict panes", function()
+    local session = open_merge_view()
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local conflict = require("codediff.ui.conflict")
+
+    local before = vim.api.nvim_buf_get_lines(session.result_bufnr, 0, -1, false)
+
+    vim.api.nvim_set_current_buf(session.original_bufnr)
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    assert.is_true(conflict.accept_incoming(tabpage), "accept action should modify the result buffer")
+
+    local after_accept = vim.api.nvim_buf_get_lines(session.result_bufnr, 0, -1, false)
+    assert.not_same(before, after_accept, "accept action should change result content")
+
+    vim.api.nvim_feedkeys("u", "x", false)
+
+    local after_undo = vim.api.nvim_buf_get_lines(session.result_bufnr, 0, -1, false)
+    assert.are.same(before, after_undo, "`u` from a non-result pane should undo result buffer changes")
+  end)
+
   it("claims do and dp again in an ordinary diff", function()
     -- The counterpart: outside a merge, do/dp are codediff's. Without this a
     -- change that simply never binds them would pass the assertions above.
