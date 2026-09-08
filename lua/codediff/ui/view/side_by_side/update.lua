@@ -129,8 +129,17 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   if not old_original_buf or not old_modified_buf then
     return false
   end
-  if not original_win and not modified_win then
-    return false
+  local original_win_valid = original_win and vim.api.nvim_win_is_valid(original_win)
+  local modified_win_valid = modified_win and vim.api.nvim_win_is_valid(modified_win)
+
+  -- Rebuild the first pane from the panel when both diff windows are gone.
+  if not original_win_valid and not modified_win_valid then
+    original_win = helpers.open_pane_from_panel(tabpage, session)
+    if not original_win then
+      return false
+    end
+    original_win_valid = true
+    session.original_win = original_win
   end
 
   -- Disable auto-refresh temporarily
@@ -155,19 +164,19 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     lifecycle.set_result(tabpage, nil, nil)
   end
 
-  -- Restore second window if returning from single-pane mode
-  if session.single_pane then
+  -- Restore the second pane after a single-file view or a manual close.
+  if session.single_pane or not original_win_valid or not modified_win_valid then
     local split_cmd = config.options.diff.original_position == "right" and "leftabove vsplit" or "rightbelow vsplit"
 
-    if not original_win or not vim.api.nvim_win_is_valid(original_win) then
-      -- Original was closed (untracked file) — recreate it to the left of modified
+    if not original_win_valid then
+      -- Recreate original on the configured side of modified.
       vim.api.nvim_set_current_win(modified_win)
       vim.cmd(config.options.diff.original_position == "right" and "rightbelow vsplit" or "leftabove vsplit")
       original_win = vim.api.nvim_get_current_win()
       vim.w[original_win].codediff_restore = 1
       session.original_win = original_win
-    elseif not modified_win or not vim.api.nvim_win_is_valid(modified_win) then
-      -- Modified was closed (deleted file) — recreate it to the right of original
+    elseif not modified_win_valid then
+      -- Recreate modified on the configured side of original.
       vim.api.nvim_set_current_win(original_win)
       vim.cmd(split_cmd)
       modified_win = vim.api.nvim_get_current_win()

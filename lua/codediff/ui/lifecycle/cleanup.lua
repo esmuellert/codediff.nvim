@@ -107,11 +107,14 @@ local function cleanup_diff(tabpage)
   active_diffs[tabpage] = nil
 end
 
--- Count windows in current tabpage that have diff markers
-local function count_diff_windows()
+-- Count windows in a tabpage that have diff markers
+local function count_diff_windows(tabpage)
+  if not tabpage or not vim.api.nvim_tabpage_is_valid(tabpage) then
+    return 0
+  end
+
   local count = 0
-  for i = 1, vim.fn.winnr("$") do
-    local win = vim.fn.win_getid(i)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tabpage)) do
     if vim.w[win].codediff_restore then
       count = count + 1
     end
@@ -122,6 +125,44 @@ end
 -- Check if we should trigger cleanup for a window
 local function should_cleanup(winid)
   return vim.w[winid].codediff_restore and vim.api.nvim_win_is_valid(winid)
+end
+
+local function has_usable_panel(tabpage, diff)
+  if not diff.panel or (diff.panel.name ~= "explorer" and diff.panel.name ~= "history") then
+    return false
+  end
+
+  local panel = diff.panel.view
+  if
+    not panel
+    or panel.is_hidden
+    or type(panel.on_file_select) ~= "function"
+    or not panel.winid
+    or not vim.api.nvim_win_is_valid(panel.winid)
+    or not panel.bufnr
+    or not vim.api.nvim_buf_is_valid(panel.bufnr)
+  then
+    return false
+  end
+
+  return vim.api.nvim_win_get_tabpage(panel.winid) == tabpage and vim.api.nvim_win_get_buf(panel.winid) == panel.bufnr
+end
+
+local function cleanup_threshold(tabpage, diff)
+  local has_result = diff.result_win and vim.api.nvim_win_is_valid(diff.result_win)
+
+  -- A visible panel is still an entry point into a side-by-side session. Keep
+  -- its state even with no diff panes so the next selection can rebuild them.
+  if diff.layout ~= "inline" and not has_result and has_usable_panel(tabpage, diff) then
+    return -1
+  end
+
+  local is_single_window = diff.single_pane == true or diff.layout == "inline"
+  if is_single_window then
+    return 0
+  end
+
+  return 1
 end
 
 -- Setup autocmds for automatic cleanup
@@ -141,11 +182,8 @@ function M.setup_autocmds()
         local active_diffs = session.get_active_diffs()
         for tabpage, diff in pairs(active_diffs) do
           if diff.original_win == closed_win or diff.modified_win == closed_win then
-            -- single_pane/inline mode: we expect only 1 diff window
-            local is_single_window = diff.single_pane == true or diff.layout == "inline"
-            local diff_win_count = count_diff_windows()
-            local threshold = is_single_window and 0 or 1
-            if diff_win_count <= threshold then
+            local diff_win_count = count_diff_windows(tabpage)
+            if diff_win_count <= cleanup_threshold(tabpage, diff) then
               cleanup_diff(tabpage)
             end
             break
@@ -194,10 +232,8 @@ function M.setup_autocmds()
         end
         local diff = session.get_active_diffs()[tabpage]
         if diff then
-          local diff_win_count = count_diff_windows()
-          local is_single_window = diff.single_pane == true or diff.layout == "inline"
-          local threshold = is_single_window and 0 or 1
-          if diff_win_count <= threshold then
+          local diff_win_count = count_diff_windows(tabpage)
+          if diff_win_count <= cleanup_threshold(tabpage, diff) then
             cleanup_diff(tabpage)
           end
         end

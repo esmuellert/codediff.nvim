@@ -1,8 +1,56 @@
--- Buffer preparation helpers for diff view
+-- Buffer and window helpers for diff views
 local M = {}
 
 local virtual_file = require("codediff.core.virtual_file")
 local path = require("codediff.core.path")
+
+--- True when every pane needed by the current view is still open.
+---@param session table
+---@return boolean
+function M.has_visible_panes(session)
+  local original = session.original_win and vim.api.nvim_win_is_valid(session.original_win) or false
+  local modified = session.modified_win and vim.api.nvim_win_is_valid(session.modified_win) or false
+  if session.single_pane or session.layout == "inline" then
+    return original or modified
+  end
+  return original and modified
+end
+
+--- Open the first content pane when only an explorer or history panel remains.
+---@param tabpage number
+---@param session table
+---@return number? win
+function M.open_pane_from_panel(tabpage, session)
+  local panel = session.panel
+  local view = panel and panel.view
+  local win = view and view.winid
+  if not win or view.is_hidden or not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_tabpage(win) ~= tabpage or vim.api.nvim_win_get_buf(win) ~= view.bufnr then
+    return nil
+  end
+
+  local config = require("codediff.config")
+  local panel_config = config.options[panel.name] or {}
+  local position = panel_config.position or (panel.name == "history" and "bottom" or "left")
+  vim.api.nvim_set_current_win(win)
+  local scratch = vim.api.nvim_create_buf(false, true)
+  vim.bo[scratch].buftype = "nofile"
+  vim.bo[scratch].bufhidden = "wipe"
+
+  local ok, content_win = pcall(vim.api.nvim_open_win, scratch, true, {
+    split = position == "bottom" and "above" or "right",
+    win = -1,
+  })
+  if not ok then
+    pcall(vim.api.nvim_buf_delete, scratch, { force = true })
+    return nil
+  end
+
+  vim.w[content_win].codediff_restore = 1
+  vim.wo[content_win].cursorline = true
+  vim.wo[content_win].wrap = false
+  vim.wo[content_win].list = false
+  return content_win
+end
 
 --- True when the panel opens before any file is chosen, so the panes start
 --- empty and the panel fills them on first selection.

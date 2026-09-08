@@ -32,6 +32,57 @@ describe("History layout", function()
     end
   end)
 
+  for _, position in ipairs({ "left", "bottom" }) do
+    for _, original_position in ipairs({ "left", "right" }) do
+      it("restores panes with history " .. position .. " and original " .. original_position, function()
+        require("codediff").setup({
+          diff = { layout = "side-by-side", original_position = original_position },
+          history = { position = position },
+        })
+        vim.cmd("CodeDiff history")
+        local lifecycle = require("codediff.ui.lifecycle")
+        local tabpage, session, history
+        assert.is_true(vim.wait(5000, function()
+          tabpage = vim.api.nvim_get_current_tabpage()
+          session = lifecycle.get_session(tabpage)
+          history = lifecycle.get_panel_view(tabpage)
+          return session and history and history.current_selection and session.stored_diff_result
+            and session.original_revision ~= nil
+        end, 10))
+        local selection = vim.deepcopy(history.current_selection)
+        for _, closed_side in ipairs({ "original", "modified", "both" }) do
+          if closed_side ~= "modified" then
+            vim.api.nvim_win_close(session.original_win, false)
+          end
+          if closed_side ~= "original" then
+            vim.api.nvim_win_close(session.modified_win, false)
+          end
+          vim.wait(100)
+          assert.equals(session, lifecycle.get_session(tabpage))
+          vim.api.nvim_set_current_win(history.winid)
+          history.on_file_select(selection)
+          assert.is_true(vim.wait(2000, function()
+            return session.original_win and vim.api.nvim_win_is_valid(session.original_win)
+              and session.modified_win and vim.api.nvim_win_is_valid(session.modified_win)
+          end, 10), "History selection must restore the panes")
+          assert.is_true(h.wait_for_diff_ready())
+          assert.same({ "version 2" }, vim.api.nvim_buf_get_lines(session.original_bufnr, 0, -1, false))
+          assert.same({ "version 3" }, vim.api.nvim_buf_get_lines(session.modified_bufnr, 0, -1, false))
+          assert.equals(3, #vim.api.nvim_tabpage_list_wins(tabpage))
+          local orig_pos = vim.api.nvim_win_get_position(session.original_win)
+          local mod_pos = vim.api.nvim_win_get_position(session.modified_win)
+          local panel_pos = vim.api.nvim_win_get_position(history.winid)
+          assert.equals(original_position == "left", orig_pos[2] < mod_pos[2])
+          if position == "bottom" then
+            assert.is_true(panel_pos[1] > orig_pos[1] and panel_pos[1] > mod_pos[1])
+          else
+            assert.is_true(panel_pos[2] < orig_pos[2] and panel_pos[2] < mod_pos[2])
+          end
+        end
+      end)
+    end
+  end
+
   it("opens a history panel at the bottom with commit content", function()
     vim.cmd("CodeDiff history")
 
