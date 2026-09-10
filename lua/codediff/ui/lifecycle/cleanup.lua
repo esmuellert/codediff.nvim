@@ -78,15 +78,18 @@ local function cleanup_diff(tabpage)
   -- Clear window variables if windows still exist
   if diff.original_win and vim.api.nvim_win_is_valid(diff.original_win) then
     welcome_window.apply_normal(diff.original_win)
+    vim.wo[diff.original_win].scrollbind = false
     vim.w[diff.original_win].codediff_restore = nil
   end
   if diff.modified_win and vim.api.nvim_win_is_valid(diff.modified_win) then
     welcome_window.apply_normal(diff.modified_win)
+    vim.wo[diff.modified_win].scrollbind = false
     vim.w[diff.modified_win].codediff_restore = nil
   end
 
   -- Clear result window variable if exists (conflict mode)
   if diff.result_win and vim.api.nvim_win_is_valid(diff.result_win) then
+    vim.wo[diff.result_win].scrollbind = false
     vim.w[diff.result_win].codediff_restore = nil
   end
 
@@ -97,13 +100,16 @@ local function cleanup_diff(tabpage)
   pcall(vim.api.nvim_del_augroup_by_name, "codediff_lifecycle_tab_" .. tabpage)
   pcall(vim.api.nvim_del_augroup_by_name, "codediff_working_sync_" .. tabpage)
 
-  -- Tear down the scroll-sync group for this tab
-  pcall(function()
-    require("codediff.ui.scroll").teardown(tabpage)
-  end)
-
   -- Remove from tracking
   active_diffs[tabpage] = nil
+end
+
+local function owns_window(diff, winid)
+  if diff.original_win == winid or diff.modified_win == winid or diff.result_win == winid then
+    return true
+  end
+  local panel_view = diff.panel and diff.panel.view
+  return panel_view and panel_view.winid == winid or false
 end
 
 -- Count windows in current tabpage that have diff markers
@@ -125,6 +131,24 @@ end
 
 -- Setup autocmds for automatic cleanup
 function M.setup_autocmds()
+  -- `scrollbind` is copied by :split. Clear it from windows that are not
+  -- owned by CodeDiff before a duplicated pane can mirror the diff.
+  vim.api.nvim_create_autocmd("WinNew", {
+    group = augroup,
+    callback = function()
+      local tabpage = vim.api.nvim_get_current_tabpage()
+      local diff = session.get_active_diffs()[tabpage]
+      if not diff then
+        return
+      end
+
+      local new_win = vim.api.nvim_get_current_win()
+      if vim.api.nvim_win_is_valid(new_win) and not owns_window(diff, new_win) and vim.wo[new_win].scrollbind then
+        vim.wo[new_win].scrollbind = false
+      end
+    end,
+  })
+
   -- When a window is closed, check if we should cleanup the diff
   vim.api.nvim_create_autocmd("WinClosed", {
     group = augroup,

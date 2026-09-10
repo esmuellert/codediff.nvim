@@ -103,9 +103,12 @@ local function do_diff_update(bufnr, skip_watcher_check)
     -- Refresh compact mode folds if active
     require("codediff.ui.view.compact").refresh(tabpage)
 
-    -- Check if this is an inline mode session
+    -- Check if the session still owns the tab after the asynchronous diff.
     local session = lifecycle.get_session(tabpage)
-    if session and session.layout == "inline" then
+    if not session then
+      return
+    end
+    if session.layout == "inline" then
       local inline_mod = require("codediff.ui.inline")
       inline_mod.render_inline_diff(modified_bufnr, lines_diff, original_lines, modified_lines)
       return
@@ -114,36 +117,54 @@ local function do_diff_update(bufnr, skip_watcher_check)
     -- Side-by-side mode: Update decorations on both buffers
     core.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, lines_diff)
 
-    -- Re-align scroll-sync after filler changes so all panes stay aligned even
-    -- if fillers were added/removed. The structural sync preserves each pane's
-    -- scroll position (no reset-to-top / view save-restore dance needed).
-    local original_win, modified_win, result_win = nil, nil, nil
-    local _, stored_result_win = lifecycle.get_result(tabpage)
+    -- Re-sync scrollbind after filler changes. Use the session's windows rather
+    -- than searching by buffer, because a duplicated pane may show the same
+    -- buffer without belonging to the diff.
+    local original_win = session.original_win
+    local modified_win = session.modified_win
+    local _, result_win = lifecycle.get_result(tabpage)
 
-    for _, win in ipairs(vim.api.nvim_list_wins()) do
-      local buf = vim.api.nvim_win_get_buf(win)
-      if buf == original_bufnr then
-        original_win = win
-      elseif buf == modified_bufnr then
-        modified_win = win
-      end
-    end
-
-    -- Check if result window is valid
-    if stored_result_win and vim.api.nvim_win_is_valid(stored_result_win) then
-      result_win = stored_result_win
-    end
-
-    if original_win and modified_win then
+    if original_win and modified_win and original_win ~= modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
       local current_win = vim.api.nvim_get_current_win()
-      local scroll = require("codediff.ui.scroll")
-      local wins = { original_win, modified_win }
-      if result_win then
-        wins[#wins + 1] = result_win
+      if current_win == original_win or current_win == modified_win or current_win == result_win then
+        local other_win = current_win == original_win and modified_win or original_win
+
+        local saved_view = vim.fn.winsaveview()
+        vim.api.nvim_set_current_win(other_win)
+        local other_saved_view = vim.fn.winsaveview()
+        local result_saved_view
+        if result_win then
+          vim.api.nvim_set_current_win(result_win)
+          result_saved_view = vim.fn.winsaveview()
+        end
+        vim.api.nvim_set_current_win(current_win)
+
+        vim.api.nvim_win_set_cursor(original_win, { 1, 0 })
+        vim.api.nvim_win_set_cursor(modified_win, { 1, 0 })
+        if result_win then
+          vim.api.nvim_win_set_cursor(result_win, { 1, 0 })
+        end
+
+        vim.wo[original_win].scrollbind = false
+        vim.wo[modified_win].scrollbind = false
+        if result_win then
+          vim.wo[result_win].scrollbind = false
+        end
+        vim.wo[original_win].scrollbind = true
+        vim.wo[modified_win].scrollbind = true
+        if result_win then
+          vim.wo[result_win].scrollbind = true
+        end
+
+        vim.api.nvim_set_current_win(other_win)
+        vim.fn.winrestview(other_saved_view)
+        if result_win and result_saved_view then
+          vim.api.nvim_set_current_win(result_win)
+          vim.fn.winrestview(result_saved_view)
+        end
+        vim.api.nvim_set_current_win(current_win)
+        vim.fn.winrestview(saved_view)
       end
-      scroll.bind(tabpage, wins)
-      local leader = (current_win == original_win or current_win == modified_win or current_win == result_win) and current_win or modified_win
-      scroll.refresh(tabpage, leader)
     end
   end)
 end

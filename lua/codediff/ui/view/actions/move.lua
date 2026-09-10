@@ -4,6 +4,7 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
+local render = require("codediff.ui.view.render")
 
 function M.align_move(ctx)
   local session = lifecycle.get_session(ctx.tabpage)
@@ -61,9 +62,9 @@ function M.align_move(ctx)
   end)
   local saved_scrolloff_other = vim.wo[other_win].scrolloff
 
-  -- Pause structural scroll-sync while we impose the move alignment.
-  local scroll = require("codediff.ui.scroll")
-  scroll.pause(ctx.tabpage)
+  -- Disable native scrollbind while we impose the move alignment.
+  vim.wo[current_win].scrollbind = false
+  vim.wo[other_win].scrollbind = false
   vim.wo[other_win].scrolloff = 0
 
   -- Align using the annotation virt_line as anchor:
@@ -111,14 +112,26 @@ function M.align_move(ctx)
     if not vim.api.nvim_win_is_valid(current_win) or not vim.api.nvim_win_is_valid(other_win) then
       return
     end
-    -- Restore views first, then resume structural scroll-sync.
+    -- Restore views first, then re-establish native scrollbind.
     vim.api.nvim_win_call(other_win, function()
       vim.fn.winrestview(other_view)
     end)
     vim.api.nvim_win_call(current_win, function()
       vim.fn.winrestview(current_view)
     end)
-    scroll.resume(ctx.tabpage)
+
+    local session = lifecycle.get_session(ctx.tabpage)
+    local orig_win = session and session.original_win or current_win
+    local mod_win = session and session.modified_win or other_win
+    local orig_bufnr = session and session.original_bufnr or vim.api.nvim_win_get_buf(orig_win)
+    local mod_bufnr = session and session.modified_bufnr or vim.api.nvim_win_get_buf(mod_win)
+    local diff_result = session and session.stored_diff_result
+    local orig_cur = { current_view.lnum, current_view.col }
+    local mod_cur = { other_view.lnum, other_view.col }
+    if not is_on_original then
+      orig_cur, mod_cur = mod_cur, orig_cur
+    end
+    render.establish_scrollbind(orig_win, mod_win, orig_bufnr, mod_bufnr, diff_result, orig_cur, mod_cur)
   end
 
   -- Restore when cursor moves out of the moved block

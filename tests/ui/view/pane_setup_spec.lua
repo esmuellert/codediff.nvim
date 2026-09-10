@@ -76,8 +76,7 @@ describe("diff pane setup", function()
     local session = open_diff()
 
     for _, win in ipairs({ session.original_win, session.modified_win }) do
-      -- nowrap is load-bearing: the scroll-sync maps one buffer line to one
-      -- screen row, which wrapping breaks.
+      -- nowrap is load-bearing for native scrollbind alignment.
       assert.is_false(vim.wo[win].wrap, "diff panes must not wrap")
       assert.is_true(vim.wo[win].cursorline, "diff panes should show cursorline")
       assert.is_false(vim.wo[win].list, "diff panes should not show listchars")

@@ -96,6 +96,9 @@ describe("conflicted file in an inline tab", function()
     assert.is_not_nil(session.original_win, "OURS needs a window")
     assert.is_not_nil(session.modified_win, "THEIRS needs a window")
     assert.not_equal(session.original_win, session.modified_win, "the two sides must not share a window")
+    for _, win in ipairs({ session.original_win, session.modified_win, session.result_win }) do
+      assert.is_true(vim.wo[win].scrollbind, "all conflict panes should use native scrollbind")
+    end
 
     local ours = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(session.original_win), 0, -1, false)
     local theirs = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(session.modified_win), 0, -1, false)

@@ -42,19 +42,14 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
   -- Render merge view with alignment and filler lines
   local render_result = core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines)
 
-  -- Setup window options with structural scroll-sync (filler lines enable proper alignment)
+  -- Enable native scrollbind for the two conflict input panes.
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
     vim.wo[original_win].wrap = false
     vim.wo[modified_win].wrap = false
-
-    -- Reset scroll position and bind the two panes (the result pane, if any,
-    -- is added to the group later once it exists).
     vim.api.nvim_win_set_cursor(original_win, { 1, 0 })
     vim.api.nvim_win_set_cursor(modified_win, { 1, 0 })
-    local scroll = require("codediff.ui.scroll")
-    local tabpage = vim.api.nvim_win_get_tabpage(modified_win)
-    scroll.bind(tabpage, { original_win, modified_win })
-    scroll.resync(tabpage, modified_win)
+    vim.wo[original_win].scrollbind = true
+    vim.wo[modified_win].scrollbind = true
 
     -- Scroll to first change in either buffer
     if auto_scroll_to_first_hunk then
