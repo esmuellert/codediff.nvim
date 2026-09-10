@@ -38,6 +38,12 @@ local function cleanup_diff(tabpage)
   local auto_refresh = require("codediff.ui.auto_refresh")
   auto_refresh.disable(diff.original_bufnr)
   auto_refresh.disable(diff.modified_bufnr)
+  if diff.result_bufnr then
+    auto_refresh.disable_result(diff.result_bufnr)
+  end
+
+  -- Restore gutter options before deleting buffers can close or reuse windows.
+  require("codediff.ui.conflict").teardown_gutter(tabpage)
 
   -- Clear highlights from both buffers
   state.clear_buffer_highlights(diff.original_bufnr)
@@ -84,19 +90,12 @@ local function cleanup_diff(tabpage)
     vim.w[diff.result_win].codediff_restore = nil
   end
 
-  -- Clear result buffer signs (conflict mode)
-  if diff.result_bufnr and vim.api.nvim_buf_is_valid(diff.result_bufnr) then
-    local result_signs_ns = vim.api.nvim_create_namespace("codediff-result-signs")
-    vim.api.nvim_buf_clear_namespace(diff.result_bufnr, result_signs_ns, 0, -1)
-  end
-
   -- Clear conflict file tracking (buffers remain, just not tracked)
   diff.conflict_files = {}
 
   -- Clear tab-specific autocmd groups
   pcall(vim.api.nvim_del_augroup_by_name, "codediff_lifecycle_tab_" .. tabpage)
   pcall(vim.api.nvim_del_augroup_by_name, "codediff_working_sync_" .. tabpage)
-  pcall(vim.api.nvim_del_augroup_by_name, "CodeDiffConflictSigns_" .. tabpage)
 
   -- Tear down the scroll-sync group for this tab
   pcall(function()

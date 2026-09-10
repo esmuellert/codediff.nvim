@@ -4,7 +4,7 @@ local M = {}
 local lifecycle = require("codediff.ui.lifecycle")
 local auto_refresh = require("codediff.ui.auto_refresh")
 local tracking = require("codediff.ui.conflict.tracking")
-local signs = require("codediff.ui.conflict.signs")
+local gutter = require("codediff.ui.conflict.gutter")
 
 --- Apply text to result buffer at the conflict's range
 --- @param result_bufnr number Result buffer
@@ -105,7 +105,7 @@ function M.diffget_incoming(tabpage)
   end
 
   apply_to_result(result_bufnr, block, incoming_lines, base_lines)
-  signs.refresh_all_conflict_signs(session)
+  gutter.refresh(session)
   auto_refresh.refresh_result_now(result_bufnr)
   return true
 end
@@ -153,7 +153,7 @@ function M.diffget_current(tabpage)
   end
 
   apply_to_result(result_bufnr, block, current_lines, base_lines)
-  signs.refresh_all_conflict_signs(session)
+  gutter.refresh(session)
   auto_refresh.refresh_result_now(result_bufnr)
   return true
 end

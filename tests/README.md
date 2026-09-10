@@ -96,6 +96,39 @@ they opened files from, and a watcher left pointing at a deleted path prints
 | `CODEDIFF_TEST_TIMEOUT` | `300000` | Per-spec timeout in ms; guards against a hung spec stalling CI. |
 | `NO_COLOR` / `CODEDIFF_TEST_NO_COLOR` | unset | Disable ANSI colors. |
 
+## Screen-grid regressions
+
+`tests/framework/screen.lua` starts a separate `nvim --embed` and attaches an
+RPC UI. Assertions read actual `grid_line` cells and highlight colors, not
+extmark metadata or screen functions in the headless test process. It uses
+Neovim's bundled MessagePack and libuv, with no external dependencies.
+
+The conflict gutter has three automatically discovered specs:
+
+- `ui/conflict/gutter_grid_spec.lua`: hand-authored block shapes from
+  `fixtures/conflict_gutter.lua`, including empty/filler-only blocks, BOF/EOF,
+  partial scrolling, unrelated blank rows, multiple blocks and Result
+  projections. Checks both glyph cells and colors in all three panes under
+  each focus state. Fixtures go through the production conflict renderer;
+  expected rows do not call or duplicate the gutter calculator.
+- `ui/conflict/gutter_options_spec.lua`: compares ordinary columns against
+  Neovim's native rendering, including relative/hybrid numbers, folds, wrapped
+  rows and other signs; checks custom-option ownership and restoration.
+- `ui/conflict/gutter_lifecycle_spec.lua`: real Git merges, file/window/tab
+  transitions, resizing, accept/undo/redo/discard, manual Result edits and
+  teardown of stale callbacks and invalid sessions.
+
+Run these like any other spec, for example:
+
+```bash
+nvim --headless --noplugin -u tests/init.lua \
+  -c "lua require('tests.framework').run_and_exit('tests/ui/conflict/gutter_grid_spec.lua')"
+```
+
+Always close the embedded UI in `after_each`, including when an assertion
+fails. A grid failure reports the pane/focus context, display row, expected
+text and actual text. These are cell-level checks, not font or pixel snapshots.
+
 ## Test Philosophy
 
 Focus on **integration points** that C tests cannot validate:
@@ -107,4 +140,4 @@ Focus on **integration points** that C tests cannot validate:
 ## What's NOT Covered
 
 ❌ **Diff algorithm** - Validated by C tests in `c-diff-core/tests/` (3,490 lines)
-❌ **Visual correctness** - Manual testing required
+❌ **Other visual features and third-party UI integrations** - Manual testing unless covered by a dedicated grid spec

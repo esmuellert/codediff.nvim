@@ -58,7 +58,7 @@ describe("conflict signs", function()
   end)
 
   it("changes input and Result signs after accepting one side", function()
-    conflict.refresh_all_conflict_signs(session)
+    conflict.refresh(session)
     assert.equals("CodeDiffConflictSign", sign_highlight(session.original_bufnr, highlights.ns_conflict))
     assert.equals("CodeDiffConflictSign", sign_highlight(session.modified_bufnr, highlights.ns_conflict))
     assert.equals("CodeDiffConflictSign", sign_highlight(session.result_bufnr, tracking.result_signs_ns))
