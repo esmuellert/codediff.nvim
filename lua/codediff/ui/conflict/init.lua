@@ -4,7 +4,7 @@ local M = {}
 
 -- Import submodules
 local tracking = require("codediff.ui.conflict.tracking")
-local signs = require("codediff.ui.conflict.signs")
+local gutter = require("codediff.ui.conflict.gutter")
 local resolution = require("codediff.ui.conflict.resolution")
 local navigation = require("codediff.ui.conflict.navigation")
 local keymaps = require("codediff.ui.conflict.keymaps")
@@ -13,9 +13,12 @@ local keymaps = require("codediff.ui.conflict.keymaps")
 M.run_repeatable_action = tracking.run_repeatable_action
 M.initialize_tracking = tracking.initialize_tracking
 
--- Delegate to signs module
-M.refresh_all_conflict_signs = signs.refresh_all_conflict_signs
-M.setup_sign_refresh_autocmd = signs.setup_sign_refresh_autocmd
+-- Delegate to the conflict renderer
+M.refresh = gutter.refresh
+M.setup_refresh_autocmd = gutter.setup_refresh_autocmd
+M.attach_gutter = gutter.attach
+M.detach_gutter = gutter.detach
+M.teardown_gutter = gutter.teardown
 
 -- Delegate to resolution module
 M.accept_incoming = resolution.accept_incoming

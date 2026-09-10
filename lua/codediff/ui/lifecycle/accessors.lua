@@ -422,8 +422,15 @@ function M.set_result(tabpage, result_bufnr, result_win)
 
   -- Leaving conflict mode: retire the conflict mappings so do/dp and the
   -- ordinary view mappings can be claimed again on the next setup pass.
-  if result_bufnr == nil and sess.result_bufnr ~= nil and sess.keymaps then
-    sess.keymaps:release_scope("conflict")
+  if result_bufnr == nil and sess.result_bufnr ~= nil then
+    if sess.keymaps then
+      sess.keymaps:release_scope("conflict")
+    end
+    require("codediff.ui.conflict").teardown_gutter(tabpage)
+    require("codediff.ui.auto_refresh").disable_result(sess.result_bufnr)
+    sess.conflict_blocks = nil
+    sess.result_base_lines = nil
+    sess.merge_base_lines = nil
   end
 
   sess.result_bufnr = result_bufnr

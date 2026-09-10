@@ -169,14 +169,15 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   -- Initialize conflict tracking (keymaps setup separately after setup_all_keymaps)
   local conflict = require("codediff.ui.conflict")
   conflict.initialize_tracking(result_bufnr, conflict_diffs.conflict_blocks)
+  conflict.attach_gutter(original_win, modified_win)
 
-  -- Setup autocmd to refresh signs when result buffer changes (event-driven approach)
-  conflict.setup_sign_refresh_autocmd(tabpage, result_bufnr)
+  -- Setup autocmd to refresh markers when the result buffer changes.
+  conflict.setup_refresh_autocmd(tabpage, result_bufnr)
 
-  -- Initialize all conflict signs (uses refresh_all_conflict_signs for centralized logic)
+  -- Initialize all conflict markers through the centralized renderer.
   local session = lifecycle.get_session(tabpage)
   if session then
-    conflict.refresh_all_conflict_signs(session)
+    conflict.refresh(session)
   end
 
   -- Return focus to modified window

@@ -133,6 +133,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     return false
   end
 
+  -- Retire the old conflict renderer before asynchronous buffer loading starts.
+  if session.result_bufnr then
+    require("codediff.ui.conflict").teardown_gutter(tabpage)
+    auto_refresh.disable_result(session.result_bufnr)
+  end
+
   -- Disable auto-refresh temporarily
   auto_refresh.disable(old_original_buf)
   auto_refresh.disable(old_modified_buf)

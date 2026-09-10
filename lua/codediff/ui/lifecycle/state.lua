@@ -124,6 +124,7 @@ local function resume_diff(tabpage)
   -- orphan its registry, leaving codediff's mappings installed on whichever
   -- pane survived and its saved user mappings unreachable.
   if not vim.api.nvim_buf_is_valid(diff.original_bufnr) or not vim.api.nvim_buf_is_valid(diff.modified_bufnr) then
+    require("codediff.ui.conflict").teardown_gutter(tabpage)
     if diff.keymaps then
       diff.keymaps:dispose()
       diff.keymaps = nil
@@ -194,7 +195,27 @@ local function resume_diff(tabpage)
 
   -- Render with fresh content and (possibly reused) diff result
   if lines_diff then
-    if diff.layout == "inline" then
+    if diff.result_bufnr and diff.merge_base_lines and diff.conflict_blocks then
+      -- Conflict inputs are two diffs against BASE, not a diff against each
+      -- other. Restore that same geometry without resetting Result or its
+      -- tracking extmarks, so accepted edits and gutter colors survive tabs.
+      local diff_module = require("codediff.core.diff")
+      local options = require("codediff.config").options.diff
+      local diff_options = {
+        max_computation_time_ms = options.max_computation_time_ms,
+        ignore_trim_whitespace = options.ignore_trim_whitespace,
+        compute_moves = options.compute_moves,
+      }
+      local original_diff = diff_module.compute_diff(diff.merge_base_lines, original_lines, diff_options)
+      local modified_diff = diff_module.compute_diff(diff.merge_base_lines, modified_lines, diff_options)
+      if original_diff and modified_diff then
+        require("codediff.ui.core").render_merge_view(diff.original_bufnr, diff.modified_bufnr, original_diff, modified_diff, diff.merge_base_lines, original_lines, modified_lines)
+        diff.stored_diff_result = modified_diff
+        local conflict = require("codediff.ui.conflict")
+        conflict.attach_gutter(diff.original_win, diff.modified_win)
+        conflict.refresh(diff)
+      end
+    elseif diff.layout == "inline" then
       local inline_mod = require("codediff.ui.inline")
       inline_mod.render_inline_diff(diff.modified_bufnr, lines_diff, original_lines, modified_lines)
     else
