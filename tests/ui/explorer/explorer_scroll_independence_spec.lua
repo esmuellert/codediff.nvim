@@ -1,7 +1,5 @@
 -- Regression: the explorer pane must NOT scroll together with the side-by-side
--- diff panes. With native scrollbind this could happen if the explorer window
--- ever inherited scrollbind=true. codediff's structural scroll-sync only ever
--- binds the explicit diff windows, so the explorer is always independent.
+-- diff panes. Native scrollbind is enabled only on the diff windows.
 
 local h = dofile("tests/helpers.lua")
 
@@ -46,16 +44,15 @@ local function open_codediff_and_wait(repo, timeout_ms)
   vim.cmd("edit " .. repo.path("file01.txt"))
   vim.cmd("CodeDiff")
   local lifecycle = require("codediff.ui.lifecycle")
-  local scroll = require("codediff.ui.scroll")
   local tabpage
-  -- Wait until the diff content has loaded AND the scroll-sync group is bound
+  -- Wait until the diff content has loaded and native scrollbind is enabled
   -- (both happen asynchronously after :CodeDiff).
   local ready = vim.wait(timeout_ms, function()
     for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
       local s = lifecycle.get_session(tp)
-      if s and (s.panel or {}).view and s.modified_win and vim.api.nvim_win_is_valid(s.modified_win) then
+      if s and (s.panel or {}).view and s.original_win and s.modified_win and vim.api.nvim_win_is_valid(s.original_win) and vim.api.nvim_win_is_valid(s.modified_win) then
         local mbuf = vim.api.nvim_win_get_buf(s.modified_win)
-        if vim.api.nvim_buf_is_valid(mbuf) and vim.api.nvim_buf_line_count(mbuf) > 100 and scroll.get(tp) then
+        if vim.api.nvim_buf_is_valid(mbuf) and vim.api.nvim_buf_line_count(mbuf) > 100 and vim.wo[s.original_win].scrollbind and vim.wo[s.modified_win].scrollbind then
           tabpage = tp
           return true
         end
@@ -63,7 +60,7 @@ local function open_codediff_and_wait(repo, timeout_ms)
     end
     return false
   end, 100)
-  assert.is_true(ready, "CodeDiff explorer, loaded diff panes, and scroll-sync group should be ready")
+  assert.is_true(ready, "CodeDiff explorer, loaded diff panes, and native scrollbind should be ready")
   local session = lifecycle.get_session(tabpage)
   return tabpage, session, (session.panel or {}).view
 end
@@ -98,17 +95,12 @@ describe("explorer scroll independence", function()
     end
   end)
 
-  it("keeps the explorer out of the diff scroll-sync group", function()
+  it("keeps the explorer out of native scrollbind", function()
     repo = busy_repo()
-    local tabpage, _, explorer = open_codediff_and_wait(repo)
+    local _, session, explorer = open_codediff_and_wait(repo)
     assert.is_not_nil(explorer and explorer.winid, "explorer window should exist")
-
-    local scroll = require("codediff.ui.scroll")
-    local group = scroll.get(tabpage)
-    assert.is_not_nil(group, "a scroll-sync group should exist for the diff")
-    for _, w in ipairs(group.wins) do
-      assert.are_not.equal(explorer.winid, w, "explorer must not be in the scroll-sync group")
-    end
+    assert.is_true(vim.wo[session.original_win].scrollbind, "original diff pane should use native scrollbind")
+    assert.is_true(vim.wo[session.modified_win].scrollbind, "modified diff pane should use native scrollbind")
     assert.is_false(vim.wo[explorer.winid].scrollbind, "explorer must not have native scrollbind")
   end)
 
@@ -123,9 +115,6 @@ describe("explorer scroll independence", function()
     for _ = 1, 80 do
       vim.cmd("normal! \5") -- <C-e>
     end
-    -- Synchronous spec execution never returns to the main loop, so
-    -- WinScrolled is not dispatched. Fire it manually.
-    vim.api.nvim_exec_autocmds("WinScrolled", {})
     vim.cmd("redraw")
 
     assert.is_true(topline(session.modified_win) > 20, "modified diff pane should have scrolled down")
@@ -145,18 +134,16 @@ describe("explorer scroll independence", function()
     for _ = 1, 40 do
       vim.cmd("normal! \5")
     end
-    vim.api.nvim_exec_autocmds("WinScrolled", {})
     vim.cmd("redraw")
     local mod_top = topline(session.modified_win)
     local orig_top = topline(session.original_win)
 
-    -- Scroll the explorer and fire WinScrolled; the diff panes must not move.
+    -- Scroll the explorer; the diff panes must not move.
     vim.api.nvim_set_current_win(explorer.winid)
     vim.api.nvim_win_set_cursor(explorer.winid, { 1, 0 })
     for _ = 1, 20 do
       vim.cmd("normal! \5")
     end
-    vim.api.nvim_exec_autocmds("WinScrolled", {})
     vim.cmd("redraw")
 
     assert.are.equal(mod_top, topline(session.modified_win), "modified diff pane must stay put while the explorer scrolls")

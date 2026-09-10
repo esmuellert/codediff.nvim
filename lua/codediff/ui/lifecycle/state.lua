@@ -223,9 +223,7 @@ local function resume_diff(tabpage)
       core.render_diff(diff.original_bufnr, diff.modified_bufnr, original_lines, modified_lines, lines_diff)
     end
 
-    -- Re-align scroll-sync ONLY if diff was recomputed and not inline mode.
-    -- Fillers may have changed, so rebuild the alignment and re-sync in place
-    -- (the structural sync preserves scroll position, no reset-to-top needed).
+    -- Re-sync scrollbind ONLY if diff was recomputed and not inline mode.
     if
       diff_was_recomputed
       and diff.layout ~= "inline"
@@ -237,22 +235,38 @@ local function resume_diff(tabpage)
       local current_win = vim.api.nvim_get_current_win()
       local result_win = diff.result_win and vim.api.nvim_win_is_valid(diff.result_win) and diff.result_win or nil
 
-      -- Re-apply critical window options that might have been reset
-      vim.wo[diff.original_win].wrap = false
-      vim.wo[diff.modified_win].wrap = false
-      if result_win then
-        vim.wo[result_win].wrap = false
-      end
+      if current_win == diff.original_win or current_win == diff.modified_win or current_win == result_win then
+        local saved_cursor = vim.api.nvim_win_get_cursor(current_win)
 
-      local scroll = require("codediff.ui.scroll")
-      local wins = { diff.original_win, diff.modified_win }
-      if result_win then
-        wins[#wins + 1] = result_win
+        vim.api.nvim_win_set_cursor(diff.original_win, { 1, 0 })
+        vim.api.nvim_win_set_cursor(diff.modified_win, { 1, 0 })
+        if result_win then
+          vim.api.nvim_win_set_cursor(result_win, { 1, 0 })
+        end
+
+        vim.wo[diff.original_win].scrollbind = false
+        vim.wo[diff.modified_win].scrollbind = false
+        if result_win then
+          vim.wo[result_win].scrollbind = false
+        end
+        vim.wo[diff.original_win].scrollbind = true
+        vim.wo[diff.modified_win].scrollbind = true
+        if result_win then
+          vim.wo[result_win].scrollbind = true
+        end
+
+        vim.wo[diff.original_win].wrap = false
+        vim.wo[diff.modified_win].wrap = false
+        if result_win then
+          vim.wo[result_win].wrap = false
+        end
+
+        pcall(vim.api.nvim_win_set_cursor, diff.original_win, saved_cursor)
+        pcall(vim.api.nvim_win_set_cursor, diff.modified_win, saved_cursor)
+        if result_win then
+          pcall(vim.api.nvim_win_set_cursor, result_win, saved_cursor)
+        end
       end
-      scroll.bind(tabpage, wins)
-      -- Prefer the focused diff window as the alignment leader.
-      local leader = (current_win == diff.original_win or current_win == diff.modified_win or current_win == result_win) and current_win or diff.modified_win
-      scroll.refresh(tabpage, leader)
     end
   end
 

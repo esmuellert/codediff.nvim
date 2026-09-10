@@ -95,9 +95,9 @@ local function open_diff_panes(session_config)
   return original_win, modified_win, original_info, modified_info
 end
 
---- Window options both diff panes get. 'wrap' is load-bearing: the scroll-sync
---- maps one buffer line to one screen row. 'number'/'relativenumber' are left
---- alone so the user's own settings survive.
+--- Window options both diff panes get. 'wrap' is load-bearing for native
+--- scrollbind alignment. 'number'/'relativenumber' are left alone so the
+--- user's own settings survive.
 --- @param original_win number
 --- @param modified_win number
 local function apply_pane_options(original_win, modified_win)
