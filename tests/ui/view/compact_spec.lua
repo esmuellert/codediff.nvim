@@ -157,16 +157,16 @@ describe("compact mode (#344)", function()
       assert.is_nil(visible[11], "buffer only has 10 lines")
     end)
 
-    it("treats zero-width ranges (pure insertion/deletion) as a one-line anchor", function()
-      -- Zero-width range at line 5 — gets treated as the one-line slice [5,6).
-      -- With context=2: visible = max(1, 5-2)..min(N, 6-1+2) = 3..7.
+    it("shows context on both sides of zero-width ranges without an extra anchor line", function()
+      -- A zero-width range is a boundary between lines, not a changed line.
+      -- With context=2, show two real lines on either side: 3..6.
       local changes = { make_change(5, 5, 5, 8) }
       local visible = compact.compute_visible_lines(changes, "original", 100, 2)
-      for l = 3, 7 do
+      for l = 3, 6 do
         assert.is_true(visible[l], "line " .. l .. " should be visible")
       end
       assert.is_nil(visible[2])
-      assert.is_nil(visible[8])
+      assert.is_nil(visible[7])
     end)
 
     it("merges overlapping hunks' visible ranges via set union", function()
@@ -194,12 +194,28 @@ describe("compact mode (#344)", function()
       -- Original side: anchor at 5, ±2 context → 3..6.
       assert.is_true(orig_visible[5])
       assert.is_true(orig_visible[3])
+      assert.is_true(orig_visible[6])
+      assert.is_nil(orig_visible[7])
       assert.is_nil(orig_visible[10])
 
       -- Modified side: hunk 10..12, ±2 context → 8..14.
       assert.is_true(mod_visible[10])
       assert.is_true(mod_visible[14])
       assert.is_nil(mod_visible[5])
+    end)
+
+    it("aligns the first folded line after a pure insertion", function()
+      local changes = { make_change(50, 50, 60, 61) }
+      local original = compact.compute_visible_lines(changes, "original", 100, 3)
+      local modified = compact.compute_visible_lines(changes, "modified", 110, 3)
+
+      -- Context ends at 52/63, so the next folds begin at corresponding
+      -- unchanged lines 53/64. Before the fix, the original fold began at 54.
+      assert.is_true(original[52])
+      assert.is_true(modified[63])
+      assert.is_nil(original[53])
+      assert.is_nil(modified[64])
+      assert.equal(64, compact.compute_corresponding_lnum(changes, "original", "modified", 53))
     end)
 
     it("supports zero context (only the hunk lines visible)", function()
