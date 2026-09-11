@@ -337,7 +337,7 @@ function M.toggle(tabpage)
     title_pos = "center",
   })
   vim.wo[win].cursorline = false
-  vim.wo[win].winhighlight = "NormalFloat:Normal"
+  vim.wo[win].winhighlight = "NormalFloat:NormalFloat"
 
   -- Track window in session for toggle
   if session then

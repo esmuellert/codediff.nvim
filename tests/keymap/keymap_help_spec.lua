@@ -258,6 +258,19 @@ describe("keymap help popup", function()
     cleanup()
   end)
 
+  it("uses NormalFloat for the help window body highlight", function()
+    local tabpage, cleanup = open_standalone()
+
+    keymap_help.toggle(tabpage)
+    local session = lifecycle.get_session(tabpage)
+    local win = session and session._help_win
+    assert.is_true(win ~= nil and vim.api.nvim_win_is_valid(win), "help window should open")
+    assert.are.same("NormalFloat:NormalFloat", vim.wo[win].winhighlight)
+    keymap_help.toggle(tabpage)
+
+    cleanup()
+  end)
+
   it("does not advertise a key disabled in config", function()
     local tabpage, cleanup = open_standalone({ keymaps = { view = { quit = false, toggle_compact = false } } })
 
