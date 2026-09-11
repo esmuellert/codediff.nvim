@@ -510,4 +510,17 @@ describe("Tree", function()
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     assert.same({ "Changes" }, lines)
   end)
+
+  it("applies a virtual top margin to group nodes that are not the first line", function()
+    local tree = Tree({ bufnr = bufnr, nodes = {
+      Tree.Node({ data = { type = "group" } }),
+      Tree.Node({ data = { type = "group" } })
+    }})
+
+    tree:render()
+
+    local marks = vim.api.nvim_buf_get_extmarks(bufnr, tree._ns_id, 0, -1, { details = true })
+    assert.equals(1, #marks[1][4].virt_lines)
+    assert.is_true(marks[1][4].virt_lines_above)
+  end)
 end)

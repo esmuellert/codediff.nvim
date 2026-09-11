@@ -250,10 +250,15 @@ function Tree:render()
   -- Build lines and collect highlight info
   local lines = {}
   local line_highlights = {} -- [line_idx] = { {col_start, col_end, hl_group}, ... }
+  local line_spacers = {} -- [line_idx] = spacer_size
 
   for i, node in ipairs(visible_nodes) do
     node._line = i
     self._line_to_node[i] = node
+
+    if node.data and node.data.type == "group" and i > 1 then
+      line_spacers[i] = 1
+    end
 
     if self._prepare_node then
       local line_obj = self._prepare_node(node)
@@ -287,6 +292,19 @@ function Tree:render()
 
   -- Apply highlights
   vim.api.nvim_buf_clear_namespace(self._bufnr, self._ns_id, 0, -1)
+
+  -- Apply virtual line spacers
+  for line_idx, spacer_size in pairs(line_spacers) do
+    local virt_lines = {}
+    for _ = 1, spacer_size do
+      table.insert(virt_lines, { { "", "" } })
+    end
+    pcall(vim.api.nvim_buf_set_extmark, self._bufnr, self._ns_id, line_idx - 1, 0, {
+      virt_lines = virt_lines,
+      virt_lines_above = true,
+    })
+  end
+
   for line_idx, entries in pairs(line_highlights) do
     for _, entry in ipairs(entries) do
       pcall(vim.api.nvim_buf_set_extmark, self._bufnr, self._ns_id, line_idx - 1, entry[1], {
