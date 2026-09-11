@@ -30,7 +30,7 @@ function M.arrange(tabpage)
 
   -- Step 1: Pin panel size (fixed element)
   if panel_visible then
-    if panel_position == "left" then
+    if panel_position == "left" or panel_position == "right" then
       vim.api.nvim_win_set_width(panel_win, panel_config.width)
     else
       vim.api.nvim_win_set_height(panel_win, panel_config.height)
@@ -46,7 +46,7 @@ function M.arrange(tabpage)
     local sole_win = orig_valid and original_win or (mod_valid and modified_win or nil)
     if sole_win then
       if panel_visible then
-        if panel_position == "left" then
+        if panel_position == "left" or panel_position == "right" then
           vim.api.nvim_win_set_width(panel_win, panel_config.width)
           -- Explicitly set diff window to fill remainder
           local remainder = vim.o.columns - panel_config.width - 1
@@ -112,7 +112,7 @@ function M.arrange(tabpage)
 
   -- Step 5: Re-pin panel size (undo disturbance from step 4)
   if panel_visible then
-    if panel_position == "left" then
+    if panel_position == "left" or panel_position == "right" then
       vim.api.nvim_win_set_width(panel_win, panel_config.width)
     else
       vim.api.nvim_win_set_height(panel_win, panel_config.height)

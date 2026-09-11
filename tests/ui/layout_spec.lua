@@ -230,6 +230,44 @@ describe("Layout Manager", function()
   end)
 
   -- =========================================================================
+  -- Case 2b: Explorer right, no result — [orig | mod | expl]
+  -- =========================================================================
+  it("Case 2b: Explorer right — panel gets configured width, diff panes split remainder", function()
+    local panel_width = 35
+    config.options.explorer = { position = "right", width = panel_width }
+
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local orig_win = vim.api.nvim_get_current_win()
+    local orig_buf = vim.api.nvim_get_current_buf()
+    vim.cmd("vsplit")
+    local mod_win = vim.api.nvim_get_current_win()
+    local mod_buf = vim.api.nvim_get_current_buf()
+
+    local panel = create_panel_split("right", panel_width)
+
+    create_mock_session(tabpage, {
+      mode = "explorer",
+      original_win = orig_win,
+      modified_win = mod_win,
+      original_bufnr = orig_buf,
+      modified_bufnr = mod_buf,
+      panel = panel,
+    })
+
+    layout.arrange(tabpage)
+
+    local panel_w = vim.api.nvim_win_get_width(panel.winid)
+    local orig_w = vim.api.nvim_win_get_width(orig_win)
+    local mod_w = vim.api.nvim_win_get_width(mod_win)
+
+    assert.are.equal(panel_width, panel_w, "Panel should be configured width")
+    assert_width_near(orig_w, mod_w, "Diff panes should be equal width:")
+
+    cleanup_mock_session(tabpage)
+  end)
+
+  -- =========================================================================
   -- Case 3: Explorer bottom, no result — [orig | mod] / [expl]
   -- =========================================================================
   it("Case 3: Explorer bottom — panel gets configured height, diff panes split full width", function()

@@ -181,9 +181,9 @@ Both methods automatically place the library in the plugin root directory.
 
     -- Explorer panel configuration
     explorer = {
-      position = "left",  -- "left" or "bottom"
+      position = "left",  -- "left", "right", or "bottom"
       hidden = false,  -- Initial visibility state
-      width = 40,         -- Width when position is "left" (columns)
+      width = 40,         -- Width when position is "left" or "right" (columns)
       height = 15,        -- Height when position is "bottom" (lines)
       auto_refresh = true,  -- Native file watching with polling fallback (R still refreshes manually)
       indent_markers = true,  -- Show indent markers in tree view (│, ├, └)

@@ -55,7 +55,7 @@ M.defaults = {
 
   -- Explorer panel configuration
   explorer = {
-    position = "left", -- "left" or "bottom"
+    position = "left", -- "left", "right", or "bottom"
     hidden = false, -- Initial visibility state
     width = 40, -- Width when position is "left" (columns)
     height = 15, -- Height when position is "bottom" (lines)
