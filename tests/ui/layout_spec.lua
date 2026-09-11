@@ -268,6 +268,82 @@ describe("Layout Manager", function()
   end)
 
   -- =========================================================================
+  -- Case 3b: Explorer right, no result — [orig | mod | expl]
+  -- =========================================================================
+  it("Case 3b: Explorer right — panel gets configured width, diff panes split remainder", function()
+    local panel_width = 35
+    config.options.explorer = { position = "right", width = panel_width }
+
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local orig_win = vim.api.nvim_get_current_win()
+    local orig_buf = vim.api.nvim_get_current_buf()
+    vim.cmd("vsplit")
+    local mod_win = vim.api.nvim_get_current_win()
+    local mod_buf = vim.api.nvim_get_current_buf()
+
+    local panel = create_panel_split("right", panel_width)
+
+    create_mock_session(tabpage, {
+      mode = "explorer",
+      original_win = orig_win,
+      modified_win = mod_win,
+      original_bufnr = orig_buf,
+      modified_bufnr = mod_buf,
+      panel = panel,
+    })
+
+    layout.arrange(tabpage)
+
+    local panel_w = vim.api.nvim_win_get_width(panel.winid)
+    local orig_w = vim.api.nvim_win_get_width(orig_win)
+    local mod_w = vim.api.nvim_win_get_width(mod_win)
+
+    assert.are.equal(panel_width, panel_w, "Panel should be configured width")
+    assert_width_near(orig_w, mod_w, "Diff panes should be equal width:")
+
+    cleanup_mock_session(tabpage)
+  end)
+
+  -- =========================================================================
+  -- Case 3c: Explorer top, no result — [expl] / [orig | mod]
+  -- =========================================================================
+  it("Case 3c: Explorer top — panel gets configured height, diff panes split full width", function()
+    local panel_height = 12
+    config.options.explorer = { position = "top", height = panel_height }
+
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local orig_win = vim.api.nvim_get_current_win()
+    local orig_buf = vim.api.nvim_get_current_buf()
+    vim.cmd("vsplit")
+    local mod_win = vim.api.nvim_get_current_win()
+    local mod_buf = vim.api.nvim_get_current_buf()
+
+    local panel = create_panel_split("top", panel_height)
+
+    create_mock_session(tabpage, {
+      mode = "explorer",
+      original_win = orig_win,
+      modified_win = mod_win,
+      original_bufnr = orig_buf,
+      modified_bufnr = mod_buf,
+      panel = panel,
+    })
+
+    layout.arrange(tabpage)
+
+    local panel_h = vim.api.nvim_win_get_height(panel.winid)
+    local orig_w = vim.api.nvim_win_get_width(orig_win)
+    local mod_w = vim.api.nvim_win_get_width(mod_win)
+
+    assert.are.equal(panel_height, panel_h, "Panel should be configured height")
+    assert_width_near(orig_w, mod_w, "Diff panes should be equal width:")
+
+    cleanup_mock_session(tabpage)
+  end)
+
+  -- =========================================================================
   -- Case 4: History left, no result — [hist | orig | mod]
   -- =========================================================================
   it("Case 4: History left — panel gets configured width, diff panes split remainder", function()
@@ -329,6 +405,82 @@ describe("Layout Manager", function()
       original_bufnr = orig_buf,
       modified_bufnr = mod_buf,
       panel_obj = panel,
+    })
+
+    layout.arrange(tabpage)
+
+    local panel_h = vim.api.nvim_win_get_height(panel.winid)
+    local orig_w = vim.api.nvim_win_get_width(orig_win)
+    local mod_w = vim.api.nvim_win_get_width(mod_win)
+
+    assert.are.equal(panel_height, panel_h, "History panel should be configured height")
+    assert_width_near(orig_w, mod_w, "Diff panes should be equal width:")
+
+    cleanup_mock_session(tabpage)
+  end)
+
+  -- =========================================================================
+  -- Case 5b: History right, no result — [orig | mod | hist]
+  -- =========================================================================
+  it("Case 5b: History right — panel gets configured width, diff panes split remainder", function()
+    local panel_width = 30
+    config.options.history = { position = "right", width = panel_width }
+
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local orig_win = vim.api.nvim_get_current_win()
+    local orig_buf = vim.api.nvim_get_current_buf()
+    vim.cmd("vsplit")
+    local mod_win = vim.api.nvim_get_current_win()
+    local mod_buf = vim.api.nvim_get_current_buf()
+
+    local panel = create_panel_split("right", panel_width)
+
+    create_mock_session(tabpage, {
+      mode = "history",
+      original_win = orig_win,
+      modified_win = mod_win,
+      original_bufnr = orig_buf,
+      modified_bufnr = mod_buf,
+      panel = panel,
+    })
+
+    layout.arrange(tabpage)
+
+    local panel_w = vim.api.nvim_win_get_width(panel.winid)
+    local orig_w = vim.api.nvim_win_get_width(orig_win)
+    local mod_w = vim.api.nvim_win_get_width(mod_win)
+
+    assert.are.equal(panel_width, panel_w, "History panel should be configured width")
+    assert_width_near(orig_w, mod_w, "Diff panes should be equal width:")
+
+    cleanup_mock_session(tabpage)
+  end)
+
+  -- =========================================================================
+  -- Case 5c: History top, no result — [hist] / [orig | mod]
+  -- =========================================================================
+  it("Case 5c: History top — panel gets configured height, diff panes split full width", function()
+    local panel_height = 10
+    config.options.history = { position = "top", height = panel_height }
+
+    vim.cmd("tabnew")
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local orig_win = vim.api.nvim_get_current_win()
+    local orig_buf = vim.api.nvim_get_current_buf()
+    vim.cmd("vsplit")
+    local mod_win = vim.api.nvim_get_current_win()
+    local mod_buf = vim.api.nvim_get_current_buf()
+
+    local panel = create_panel_split("top", panel_height)
+
+    create_mock_session(tabpage, {
+      mode = "history",
+      original_win = orig_win,
+      modified_win = mod_win,
+      original_bufnr = orig_buf,
+      modified_bufnr = mod_buf,
+      panel = panel,
     })
 
     layout.arrange(tabpage)

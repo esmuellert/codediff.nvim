@@ -174,9 +174,9 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   local size
   local text_width -- Width for text rendering (always horizontal width)
 
-  if position == "bottom" then
+  if position == "bottom" or position == "top" then
     size = explorer_config.height or 15
-    -- For bottom position, use full window width for text
+    -- For bottom/top position, use full window width for text
     text_width = vim.o.columns
   else
     -- Use provided width or config width or default to 40 columns

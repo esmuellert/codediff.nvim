@@ -141,7 +141,7 @@ function M.create(commits, git_root, tabpage, width, opts)
   local size
   local text_width
 
-  if position == "bottom" then
+  if position == "bottom" or position == "top" then
     size = history_config.height or 15
     text_width = vim.o.columns
   else
