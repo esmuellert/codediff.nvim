@@ -129,6 +129,29 @@ Always close the embedded UI in `after_each`, including when an assertion
 fails. A grid failure reports the pane/focus context, display row, expected
 text and actual text. These are cell-level checks, not font or pixel snapshots.
 
+## Refresh regressions
+
+`ui/refresh/*_e2e_spec.lua` exercises the session refresh controller through real
+file writes, Git index/ref changes and rendered screen cells. It covers both
+layouts, Explorer and bare comparisons, history, single-file previews,
+directory comparisons, and editable merge Results. Lifecycle cases hold actual
+Git responses to test file switches, buffer deletion, tab closure and edits
+made while reads are pending. Unrelated changes must preserve pane identities,
+cursors, viewports, folds and every observed diff-grid frame.
+
+Git cases run twice: once with the native watcher, and once with its 500 ms
+polling fallback. Native tests require the real `codediff-watcher` binary and
+assert that it became ready; silently falling back is not a native-test pass.
+The normal installer supplies the binary, or set `CODEDIFF_WATCHER_PATH` to an
+existing executable for offline runs. Android has no native release and skips
+only the native cases. A process-exit case verifies actual watcher-to-polling
+failover. Plain file/directory comparisons use polling without Git metadata.
+
+`ui/refresh/policy_spec.lua`, `ui/auto_refresh_spec.lua` and
+`ui/explorer/native_watcher_spec.lua` cover dependency selection, settled input
+snapshots, event coalescing, retries and stale callback rejection independently
+of the screen tests.
+
 ## Test Philosophy
 
 Focus on **integration points** that C tests cannot validate:

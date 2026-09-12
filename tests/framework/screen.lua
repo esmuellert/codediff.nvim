@@ -56,6 +56,9 @@ function Screen:_redraw(events)
         self.highlights[args[1]] = args[2]
       elseif name == "flush" then
         self.flushes = self.flushes + 1
+        if self.on_flush then
+          self.on_flush(self)
+        end
       end
     end
   end
@@ -165,6 +168,17 @@ function Screen:flush()
     end, 1),
     "No UI flush after redraw"
   )
+end
+
+-- Wait for naturally delivered UI events; unlike flush(), this does not redraw.
+function Screen:await(predicate, message, timeout)
+  assert(
+    vim.wait(timeout or 10000, function()
+      return self.error ~= nil or predicate()
+    end, 10),
+    (message or "Embedded Neovim did not become ready") .. "\n" .. self.stderr
+  )
+  assert(not self.error, tostring(self.error))
 end
 
 function Screen:wait_for(predicate, message)
