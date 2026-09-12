@@ -1,150 +1,91 @@
-describe("mutable revision synchronization", function()
-  local original_auto_refresh
-  local original_git
-  local original_lifecycle
-  local auto_refresh
-  local original_trigger
-  local current_session
-  local callbacks
-  local trigger_count
-  local original_bufnr
-  local modified_bufnr
-  local tabpage
+local snapshot = require("codediff.ui.refresh.snapshot")
+
+describe("refresh input snapshots", function()
+  local git, original_get_content, session, buffers, callbacks
 
   before_each(function()
-    original_auto_refresh = package.loaded["codediff.ui.auto_refresh"]
-    original_git = package.loaded["codediff.core.git"]
-    original_lifecycle = package.loaded["codediff.ui.lifecycle"]
-
-    original_bufnr = vim.api.nvim_create_buf(false, true)
-    modified_bufnr = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(original_bufnr, 0, -1, false, { "old original" })
-    vim.api.nvim_buf_set_lines(modified_bufnr, 0, -1, false, { "old modified" })
-    tabpage = vim.api.nvim_get_current_tabpage()
-    current_session = {
+    git = require("codediff.core.git")
+    original_get_content = git.get_file_content
+    callbacks, buffers = {}, {}
+    for i = 1, 2 do
+      buffers[i] = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(buffers[i], 0, -1, false, { "old " .. i })
+    end
+    session = {
       git_root = "/repo",
-      original_bufnr = original_bufnr,
-      modified_bufnr = modified_bufnr,
+      original_bufnr = buffers[1],
+      modified_bufnr = buffers[2],
       original_revision = ":2",
       modified_revision = ":3",
-      original = { relative = "file.txt" },
-      modified = { relative = "file.txt" },
+      original = { absolute = "/repo/file.txt", relative = "file.txt" },
+      modified = { absolute = "/repo/file.txt", relative = "file.txt" },
     }
-    callbacks = {}
-    trigger_count = 0
-
-    package.loaded["codediff.ui.lifecycle"] = {
-      get_session = function(candidate)
-        assert.equals(tabpage, candidate)
-        return current_session
-      end,
-    }
-    package.loaded["codediff.core.git"] = {
-      get_file_content = function(revision, git_root, path, callback)
-        assert.equals("/repo", git_root)
-        assert.equals("file.txt", path)
-        callbacks[revision] = callback
-      end,
-    }
-    package.loaded["codediff.ui.auto_refresh"] = nil
-    auto_refresh = require("codediff.ui.auto_refresh")
-    original_trigger = auto_refresh.trigger
-    auto_refresh.trigger = function()
-      trigger_count = trigger_count + 1
+    git.get_file_content = function(revision, _, _, done)
+      callbacks[revision] = done
     end
   end)
 
   after_each(function()
-    auto_refresh.trigger = original_trigger
-    package.loaded["codediff.ui.auto_refresh"] = original_auto_refresh
-    package.loaded["codediff.core.git"] = original_git
-    package.loaded["codediff.ui.lifecycle"] = original_lifecycle
-    if vim.api.nvim_buf_is_valid(original_bufnr) then
-      vim.api.nvim_buf_delete(original_bufnr, { force = true })
-    end
-    if vim.api.nvim_buf_is_valid(modified_bufnr) then
-      vim.api.nvim_buf_delete(modified_bufnr, { force = true })
+    git.get_file_content = original_get_content
+    for _, buf in ipairs(buffers) do
+      vim.api.nvim_buf_delete(buf, { force = true })
     end
   end)
 
-  it("completes only after every mutable target settles", function()
-    local completed = 0
-    auto_refresh.sync_mutable_buffers(tabpage, function()
-      completed = completed + 1
+  it("settles all candidates before returning and does not mutate displayed buffers", function()
+    local result
+    snapshot.read(session, { index = true }, snapshot.capture(session), function(err, data)
+      assert.is_nil(err)
+      result = data
     end)
-
-    assert.is_function(callbacks[":2"])
-    assert.is_function(callbacks[":3"])
-    assert.equals(0, completed)
-
     callbacks[":2"](nil, { "new original" })
-    assert.is_true(vim.wait(1000, function()
-      return vim.api.nvim_buf_get_lines(original_bufnr, 0, -1, false)[1] == "new original"
-    end, 10))
-    assert.equals(0, completed)
-
+    vim.wait(20)
+    assert.is_nil(result)
+    assert.same({ "old 1" }, vim.api.nvim_buf_get_lines(buffers[1], 0, -1, false))
     callbacks[":3"](nil, { "new modified" })
     assert.is_true(vim.wait(1000, function()
-      return completed == 1
+      return result ~= nil
     end, 10))
-    assert.equals("new modified", vim.api.nvim_buf_get_lines(modified_bufnr, 0, -1, false)[1])
-    assert.equals(2, trigger_count)
+    assert.same({ "new original" }, result.original)
+    assert.same({ "new modified" }, result.modified)
+    assert.same({ "old 2" }, vim.api.nvim_buf_get_lines(buffers[2], 0, -1, false))
   end)
 
-  it("completes immediately when the session no longer exists", function()
-    current_session = nil
-    local completed = 0
-
-    auto_refresh.sync_mutable_buffers(tabpage, function()
-      completed = completed + 1
+  it("does not read index sources for a worktree-only event", function()
+    local result
+    snapshot.read(session, { worktree = true }, snapshot.capture(session), function(err, data)
+      assert.is_nil(err)
+      result = data
     end)
-
-    assert.equals(1, completed)
     assert.same({}, callbacks)
+    assert.same({ "old 1" }, result.original)
   end)
 
-  it("completes immediately when neither side is mutable", function()
-    current_session.original_revision = "HEAD"
-    current_session.modified_revision = nil
-    local completed = 0
-
-    auto_refresh.sync_mutable_buffers(tabpage, function()
-      completed = completed + 1
+  it("reports read failures without applying a partial snapshot", function()
+    local failure
+    snapshot.read(session, { index = true }, snapshot.capture(session), function(err)
+      failure = err
     end)
-
-    assert.equals(1, completed)
-    assert.same({}, callbacks)
-  end)
-
-  it("counts errors as settled", function()
-    current_session.modified_revision = nil
-    local completed = 0
-    auto_refresh.sync_mutable_buffers(tabpage, function()
-      completed = completed + 1
-    end)
-
     callbacks[":2"]("git failed")
-
+    callbacks[":3"](nil, { "new modified" })
     assert.is_true(vim.wait(1000, function()
-      return completed == 1
+      return failure ~= nil
     end, 10))
-    assert.equals("old original", vim.api.nvim_buf_get_lines(original_bufnr, 0, -1, false)[1])
+    assert.equals("git failed", failure)
+    assert.same({ "old 2" }, vim.api.nvim_buf_get_lines(buffers[2], 0, -1, false))
   end)
 
-  it("does not write after the owning session is replaced", function()
-    current_session.modified_revision = nil
-    local completed = 0
-    auto_refresh.sync_mutable_buffers(tabpage, function()
-      completed = completed + 1
+  it("represents a missing side as empty content rather than a transport failure", function()
+    local result
+    snapshot.read(session, { index = true }, snapshot.capture(session), function(err, data)
+      assert.is_nil(err)
+      result = data
     end)
-    current_session = {}
-
-    callbacks[":2"](nil, { "stale" })
-
+    callbacks[":2"]("File 'file.txt' not found in revision ':2'")
+    callbacks[":3"](nil, { "new modified" })
     assert.is_true(vim.wait(1000, function()
-      return completed == 1
+      return result ~= nil
     end, 10))
-    assert.equals("old original", vim.api.nvim_buf_get_lines(original_bufnr, 0, -1, false)[1])
-    assert.equals(0, trigger_count)
+    assert.same({ "" }, result.original)
   end)
 end)

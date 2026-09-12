@@ -5,15 +5,45 @@
 local M = {}
 
 local api = vim.api
+local loads = {}
+
+-- Populate revision buffers consistently whether opening or refreshing a view.
+function M.set_content(buf, lines, filepath)
+  if not api.nvim_buf_is_valid(buf) then
+    return false
+  end
+  local value = #lines > 0 and lines or { "" }
+  if not vim.deep_equal(api.nvim_buf_get_lines(buf, 0, -1, false), value) then
+    vim.bo[buf].modifiable = true
+    vim.bo[buf].readonly = false
+    api.nvim_buf_set_lines(buf, 0, -1, false, value)
+  end
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].readonly = true
+  -- Setting filetype fires FileType and can attach LSPs to codediff:// URIs.
+  local ft = filepath and vim.filetype.match({ filename = filepath, buf = buf })
+  if ft then
+    local lang = vim.treesitter.language.get_lang(ft) or ft
+    if pcall(vim.treesitter.start, buf, lang) then
+      vim.bo[buf].syntax = ""
+    else
+      vim.bo[buf].syntax = ft
+    end
+  end
+  vim.diagnostic.enable(false, { bufnr = buf })
+  return true
+end
 
 -- Helper function to load content into a virtual buffer and fire the loaded event
 local function load_virtual_buffer_content(buf, git_root, commit, filepath)
   local git = require("codediff.core.git")
+  loads[buf] = (loads[buf] or 0) + 1
+  local generation = loads[buf]
 
   git.get_file_content(commit, git_root, filepath, function(err, lines)
     vim.schedule(function()
       -- Check buffer is still valid (might have been deleted during async fetch)
-      if not api.nvim_buf_is_valid(buf) then
+      if not api.nvim_buf_is_valid(buf) or loads[buf] ~= generation then
         return
       end
 
@@ -39,37 +69,7 @@ local function load_virtual_buffer_content(buf, git_root, commit, filepath)
         return
       end
 
-      -- Set the content
-      if not api.nvim_buf_is_valid(buf) then
-        -- Buffer was deleted while we were fetching, skip
-        return
-      end
-      vim.bo[buf].modifiable = true
-      vim.bo[buf].readonly = false
-      api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-
-      -- Make it read-only
-      vim.bo[buf].modifiable = false
-      vim.bo[buf].readonly = true
-
-      -- Start TreeSitter highlighting directly without setting filetype.
-      -- Setting filetype fires FileType autocmd, which triggers LSP plugins
-      -- to attach and send textDocument/didOpen with codediff:// URI,
-      -- crashing language servers that can't handle custom URI schemes.
-      local ft = vim.filetype.match({ filename = filepath, buf = buf })
-      if ft then
-        local lang = vim.treesitter.language.get_lang(ft) or ft
-        if pcall(vim.treesitter.start, buf, lang) then
-          -- Keep syntax fallback disabled when Tree-sitter is active.
-          vim.bo[buf].syntax = ""
-        else
-          -- TreeSitter parser not available, fall back to syntax highlighting
-          vim.bo[buf].syntax = ft
-        end
-      end
-
-      -- Disable diagnostics for this buffer completely
-      vim.diagnostic.enable(false, { bufnr = buf })
+      M.set_content(buf, lines, filepath)
 
       api.nvim_exec_autocmds("User", {
         pattern = "CodeDiffVirtualFileLoaded",
@@ -171,6 +171,13 @@ function M.setup()
 
       -- Load content using the shared helper
       load_virtual_buffer_content(buf, git_root, commit, filepath)
+    end,
+  })
+
+  api.nvim_create_autocmd("BufWipeout", {
+    group = group,
+    callback = function(event)
+      loads[event.buf] = nil
     end,
   })
 
