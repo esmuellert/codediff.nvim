@@ -72,6 +72,9 @@ M.compute_virtual_uri = compute_virtual_uri
 --- @param session_config SessionConfig What was asked for
 --- @param panes SessionPanes What the layout built for it
 function M.create_session(tabpage, session_config, panes)
+  if active_diffs[tabpage] and active_diffs[tabpage].refresh then
+    active_diffs[tabpage].refresh:dispose()
+  end
   local state = require("codediff.ui.lifecycle.state")
   local original_bufnr, modified_bufnr = panes.original_bufnr, panes.modified_bufnr
   -- Save buffer states
@@ -91,6 +94,7 @@ function M.create_session(tabpage, session_config, panes)
     modified = session_config.modified,
     original_revision = session_config.original_revision,
     modified_revision = session_config.modified_revision,
+    source_revisions = session_config.source_revisions,
 
     -- Buffers & Windows
     original_bufnr = original_bufnr,
@@ -127,6 +131,12 @@ function M.create_session(tabpage, session_config, panes)
   }
 
   welcome_window.capture_session_profiles(active_diffs[tabpage])
+  local created = active_diffs[tabpage]
+  vim.schedule(function()
+    if active_diffs[tabpage] == created then
+      require("codediff.ui.refresh").attach(tabpage)
+    end
+  end)
 
   -- Mark windows with restore flag
   vim.w[panes.original_win].codediff_restore = 1

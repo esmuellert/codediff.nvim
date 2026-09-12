@@ -35,6 +35,7 @@ function M.setup_explorer(tabpage, session_config, original_win, modified_win)
   end
   -- Scope (#74): carry the pathspec so auto-refresh re-applies it (see refresh.lua).
   explorer_opts.pathspec = panel.data.pathspec
+  explorer_opts.source_revisions = panel.data.source_revisions
 
   local explorer_obj =
     explorer_module.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)

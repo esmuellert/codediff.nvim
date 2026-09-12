@@ -2,12 +2,10 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 
 function M.disable_refresh_and_clear_highlights(session)
   for _, bufnr in pairs({ session.original_bufnr, session.modified_bufnr }) do
     if vim.api.nvim_buf_is_valid(bufnr) then
-      auto_refresh.disable(bufnr)
       lifecycle.clear_highlights(bufnr)
     end
   end

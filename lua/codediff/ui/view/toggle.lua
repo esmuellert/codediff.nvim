@@ -89,6 +89,7 @@ local function rerender_current_file(tabpage)
     modified = session.modified,
     original_revision = session.original_revision,
     modified_revision = session.modified_revision,
+    source_revisions = session.source_revisions,
   }
   return require("codediff.ui.view").update(tabpage, session_config, false)
 end
@@ -120,8 +121,12 @@ function M.toggle(tabpage)
     return false
   end
 
+  local refresh = require("codediff.ui.refresh")
+  refresh.begin(tabpage)
   if rerender_current_file(tabpage) then
     layout.arrange(tabpage)
+  else
+    refresh.ready(tabpage)
   end
 
   -- Re-enable compact mode in new layout

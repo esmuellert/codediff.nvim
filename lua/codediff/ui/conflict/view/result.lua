@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local config = require("codediff.config")
 local layout = require("codediff.ui.layout")
 
@@ -160,9 +159,6 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
       vim.wo[modified_win].winbar = " Ours (Current)"
     end
   end
-
-  -- Enable auto-refresh for result buffer
-  auto_refresh.enable_for_result(result_bufnr)
 
   -- Initialize conflict tracking (keymaps setup separately after setup_all_keymaps)
   local conflict = require("codediff.ui.conflict")

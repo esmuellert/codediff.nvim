@@ -244,14 +244,20 @@ function M.create(commits, git_root, tabpage, width, opts)
     end
 
     git.get_commit_files(data.hash, git_root, function(err, files)
-      if err then
-        vim.schedule(function()
-          vim.notify("Failed to load commit files: " .. err, vim.log.levels.ERROR)
-        end)
-        return
-      end
-
       vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(history.bufnr) or tree:get_node(commit_node:get_id()) ~= commit_node then
+          if callback then
+            callback()
+          end
+          return
+        end
+        if err then
+          vim.notify("Failed to load commit files: " .. err, vim.log.levels.ERROR)
+          if callback then
+            callback()
+          end
+          return
+        end
         -- Apply file_filter.ignore patterns (same as explorer view)
         local filter = require("codediff.ui.explorer.filter")
         local explorer_config = config.options.explorer or {}
@@ -304,14 +310,18 @@ function M.create(commits, git_root, tabpage, width, opts)
     local file_path = file_data.path
     local old_path = file_data.old_path
     local commit_hash = file_data.commit_hash
+    local selection = history._selection_generation
+    local refresh = require("codediff.ui.refresh")
 
     if not file_path or file_path == "" then
       vim.notify("[CodeDiff] No file path for selection", vim.log.levels.WARN)
+      refresh.ready(tabpage)
       return
     end
 
     if not commit_hash or commit_hash == "" then
       vim.notify("[CodeDiff] No commit hash for selection", vim.log.levels.WARN)
+      refresh.ready(tabpage)
       return
     end
 
@@ -320,11 +330,15 @@ function M.create(commits, git_root, tabpage, width, opts)
     local session = lifecycle.get_session(tabpage)
     if not opts.force and session and session.original_revision == target_hash and session.modified_revision == commit_hash then
       if (session.modified and session.modified.relative == file_path) or (session.original and session.original.relative == file_path) then
+        refresh.ready(tabpage)
         return
       end
     end
 
     vim.schedule(function()
+      if lifecycle.get_panel_view(tabpage) ~= history or history._selection_generation ~= selection then
+        return
+      end
       -- Handle added/deleted files: show single file instead of empty diff
       local file_status = file_data.status
       if file_status == "A" or file_status == "D" then
@@ -364,6 +378,8 @@ function M.create(commits, git_root, tabpage, width, opts)
   end
 
   history.on_file_select = function(file_data, opts)
+    history._selection_generation = (history._selection_generation or 0) + 1
+    require("codediff.ui.refresh").begin(tabpage)
     history.current_commit = file_data.commit_hash
     history.current_file = file_data.path
     history.current_selection = vim.deepcopy(file_data)

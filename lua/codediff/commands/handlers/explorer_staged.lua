@@ -49,6 +49,7 @@ function M.run(revision, global_opts, pathspec)
                 status_result = status_result,
                 focus_file = focus_file,
                 pathspec = pathspec,
+                source_revisions = { original = rev, modified = ":0" },
               },
             },
             git_root = git_root,

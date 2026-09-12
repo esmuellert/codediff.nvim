@@ -58,7 +58,7 @@ end
 --- codediff:// buffers mid-load (bufhidden=wipe), and resets single_pane.
 local function open_diff_when_still_selected(ctx, sides)
   vim.schedule(function()
-    if ctx.explorer.current_file_path ~= ctx.file_path then
+    if ctx.explorer.current_file_path ~= ctx.file_path or (ctx.selection and ctx.explorer._selection_generation ~= ctx.selection) then
       return
     end
     ---@type SessionConfig
@@ -106,7 +106,7 @@ end
 --- @return boolean
 local function already_showing(session, explorer, file_path, abs_path, group)
   local same_file = (session.modified and session.modified.absolute == abs_path) or (session.original and session.original.absolute == abs_path)
-  if not same_file then
+  if not same_file or session.single_side then
     return false
   end
 
@@ -155,8 +155,9 @@ end
 --- a newer one.
 --- @param show fun(is_inline: boolean)
 local function show_when_still_selected(explorer, file_path, show)
+  local generation = explorer._selection_generation
   vim.schedule(function()
-    if explorer.current_file_path ~= file_path then
+    if explorer.current_file_path ~= file_path or explorer._selection_generation ~= generation then
       return
     end
     local session = lifecycle.get_session(explorer.tabpage)
@@ -271,6 +272,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     dir2 = opts.dir2,
     base_revision = base_revision,
     target_revision = target_revision,
+    source_revisions = opts.source_revisions,
     pathspec = opts.pathspec, -- Scope (#74): re-applied on every auto-refresh
     status_result = status_result, -- Store initial status result
     on_file_select = nil, -- Will be set below
@@ -284,6 +286,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
   -- File selection callback - manages its own lifecycle
   local function on_file_select(file_data, opts)
     opts = opts or {}
+    local base_revision, target_revision = explorer.base_revision, explorer.target_revision
     local git = require("codediff.core.git")
     local view = require("codediff.ui.view")
     local lifecycle = require("codediff.ui.lifecycle")
@@ -316,6 +319,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
         and session.original.absolute == original.absolute
         and session.modified.absolute == modified.absolute
       if showing_already and not opts.force then
+        require("codediff.ui.refresh").ready(tabpage)
         return
       end
 
@@ -325,6 +329,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
         git_root = nil,
         file_path = file_path,
         jump = jump,
+        selection = explorer._selection_generation,
       }, { original = original, modified = modified })
       return
     end
@@ -405,14 +410,16 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
     -- Same file can have different diffs (staged vs HEAD, working vs staged)
     local session = lifecycle.get_session(tabpage)
     if session and not opts.force and already_showing(session, explorer, file_path, abs_path, group) then
+      require("codediff.ui.refresh").ready(tabpage)
       return
     end
 
     if base_revision and target_revision and target_revision ~= "WORKING" then
       -- Two revision mode: Compare base vs target
+      local selection = explorer._selection_generation
       vim.schedule(function()
         -- Ignore stale async: see comment on the base_revision branch below.
-        if explorer.current_file_path ~= file_path then
+        if explorer.current_file_path ~= file_path or explorer._selection_generation ~= selection then
           return
         end
         ---@type SessionConfig
@@ -435,6 +442,7 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
       git_root = git_root,
       file_path = file_path,
       jump = jump,
+      selection = explorer._selection_generation,
     }
 
     local target_revision_single = base_revision or "HEAD"
@@ -493,6 +501,8 @@ function M.create(status_result, git_root, tabpage, width, base_revision, target
 
   -- Wrap on_file_select to track current file and group
   explorer.on_file_select = function(file_data, opts)
+    explorer._selection_generation = (explorer._selection_generation or 0) + 1
+    require("codediff.ui.refresh").begin(tabpage)
     explorer.current_file_path = file_data.path
     explorer.current_file_group = file_data.group
     explorer.current_selection = vim.deepcopy(file_data)

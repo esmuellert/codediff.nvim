@@ -1,241 +1,231 @@
-describe("explorer native watcher", function()
+local refresh = require("codediff.ui.refresh")
+local snapshot = require("codediff.ui.refresh.snapshot")
+local apply = require("codediff.ui.refresh.apply")
+local lifecycle = require("codediff.ui.lifecycle")
+local path = require("codediff.core.path")
+
+describe("session refresh scheduling", function()
+  local old_timer, old_watcher, old_read, old_apply, old_auto
+  local timers, handlers, reads, applied, unsubscribed, controller, session, tab, root
   local uv = vim.uv or vim.loop
-  local config
-  local original_auto_refresh_enabled
-  local original_new_timer
-  local original_watcher
-  local original_auto_refresh
-  local refresh_module
-  local original_refresh
-  local cleanup
-  local repository
-  local watcher_handlers
-  local unsubscribed
-  local timers
-  local refresh_completions
-  local refresh_forces
-  local refresh_count
-  local sync_count
-  local sync_completions
 
   before_each(function()
-    config = require("codediff.config")
-    original_auto_refresh_enabled = config.options.explorer.auto_refresh
-    watcher_handlers = nil
-    repository = vim.fn.tempname()
-    vim.fn.mkdir(repository .. "/.git", "p")
-    timers = {}
-    refresh_completions = {}
-    refresh_forces = {}
-    refresh_count = 0
-    sync_count = 0
-    sync_completions = {}
+    vim.cmd("tabnew")
+    tab = vim.api.nvim_get_current_tabpage()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root .. "/.git", "p")
+    timers, reads, applied = {}, {}, 0
+    handlers = nil
     unsubscribed = false
-
-    original_new_timer = uv.new_timer
+    old_timer = uv.new_timer
     uv.new_timer = function()
-      local timer = { started = false, stopped = false, closed = false }
-      function timer:start(_, _, callback)
+      local timer = {}
+      function timer:start(_, repeat_ms, callback)
         self.started = true
+        self.repeat_ms = repeat_ms
         self.callback = callback
       end
       function timer:stop()
-        self.stopped = true
+        self.started = false
       end
       function timer:close()
         self.closed = true
       end
       function timer:is_closing()
-        return self.closed
+        return self.closed == true
       end
       timers[#timers + 1] = timer
       return timer
     end
-
-    original_watcher = package.loaded["codediff.core.watcher"]
+    old_watcher = package.loaded["codediff.core.watcher"]
     package.loaded["codediff.core.watcher"] = {
-      subscribe = function(root, handlers)
-        assert.equals(repository, root)
-        watcher_handlers = handlers
+      subscribe = function(_, callbacks)
+        handlers = callbacks
         return function()
           unsubscribed = true
         end
       end,
     }
-
-    original_auto_refresh = package.loaded["codediff.ui.auto_refresh"]
-    package.loaded["codediff.ui.auto_refresh"] = {
-      sync_mutable_buffers = function(_, done)
-        sync_count = sync_count + 1
-        sync_completions[#sync_completions + 1] = done
-      end,
-    }
-
-    refresh_module = require("codediff.ui.explorer.refresh")
-    original_refresh = refresh_module._refresh_once
-    refresh_module._refresh_once = function(_, done, force)
-      refresh_count = refresh_count + 1
-      refresh_completions[#refresh_completions + 1] = done
-      refresh_forces[#refresh_forces + 1] = force == true
+    old_read, old_apply = snapshot.read, apply.run
+    snapshot.read = function(_, event, _, done)
+      reads[#reads + 1] = { event = event, done = done }
     end
+    apply.run = function()
+      applied = applied + 1
+      return true
+    end
+    old_auto = require("codediff.config").options.explorer.auto_refresh
+    require("codediff.config").options.explorer.auto_refresh = true
   end)
 
   after_each(function()
-    if cleanup then
-      cleanup()
-      cleanup = nil
-    end
-    refresh_module._refresh_once = original_refresh
-    package.loaded["codediff.core.watcher"] = original_watcher
-    package.loaded["codediff.ui.auto_refresh"] = original_auto_refresh
-    uv.new_timer = original_new_timer
-    config.options.explorer.auto_refresh = original_auto_refresh_enabled
-    vim.fn.delete(repository, "rf")
+    refresh.dispose(tab)
+    snapshot.read, apply.run = old_read, old_apply
+    package.loaded["codediff.core.watcher"] = old_watcher
+    uv.new_timer = old_timer
+    require("codediff.config").options.explorer.auto_refresh = old_auto
+    lifecycle.cleanup(tab)
+    pcall(vim.cmd, "tabclose!")
+    vim.fn.delete(root, "rf")
   end)
 
   local function setup()
-    local tabpage = vim.api.nvim_get_current_tabpage()
-    local explorer = {
-      git_root = repository,
-      is_hidden = false,
-      winid = vim.api.nvim_get_current_win(),
-    }
-    cleanup = refresh_module.setup_auto_refresh(explorer, tabpage)
-    return explorer
+    local a = vim.api.nvim_create_buf(false, true)
+    local b = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(a, 0, -1, false, { "a" })
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { "b" })
+    local win = vim.api.nvim_get_current_win()
+    lifecycle.create_session(tab, {
+      git_root = root,
+      original = path.make_ref("a.txt", root),
+      modified = path.make_ref("a.txt", root),
+      original_revision = ":0",
+      modified_revision = "WORKING",
+      panel = { name = "explorer" },
+    }, { original_bufnr = a, modified_bufnr = b, original_win = win, modified_win = win, lines_diff = { changes = {} } })
+    session = lifecycle.get_session(tab)
+    controller = refresh.attach(tab)
+    uv.new_timer = old_timer
+    vim.wait(10)
   end
 
-  it("stops polling after ready and serializes refreshes", function()
-    local explorer = setup()
-    assert.equals(1, #timers)
-    assert.is_true(timers[1].started)
-
-    watcher_handlers.on_ready()
-    assert.is_true(explorer._native_watcher_ready)
-    assert.is_true(timers[1].stopped)
-    assert.is_true(timers[1].closed)
-    assert.equals(1, refresh_count)
-    assert.is_true(refresh_forces[1])
-
-    local direct_completed = 0
-    watcher_handlers.on_refresh()
-    watcher_handlers.on_refresh()
-    refresh_module.refresh(explorer, function()
-      direct_completed = direct_completed + 1
-    end)
-    watcher_handlers.on_refresh()
-    assert.equals(1, refresh_count)
-    assert.is_true(refresh_forces[1])
-
-    refresh_completions[1]()
-    assert.equals(1, sync_count)
-    assert.equals(1, refresh_count)
-
-    sync_completions[1]()
-    assert.equals(2, refresh_count)
-    assert.equals(0, direct_completed)
-    assert.is_true(refresh_forces[2])
-
-    refresh_completions[2]()
-    assert.equals(2, sync_count)
-    assert.equals(2, refresh_count)
-    sync_completions[2]()
-    assert.equals(1, direct_completed)
-  end)
-
-  it("keeps status-equality shortcuts for fallback polling", function()
-    setup()
+  local function fire()
     timers[1].callback()
-    assert.is_true(vim.wait(1000, function()
-      return refresh_count == 1
-    end, 10))
-    assert.is_false(refresh_forces[1])
-    refresh_completions[1]()
-    sync_completions[1]()
-  end)
+    vim.wait(10)
+  end
 
-  it("serializes direct refreshes when automatic refresh is disabled", function()
-    config.options.explorer.auto_refresh = false
-    local explorer = setup()
-
-    assert.equals(0, #timers)
-    assert.is_nil(watcher_handlers)
-
-    local forced_completed = 0
-    local ordinary_completed = 0
-    refresh_module.refresh(explorer)
-    refresh_module.refresh(explorer, function()
-      forced_completed = forced_completed + 1
-    end, true)
-    refresh_module.refresh(explorer, function()
-      ordinary_completed = ordinary_completed + 1
-    end, false)
-
-    assert.equals(1, refresh_count)
-    assert.is_false(refresh_forces[1])
-    assert.equals(0, forced_completed)
-    assert.equals(0, ordinary_completed)
-
-    refresh_completions[1]()
-    assert.equals(1, sync_count)
-    assert.equals(1, refresh_count)
-
-    sync_completions[1]()
-    assert.equals(2, refresh_count)
-    assert.is_true(refresh_forces[2])
-    assert.equals(0, forced_completed)
-    assert.equals(0, ordinary_completed)
-
-    refresh_completions[2]()
-    assert.equals(2, sync_count)
-    assert.equals(0, forced_completed)
-    assert.equals(0, ordinary_completed)
-
-    sync_completions[2]()
-    assert.equals(1, forced_completed)
-    assert.equals(1, ordinary_completed)
-  end)
-
-  it("drops a trailing refresh when cleanup happens during mutable sync", function()
+  it("stops fallback after ready and preserves every queued event category", function()
     setup()
-    watcher_handlers.on_ready()
-    watcher_handlers.on_refresh()
-    refresh_completions[1]()
-
-    assert.equals(1, sync_count)
-    cleanup()
-    cleanup = nil
-    sync_completions[1]()
-
-    assert.equals(1, refresh_count)
-    assert.is_true(unsubscribed)
-  end)
-
-  it("returns to polling after a running watcher fails", function()
-    local explorer = setup()
-    watcher_handlers.on_ready()
-    watcher_handlers.on_error("process exited")
-
-    assert.is_false(explorer._native_watcher_ready)
-
-    assert.equals(2, #timers)
     assert.is_true(timers[2].started)
-
-    cleanup()
-    cleanup = nil
-    assert.is_true(timers[2].stopped)
-    assert.is_true(timers[2].closed)
-    assert.is_true(unsubscribed)
+    handlers.on_ready()
+    assert.is_false(timers[2].started)
+    fire()
+    assert.equals(1, #reads)
+    assert.is_true(reads[1].event.full)
+    handlers.on_refresh({ worktree = true })
+    handlers.on_refresh({ index = true, refs = true })
+    assert.equals(1, #reads)
+    reads[1].done(nil, snapshot.capture(session))
+    fire()
+    assert.same({ worktree = true, index = true, refs = true }, reads[2].event)
   end)
 
-  it("requests a refresh when a hidden explorer is shown again", function()
-    local explorer = setup()
-    explorer.is_hidden = true
-    watcher_handlers.on_ready()
-    watcher_handlers.on_refresh()
-    assert.equals(0, refresh_count)
+  it("completes callbacks only after applying a settled snapshot", function()
+    setup()
+    local completed = 0
+    controller:request({ index = true }, function()
+      completed = completed + 1
+    end)
+    fire()
+    assert.equals(0, completed)
+    reads[1].done(nil, snapshot.capture(session))
+    assert.equals(1, applied)
+    assert.equals(1, completed)
+  end)
 
-    explorer.is_hidden = false
-    explorer._request_auto_refresh()
-    assert.equals(1, refresh_count)
+  it("uses full data checks rather than forced reinitialization for fallback", function()
+    setup()
+    handlers.on_error("watcher exited")
+    assert.is_true(timers[2].started)
+    timers[2].callback()
+    vim.wait(10)
+    fire()
+    assert.same({ full = true }, reads[1].event)
+  end)
+
+  it("discards an in-flight snapshot after retargeting", function()
+    setup()
+    controller:request({ index = true })
+    fire()
+    refresh.begin(tab)
+    reads[1].done(nil, snapshot.capture(session))
+    assert.equals(0, applied)
+    assert.is_true(controller.pending.index)
+  end)
+
+  it("does not replay completion callbacks onto a newer selection", function()
+    setup()
+    local completed = 0
+    controller:request({ index = true }, function()
+      completed = completed + 1
+    end)
+    fire()
+    refresh.begin(tab)
+    reads[1].done(nil, snapshot.capture(session))
+    refresh.ready(tab)
+    vim.wait(10)
+    fire()
+    reads[2].done(nil, snapshot.capture(session))
+    assert.equals(0, completed)
+  end)
+
+  it("tears down timers and the subscription even with a read in flight", function()
+    setup()
+    controller:request({ full = true })
+    fire()
+    refresh.dispose(tab)
+    reads[1].done(nil, snapshot.capture(session))
+    assert.equals(0, applied)
+    assert.is_true(unsubscribed)
+    for _, timer in ipairs(timers) do
+      assert.is_true(timer.closed)
+    end
+  end)
+
+  it("defers hidden-tab work, but does not drop its invalidations", function()
+    setup()
+    session.suspended = true
+    handlers.on_refresh({ index = true })
+    assert.equals(0, #reads)
+    assert.is_true(controller.pending.index)
+    session.suspended = false
+    controller:request({ render = true })
+    fire()
+    assert.is_true(reads[1].event.index)
+    assert.is_true(reads[1].event.render)
+  end)
+
+  it("retries a synchronous source error instead of leaving the queue running forever", function()
+    setup()
+    local reader = snapshot.read
+    snapshot.read = function()
+      error("temporary source failure")
+    end
+    controller:request({ index = true })
+    local ok = pcall(controller.run, controller)
+    assert.is_true(ok)
+    assert.is_false(controller.running)
+    snapshot.read = reader
+    fire()
+    reads[1].done(nil, snapshot.capture(session))
+    assert.equals(1, applied)
+  end)
+
+  it("rejects snapshots whose working buffers changed during the read", function()
+    setup()
+    controller:request({ index = true })
+    fire()
+    local data = snapshot.capture(session)
+    data.ticks = { [session.modified_bufnr] = vim.api.nvim_buf_get_changedtick(session.modified_bufnr) }
+    vim.api.nvim_buf_set_lines(session.modified_bufnr, 0, -1, false, { "edited while reading" })
+    reads[1].done(nil, data)
+    assert.equals(0, applied)
+    fire()
+    assert.is_true(reads[2].event.buffer)
+    reads[2].done(nil, snapshot.capture(session))
+    assert.equals(1, applied)
+  end)
+
+  it("still accepts manual requests when automatic refresh is disabled", function()
+    require("codediff.config").options.explorer.auto_refresh = false
+    setup()
+    assert.is_nil(handlers)
+    local completed = 0
+    controller:request({ full = true }, function()
+      completed = completed + 1
+    end)
+    fire()
+    reads[1].done(nil, snapshot.capture(session))
+    assert.equals(1, completed)
   end)
 end)

@@ -34,13 +34,7 @@ local function cleanup_diff(tabpage)
     },
   })
 
-  -- Disable auto-refresh for both buffers
-  local auto_refresh = require("codediff.ui.auto_refresh")
-  auto_refresh.disable(diff.original_bufnr)
-  auto_refresh.disable(diff.modified_bufnr)
-  if diff.result_bufnr then
-    auto_refresh.disable_result(diff.result_bufnr)
-  end
+  require("codediff.ui.refresh").dispose(tabpage)
 
   -- Restore gutter options before deleting buffers can close or reuse windows.
   require("codediff.ui.conflict").teardown_gutter(tabpage)

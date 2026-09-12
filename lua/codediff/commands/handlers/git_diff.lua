@@ -67,6 +67,7 @@ function M.run(revision, revision2, global_opts)
                   modified = path.make_ref(modified_path, git_root),
                   original_revision = commit_hash,
                   modified_revision = commit_hash2,
+                  source_revisions = { original = revision, modified = revision2 },
                   layout = global_opts.layout,
                   exit_on_close = global_opts.exit_on_close,
                 }
@@ -85,6 +86,7 @@ function M.run(revision, revision2, global_opts)
               modified = path.make_ref(relative_path, git_root),
               original_revision = commit_hash,
               modified_revision = "WORKING",
+              source_revisions = { original = revision, modified = "WORKING" },
               layout = global_opts.layout,
               exit_on_close = global_opts.exit_on_close,
             }

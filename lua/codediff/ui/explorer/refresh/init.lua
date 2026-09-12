@@ -181,31 +181,27 @@ local function rebuild_tree(explorer, status_result, collapsed_state)
   -- Restore user's collapsed state (must be after expand_all_dirs)
   restore_collapsed_state(explorer.tree, collapsed_state, root_nodes)
 
-  explorer.tree:render()
+  if not explorer.is_hidden then
+    explorer.tree:render()
+  end
 end
 
 -- Execute one explorer refresh. Public callers use M.refresh below.
-function M._refresh_once(explorer, done, force)
+function M._refresh_once(explorer, done)
   local git = require("codediff.core.git")
   local completed = false
-  local function complete()
+  local function complete(err)
     if completed then
       return
     end
     completed = true
     if done then
-      done()
+      done(err)
     end
   end
 
-  -- Skip refresh if explorer is hidden
-  if explorer.is_hidden then
-    complete()
-    return
-  end
-
-  -- Verify window is still valid before accessing
-  if not vim.api.nvim_win_is_valid(explorer.winid) then
+  -- A hidden panel still supplies status and comparison definitions.
+  if not explorer.is_hidden and not vim.api.nvim_win_is_valid(explorer.winid) then
     complete()
     return
   end
@@ -216,20 +212,18 @@ function M._refresh_once(explorer, done, force)
   local function process_result(err, status_result)
     vim.schedule(function()
       local lifecycle = require("codediff.ui.lifecycle")
-      if lifecycle.get_panel_view(explorer.tabpage) ~= explorer or not vim.api.nvim_win_is_valid(explorer.winid) then
+      if lifecycle.get_panel_view(explorer.tabpage) ~= explorer or (not explorer.is_hidden and not vim.api.nvim_win_is_valid(explorer.winid)) then
         complete()
         return
       end
 
       if err then
-        vim.notify("Failed to refresh: " .. err, vim.log.levels.ERROR)
-        complete()
+        complete(err)
         return
       end
 
-      -- Watch notifications are invalidation hints. Skip UI churn when the
-      -- resulting status did not actually change.
-      if not force and vim.deep_equal(status_result, explorer.status_result) then
+      -- Panel equality does not suppress the controller's input inspection.
+      if vim.deep_equal(status_result, explorer.status_result) then
         complete()
         return
       end
@@ -261,15 +255,22 @@ function M._refresh_once(explorer, done, force)
       if explorer.current_file_path and total_files > 0 then
         local found_file, found_group = file_to_reselect(explorer, status_result, prev_index)
         if found_file then
-          -- on_file_select dedupes; no_jump keeps the cursor where it is,
-          -- since this is a refresh rather than a click.
-          explorer.on_file_select({
-            path = found_file.path,
-            old_path = found_file.old_path,
-            status = found_file.status,
-            git_root = explorer.git_root,
-            group = found_group,
-          }, { no_jump = true, force = force })
+          local selected = explorer.current_selection
+          if
+            not selected
+            or selected.path ~= found_file.path
+            or selected.group ~= found_group
+            or selected.status ~= found_file.status
+            or selected.old_path ~= found_file.old_path
+          then
+            explorer.on_file_select({
+              path = found_file.path,
+              old_path = found_file.old_path,
+              status = found_file.status,
+              git_root = explorer.git_root,
+              group = found_group,
+            }, { no_jump = true })
+          end
         else
           -- Committed or removed.
           clear_current_file(explorer)
@@ -280,31 +281,72 @@ function M._refresh_once(explorer, done, force)
     end)
   end
 
-  -- Use appropriate function based on mode
-  if not explorer.git_root then
-    -- Dir mode: re-scan directories
-    local dir_mod = require("codediff.core.dir")
-    local diff = dir_mod.diff_directories(explorer.dir1, explorer.dir2)
-    process_result(nil, diff.status_result)
-  elseif explorer.target_revision == ":0" then
-    -- Staged-only mode (--staged): index vs base_revision. `git diff base :0`
-    -- isn't a valid rev-pair; use `git diff --cached base` instead.
-    git.get_diff_staged(explorer.base_revision, explorer.git_root, process_result, explorer.pathspec)
-  elseif explorer.base_revision and explorer.target_revision and explorer.target_revision ~= "WORKING" then
-    git.get_diff_revisions_with_line_stats(explorer.base_revision, explorer.target_revision, explorer.git_root, process_result, explorer.pathspec)
-  elseif explorer.base_revision then
-    git.get_diff_revision_with_line_stats(explorer.base_revision, explorer.git_root, process_result, explorer.pathspec)
-  else
-    git.get_status_with_line_stats(explorer.git_root, process_result, explorer.pathspec)
+  local function fetch_status()
+    -- Use appropriate function based on mode
+    if not explorer.git_root then
+      -- Dir mode: re-scan directories
+      local dir_mod = require("codediff.core.dir")
+      local diff = dir_mod.diff_directories(explorer.dir1, explorer.dir2)
+      process_result(nil, diff.status_result)
+    elseif explorer.target_revision == ":0" then
+      -- Staged-only mode (--staged): index vs base_revision. `git diff base :0`
+      -- isn't a valid rev-pair; use `git diff --cached base` instead.
+      git.get_diff_staged(explorer.base_revision, explorer.git_root, process_result, explorer.pathspec)
+    elseif explorer.base_revision and explorer.target_revision and explorer.target_revision ~= "WORKING" then
+      git.get_diff_revisions_with_line_stats(explorer.base_revision, explorer.target_revision, explorer.git_root, process_result, explorer.pathspec)
+    elseif explorer.base_revision then
+      git.get_diff_revision_with_line_stats(explorer.base_revision, explorer.git_root, process_result, explorer.pathspec)
+    else
+      git.get_status_with_line_stats(explorer.git_root, process_result, explorer.pathspec)
+    end
   end
+
+  local requested = explorer.source_revisions
+  if not requested then
+    fetch_status()
+    return
+  end
+  local resolved, remaining, failure = {}, 1, nil
+  local function settled(err)
+    failure = failure or err
+    remaining = remaining - 1
+    if remaining ~= 0 then
+      return
+    end
+    if failure then
+      complete(failure)
+      return
+    end
+    if require("codediff.ui.lifecycle").get_panel_view(explorer.tabpage) ~= explorer then
+      complete()
+      return
+    end
+    explorer.base_revision, explorer.target_revision = resolved.original, resolved.modified
+    fetch_status()
+  end
+  for side, revision in pairs(requested) do
+    remaining = remaining + 1
+    if revision == "WORKING" or revision:match("^:[0-3]$") then
+      resolved[side] = revision
+      settled()
+    else
+      git.resolve_revision(revision, explorer.git_root, function(err, hash)
+        vim.schedule(function()
+          resolved[side] = hash
+          settled(err)
+        end)
+      end)
+    end
+  end
+  settled()
 end
 
 -- Queue every refresh source through the controller installed on the explorer.
-function M.refresh(explorer, done, force)
+function M.refresh(explorer, done)
   if explorer and explorer._request_refresh then
-    return explorer._request_refresh(force, done)
+    return explorer._request_refresh({ full = true }, done)
   end
-  return M._refresh_once(explorer, done, force)
+  return M._refresh_once(explorer, done)
 end
 
 -- Rebuild the tree synchronously from the cached status_result. Used when only

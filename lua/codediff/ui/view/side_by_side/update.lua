@@ -3,7 +3,6 @@ local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
 local virtual_file = require("codediff.core.virtual_file")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local config = require("codediff.config")
 local layout = require("codediff.ui.layout")
 local helpers = require("codediff.ui.view.helpers")
@@ -19,7 +18,6 @@ local show_real_file_buffer = helpers.show_real_file_buffer
 local open_real_file = helpers.open_real_file
 local compute_and_render = render.compute_and_render
 local compute_and_render_conflict = conflict_view.compute_and_render_conflict
-local setup_auto_refresh = render.setup_auto_refresh
 local setup_conflict_result_window = conflict_view.setup_conflict_result_window
 local setup_all_keymaps = view_keymaps.setup_all_keymaps
 
@@ -120,6 +118,10 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   if not session then
     return false
   end
+  local generation = session.refresh and session.refresh.generation
+  local function current()
+    return require("codediff.ui.refresh").is_current(tabpage, session, generation)
+  end
   session.single_side = nil
 
   -- Get existing buffers and windows
@@ -136,12 +138,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   -- Retire the old conflict renderer before asynchronous buffer loading starts.
   if session.result_bufnr then
     require("codediff.ui.conflict").teardown_gutter(tabpage)
-    auto_refresh.disable_result(session.result_bufnr)
   end
-
-  -- Disable auto-refresh temporarily
-  auto_refresh.disable(old_original_buf)
-  auto_refresh.disable(old_modified_buf)
 
   -- Clear highlights from old buffers (before they're replaced/deleted)
   lifecycle.clear_highlights(old_original_buf)
@@ -201,6 +198,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   }
 
   local render_everything = function()
+    if not current() then
+      return
+    end
     -- Guard: Check if windows are still valid
     if not vim.api.nvim_win_is_valid(original_win) or not vim.api.nvim_win_is_valid(modified_win) then
       return
@@ -229,6 +229,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         end
 
         vim.schedule(function()
+          if not current() or not vim.api.nvim_buf_is_valid(original_info.bufnr) or not vim.api.nvim_buf_is_valid(modified_info.bufnr) then
+            return
+          end
           local conflict_diffs =
             compute_and_render_conflict(original_info.bufnr, modified_info.bufnr, base_lines, original_lines, modified_lines, original_win, modified_win, should_auto_scroll)
 
@@ -269,7 +272,6 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
         lifecycle.update_revisions(tabpage, session_config.original_revision, session_config.modified_revision)
         lifecycle.update_diff_result(tabpage, lines_diff)
         lifecycle.update_changedtick(tabpage, vim.api.nvim_buf_get_changedtick(original_info.bufnr), vim.api.nvim_buf_get_changedtick(modified_info.bufnr))
-        setup_auto_refresh(original_info.bufnr, modified_info.bufnr, original_is_virtual, modified_is_virtual)
 
         local is_explorer_mode = session.panel and session.panel.name == "explorer"
         setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, is_explorer_mode)

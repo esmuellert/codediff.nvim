@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local layout = require("codediff.ui.layout")
 local welcome_window = require("codediff.ui.view.welcome_window")
 local helpers = require("codediff.ui.view.helpers")
@@ -104,9 +103,6 @@ local function commit_update(tabpage, session_config, orig_buf, mod_buf, lines_d
   lifecycle.update_changedtick(tabpage, vim.api.nvim_buf_get_changedtick(orig_buf), vim.api.nvim_buf_get_changedtick(mod_buf))
   lifecycle.update_paths(tabpage, session_config.original, session_config.modified)
 
-  auto_refresh.enable(orig_buf)
-  auto_refresh.enable(mod_buf)
-
   setup_keymaps(tabpage, orig_buf, mod_buf)
   layout.arrange(tabpage)
 
@@ -127,6 +123,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     return false
   end
 
+  local generation = session.refresh and session.refresh.generation
   local modified_win = session.modified_win
   if not modified_win or not vim.api.nvim_win_is_valid(modified_win) then
     return false
@@ -152,6 +149,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   local should_auto_scroll = auto_scroll_to_first_hunk == true
 
   local render = function()
+    if not require("codediff.ui.refresh").is_current(tabpage, session, generation) then
+      return
+    end
     if not vim.api.nvim_win_is_valid(modified_win) then
       return
     end

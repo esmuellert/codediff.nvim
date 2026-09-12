@@ -131,7 +131,9 @@ describe("Explorer refresh and single-file stability", function()
     refresh.refresh(explorer, function()
       completed = completed + 1
     end)
-    assert.is_function(git_callback)
+    assert.is_true(vim.wait(1000, function()
+      return type(git_callback) == "function"
+    end, 10))
 
     original_get_panel_view = lifecycle.get_panel_view
     lifecycle.get_panel_view = function(candidate)
@@ -148,8 +150,9 @@ describe("Explorer refresh and single-file stability", function()
     })
 
     assert.is_true(vim.wait(1000, function()
-      return completed == 1
+      return not lifecycle.get_session(tabpage).refresh.running
     end, 10))
+    assert.equals(0, completed, "a retired panel must not replay navigation callbacks")
     assert.same(status_before, explorer.status_result)
   end)
 

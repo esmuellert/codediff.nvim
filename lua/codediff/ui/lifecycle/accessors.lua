@@ -262,6 +262,9 @@ function M.update_diff_result(tabpage, diff_lines)
   end
 
   sess.stored_diff_result = diff_lines
+  if diff_lines then
+    require("codediff.ui.refresh").ready(tabpage)
+  end
   return true
 end
 
@@ -427,7 +430,6 @@ function M.set_result(tabpage, result_bufnr, result_win)
       sess.keymaps:release_scope("conflict")
     end
     require("codediff.ui.conflict").teardown_gutter(tabpage)
-    require("codediff.ui.auto_refresh").disable_result(sess.result_bufnr)
     sess.conflict_blocks = nil
     sess.result_base_lines = nil
     sess.merge_base_lines = nil

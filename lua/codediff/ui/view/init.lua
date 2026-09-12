@@ -29,6 +29,7 @@ end
 ---@field modified Path
 ---@field original_revision string?
 ---@field modified_revision string?
+---@field source_revisions { original: string?, modified: string? }? Requested refs before resolution; retained for refresh
 ---@field conflict boolean? For merge conflict mode: render both sides against base
 ---@field layout "side-by-side"|"inline"? Optional per-invocation layout override
 ---@field exit_on_close boolean? Exit Neovim when this session closes
@@ -58,6 +59,10 @@ end
 ---@param auto_scroll_to_first_hunk boolean? Whether to auto-scroll to first hunk (default: false)
 ---@return boolean success Whether update succeeded
 function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
+  if not lifecycle.get_session(tabpage) then
+    return false
+  end
+  require("codediff.ui.refresh").begin(tabpage, session_config)
   if get_layout(session_config, tabpage) == "inline" then
     return require("codediff.ui.view.inline_view").update(tabpage, session_config, auto_scroll_to_first_hunk)
   end
