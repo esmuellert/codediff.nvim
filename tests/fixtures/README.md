@@ -27,7 +27,10 @@ a valid current directory when necessary. Call it after closing the embedded UI.
 A `VimLeavePre` fallback also removes seeds and abandoned cases. No fixture lives
 in the checked-out source tree. If an unavailable backend skips a case during
 setup, its cleanup hooks still run; cleanup failures are reported rather than
-hidden by the skip.
+hidden by the skip. The plugin-aware `tests.support.create_temp_git_repo()`
+helper also retires matching in-process sessions before deletion so native
+watchers release their directory handles. This does not replace closing an
+embedded UI, which lives in a separate process.
 
 `tests/init.lua` removes inherited repository/index environment overrides and
 isolates global/system Git configuration. The factory also rejects inherited
@@ -76,6 +79,7 @@ repo.command({ "diff", "--quiet" }, 1)          -- explicit expected nonzero sta
 repo.write_file("a.txt", { "one", "two" })
 repo.write_bytes("a.txt", "one\r\ntwo")
 repo.replace("a.txt", 2, "changed")
+repo.write_index("a.txt", { "index-only content" }) -- working file is unchanged
 local index = repo.blob_lines(":0", "a.txt")
 local index_path = repo.git_path("index")
 repo.cleanup()
@@ -83,7 +87,10 @@ repo.cleanup()
 
 Prefer argv-form `command` for new cases. `git` also accepts existing string-form
 commands; the refresh fixture checks their exit status, including merge failures
-that must explicitly expect code 1.
+that must explicitly expect code 1. `write_index` writes a real blob and index
+entry directly; it can accept text or lines. Use it when only the index should
+change, instead of writing/staging/restoring the working file and exposing
+transient states to the watcher.
 
 The lower-level factory supports special states through the same lifecycle:
 

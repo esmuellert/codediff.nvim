@@ -218,6 +218,11 @@ function Controller:start_polling()
     500,
     500,
     vim.schedule_wrap(function()
+      -- Polling samples current state, unlike repository invalidations. A slow
+      -- read must finish before another sample is queued, or it never settles.
+      if not self.polling or self.closed or self.running or self.loading or next(self.pending) or #self.callbacks > 0 then
+        return
+      end
       self:request({ full = true })
     end)
   )

@@ -24,6 +24,10 @@ notifications with a call to an internal refresh method.
 
 Race cases delay delivery of **real Git results**, without replacing their
 contents. The read-error case temporarily removes a real loose Git object.
+Index-only changes are written directly to Git objects/index entries, without
+exposing an unintended intermediate working-tree state. Literal-arrow path
+cases keep entries in the real index with skip-worktree, allowing Windows to
+exercise the same status parsing without trying to create an illegal `>` filename.
 Dialog cases answer Neovim's actual confirmation prompt. Expected file contents,
 Git blobs, paths, colors and navigation destinations come from the fixture or
 Git, not production diff/gutter calculators.
@@ -35,7 +39,7 @@ are difficult to express through a Git merge. They are not counted below.
 ## Scenario matrix
 
 A named scenario is distinct from its parameterized executions. The matrix has
-132 named scenarios and 544 E2E executions on a platform with a native watcher.
+133 named scenarios and 548 E2E executions on a platform with a native watcher.
 This is the refresh change-audit matrix, not the entire E2E suite. Other command,
 working-file and diagnostic E2Es are additional coverage. Fixture self-tests,
 unit tests and component integrations are not included in these counts.
@@ -45,7 +49,7 @@ unit tests and component integrations are not included in these counts.
 | [refresh/repository_spec.lua](refresh/repository_spec.lua) | 16 | 64 | native/polling × side-by-side/inline |
 | [conflict/refresh_spec.lua](conflict/refresh_spec.lua) | 10 | 20 | native/polling; three missing-stage shapes |
 | [refresh/files_spec.lua](refresh/files_spec.lua) | 3 | 6 | side-by-side/inline; plain-file polling |
-| [refresh/lifecycle_spec.lua](refresh/lifecycle_spec.lua) | 17 | 66 | both transports/layouts; process exit is native-only |
+| [refresh/lifecycle_spec.lua](refresh/lifecycle_spec.lua) | 18 | 70 | both transports/layouts; process exit is native-only |
 | [view/hunk_actions_spec.lua](view/hunk_actions_spec.lua) | 14 | 54 | both transports/layouts; manual-only mode runs per layout |
 | [explorer/actions_spec.lua](explorer/actions_spec.lua) | 20 | 80 | both transports/layouts |
 | [history/actions_spec.lua](history/actions_spec.lua) | 14 | 56 | both transports/layouts |
@@ -166,6 +170,7 @@ Each ID is part of the test name, making failures and source searches traceable.
 | S15–S19 | Whitespace policy, whole-file highlights, original-right layout, moves, --repo |
 | T09–T12 | Hidden updates, hidden wipe, pane close, actual missing-object read/retry |
 | T13–T16 | Leaving/returning to Git, user keymaps, inlay hints, shared buffers across tabs |
+| T17 | Real Git reads slower than the polling interval still settle and publish the correct inputs |
 | V01–V04 | Public revision URI, write protection, reversed load completions, wipe, missing file |
 
 The existing 38 scenarios cover unchanged-status worktree changes, unsaved
@@ -185,6 +190,7 @@ hidden panels, shared subscriptions and native-process failover.
 | Y13–Y14 | Preserve line-range and reverse query options during history refresh |
 | T13 | Materialize a genuinely empty comparison side when following a file outside Git |
 | T15–T16 | Retain original buffer settings and respect buffers still owned by another session |
+| T17 | Coalesce fallback samples while input reads are running, without dropping actual invalidations |
 
 ## Scope of the assurance
 

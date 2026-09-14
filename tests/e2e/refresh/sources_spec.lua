@@ -144,22 +144,33 @@ for _, backend in ipairs({ "native", "polling" }) do
       it("[S12] a literal arrow in a filename is not parsed as a rename", function()
         repo = h.repo()
         local file = "literal -> name.txt"
-        repo.write_file(file, { "header", "old value", "tail" })
-        repo.commit("literal arrow path")
-        repo.replace(file, 2, "new value")
-        h.open(screen, repo, "CodeDiff", file, file)
+        -- Git can store this path on Windows, but NTFS cannot check it out.
+        repo.command({ "config", "core.protectNTFS", "false" })
+        repo.write_index(file, { "header", "old value", "tail" })
+        repo.command({ "update-index", "--skip-worktree", file })
+        repo.command({ "commit", "-m", "literal arrow path" })
+        repo.write_index(file, { "header", "new value", "tail" })
+        repo.command({ "update-index", "--skip-worktree", file })
+        h.open(screen, repo, "CodeDiff", file)
+        h.expect_panel(screen, file)
         h.expect_lines(screen, "original", { "header", "old value", "tail" })
         h.expect_text(screen, "modified", "new value")
       end)
 
       it("[S13] a renamed destination containing an arrow retains its complete path", function()
         repo = h.repo()
-        local file = "rename/target -> final.txt"
-        repo.command({ "mv", "rename/source file.txt", file })
-        repo.replace(file, 3, "working arrow rename")
-        h.open(screen, repo, "CodeDiff", file, file)
-        h.expect_lines(screen, "original", fixture.files["rename/source file.txt"])
-        h.expect_text(screen, "modified", "working arrow rename")
+        local source, file = "rename/source file.txt", "rename/target -> final.txt"
+        repo.command({ "config", "core.protectNTFS", "false" })
+        local lines = vim.deepcopy(fixture.files[source])
+        lines[3] = "index arrow rename"
+        repo.command({ "update-index", "--force-remove", source })
+        assert.equals(0, vim.fn.delete(repo.path(source)))
+        repo.write_index(file, lines)
+        repo.command({ "update-index", "--skip-worktree", file })
+        h.open(screen, repo, "CodeDiff", file)
+        h.expect_panel(screen, "target -> final.txt")
+        h.expect_lines(screen, "original", fixture.files[source])
+        h.expect_text(screen, "modified", "index arrow rename")
       end)
 
       it("[S14] an unborn branch opens staged content against an empty base", function()

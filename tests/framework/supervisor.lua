@@ -131,7 +131,7 @@ local TIMEOUT_EXIT_CODE = 124
 -- takes the next spec, so a slow spec never strands the remaining work and no
 -- hand-maintained ordering is required.
 local function run_parallel(specs, opts)
-  local results = {}
+  local results, active = {}, {}
   local next_index, emitted = 1, 0
 
   local function spawn_next()
@@ -140,8 +140,11 @@ local function run_parallel(specs, opts)
     end
     local spec = specs[next_index]
     next_index = next_index + 1
+    active[spec] = uv.hrtime()
+    reporter.print_spec_start(spec)
 
     vim.system(child_argv(spec), { text = true, timeout = opts.timeout }, function(obj)
+      active[spec] = nil
       -- Keep the pool saturated before doing anything else.
       spawn_next()
       -- Emission is deferred to the main loop: the whole block is written by a
@@ -162,11 +165,22 @@ local function run_parallel(specs, opts)
     spawn_next()
   end
 
+  local progress = uv.new_timer()
+  progress:start(
+    30000,
+    30000,
+    vim.schedule_wrap(function()
+      reporter.print_running(active, uv.hrtime())
+    end)
+  )
+
   -- Every child is bounded by `opts.timeout`, so this is a true upper bound.
   local cap = opts.timeout * math.ceil(#specs / opts.jobs) + 60000
   vim.wait(cap, function()
     return emitted >= #specs
   end, 20)
+  progress:stop()
+  progress:close()
 
   return results
 end
@@ -179,6 +193,7 @@ end
 local function run_sequential(specs)
   local results = {}
   for _, spec in ipairs(specs) do
+    reporter.print_spec_start(spec)
     local out = vim.fn.system(child_argv(spec))
     local code = vim.v.shell_error
     reporter.emit_block(spec, out, nil)

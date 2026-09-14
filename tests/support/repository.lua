@@ -115,6 +115,17 @@ local function repository(dir)
     return value == "" and {} or vim.split(value:gsub("\n$", ""), "\n", { plain = true })
   end
 
+  -- Update only the index: no intermediate working-tree state or checkout is
+  -- needed, including for Git paths that the host filesystem cannot represent.
+  function repo.write_index(filename, content)
+    if type(content) == "table" then
+      content = table.concat(content, "\n") .. (#content > 0 and "\n" or "")
+    end
+    local oid = vim.trim(repo.command({ "hash-object", "-w", "--stdin" }, 0, { stdin = content }))
+    repo.command({ "update-index", "--add", "--cacheinfo", "100644," .. oid .. "," .. filename })
+    return oid
+  end
+
   function repo.commit(message)
     commit_number = commit_number + 1
     local date = string.format("2001-01-%02dT12:00:00+00:00", commit_number)

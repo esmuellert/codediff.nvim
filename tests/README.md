@@ -81,7 +81,10 @@ nvim --headless --noplugin -u tests/init.lua \
 
 Each spec gets its own child Neovim process. The supervisor discovers files
 recursively, runs a bounded worker pool and prints each child's output as one
-block. New specs need no manifest or CI enumeration changes.
+block. Start messages and a 30-second active-worker heartbeat distinguish long
+specs from a stalled runner. New specs need no manifest or CI enumeration changes.
+Windows CI uses four workers and a 15-minute per-spec budget for large E2E
+matrices; individual asynchronous assertions retain their own bounded waits.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
@@ -90,6 +93,7 @@ block. New specs need no manifest or CI enumeration changes.
 | `CODEDIFF_TEST_TIMEOUT` | `300000` | Per-spec timeout in milliseconds |
 | `NO_COLOR` / `CODEDIFF_TEST_NO_COLOR` | unset | Disable ANSI output |
 | `CODEDIFF_WATCHER_PATH` | installer default | Existing native watcher executable for offline E2Es |
+| `CODEDIFF_TEST_UPSTREAM_SCROLLBIND` | unset | Opt into the strict tall-virtual-line regression on a Neovim build carrying the upstream fix |
 
 ## Fixtures and shared support
 
@@ -138,10 +142,17 @@ silent fallback is not a native-test pass. Polling cases disable native startup
 and exercise the 500 ms fallback. Android skips native cases only. Race tests
 may delay delivery of real Git results, but do not fabricate their contents.
 
+The tall-virtual-line monotonicity check is an upstream Neovim probe, not a
+CodeDiff workaround. Neovim reverted #41519 in `0c9012f`, so a `0.13` version
+check is insufficient. Its assertion remains opt-in on fixed builds; CodeDiff's
+own scrollbind setup is checked unconditionally. Synthetic gutter fixtures
+retire their comparison controller so periodic input reads cannot overwrite the
+hand-authored projections; real merge E2Es keep the full controller active.
+
 ## Behavioral coverage
 
 [e2e/COVERAGE.md](e2e/COVERAGE.md) maps the refresh changes against `main` to
-scenario IDs and parameterized executions. Its 132 named scenarios / 544
+scenario IDs and parameterized executions. Its 133 named scenarios / 548
 executions are a specific cross-feature matrix, **not the total E2E suite** and
 not a count of unit or integration tests. Additional command and working-file
 E2Es live alongside it. The runner reports the selected suite's actual counts.

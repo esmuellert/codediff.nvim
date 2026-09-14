@@ -1,13 +1,19 @@
 local repositories = require("tests.support.repository")
 
 describe("isolated fixture worktrees", function()
-  local repos
+  local repos, tabs
   before_each(function()
-    repos = {}
+    repos, tabs = {}, {}
   end)
   after_each(function()
     for _, repo in ipairs(repos) do
       repo.cleanup()
+    end
+    for _, tab in ipairs(tabs) do
+      if vim.api.nvim_tabpage_is_valid(tab) then
+        vim.api.nvim_set_current_tabpage(tab)
+        vim.cmd("tabclose!")
+      end
     end
   end)
   local function new(opts)
@@ -55,6 +61,45 @@ describe("isolated fixture worktrees", function()
     first.command({ "add", "staged.txt" })
     assert.equals("", second.command({ "status", "--porcelain" }))
     assert.equals("", second.command({ "ls-files", "staged.txt" }))
+  end)
+
+  it("writes index content without exposing an intermediate working-tree change", function()
+    local repo = new()
+    repo.write_file("a.txt", { "working" })
+    local oid = repo.write_index("a.txt", { "index" })
+    assert.same({ "working" }, repo.read_file("a.txt"))
+    assert.same({ "index" }, repo.blob_lines(":0", "a.txt"))
+    assert.equals(oid, vim.trim(repo.command({ "rev-parse", ":0:a.txt" })))
+  end)
+
+  it("retires only a plugin-aware fixture's sessions before removing its directory", function()
+    local h = require("tests.support")
+    local lifecycle = require("codediff.ui.lifecycle")
+    local path = require("codediff.core.path")
+    local first, second = h.create_temp_git_repo(), h.create_temp_git_repo()
+    repos[#repos + 1], repos[#repos + 2] = first, second
+    local function open(repo)
+      repo.write_file("a.txt", { "content" })
+      vim.cmd("tabnew")
+      local tab, win, buf = vim.api.nvim_get_current_tabpage(), vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+      tabs[#tabs + 1] = tab
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "content" })
+      lifecycle.create_session(tab, {
+        git_root = repo.dir,
+        original = path.make_ref("a.txt", repo.dir),
+        modified = path.make_ref("a.txt", repo.dir),
+      }, { original_bufnr = buf, modified_bufnr = buf, original_win = win, modified_win = win, lines_diff = { changes = {} } })
+      return tab, require("codediff.ui.refresh").attach(tab)
+    end
+    local first_tab, first_controller = open(first)
+    local second_tab, second_controller = open(second)
+    first.cleanup()
+    assert.is_nil(lifecycle.get_session(first_tab))
+    assert.is_true(first_controller.closed)
+    assert.equals(0, vim.fn.isdirectory(first.root))
+    assert.is_not_nil(lifecycle.get_session(second_tab))
+    assert.is_true(second_controller:valid())
+    assert.equals(1, vim.fn.isdirectory(second.root))
   end)
 
   it("also supplies regular Git-directory fixtures through the same factory", function()

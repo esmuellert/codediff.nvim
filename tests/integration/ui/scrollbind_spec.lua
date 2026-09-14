@@ -51,16 +51,18 @@ describe("native scrollbind", function()
     vim.cmd("rightbelow vsplit")
     local right = make_window({ "right" })
 
-    vim.wo[left].scrollbind = true
-    vim.wo[right].scrollbind = true
+    require("codediff.ui.view.render").establish_scrollbind(left, right, vim.api.nvim_win_get_buf(left), vim.api.nvim_win_get_buf(right), { changes = {} }, { 1, 0 }, { 1, 0 })
 
     assert.is_true(vim.wo[left].scrollbind)
     assert.is_true(vim.wo[right].scrollbind)
   end)
 
   it("keeps scrolling monotonic through a full-screen filler block", function()
-    if vim.fn.has("nvim-0.13") ~= 1 then
-      pending("requires Neovim's upstream tall virt_lines scrollbind fix")
+    -- Neovim reverted #41519 in 0c9012f; version 0.13 alone no longer
+    -- guarantees this upstream behavior. Keep the strict repro opt-in for
+    -- builds carrying its replacement, rather than hiding oscillation here.
+    if vim.env.CODEDIFF_TEST_UPSTREAM_SCROLLBIND ~= "1" then
+      pending("Neovim #41519 was reverted; opt in with CODEDIFF_TEST_UPSTREAM_SCROLLBIND=1 on a fixed build")
     end
 
     local left = make_window(make_content("C", 60), 30)

@@ -34,9 +34,30 @@ function M.git_cmd(dir, args)
   return require("tests.support.repository").git(dir, args)
 end
 
--- A fresh unborn main branch in an isolated TMP repository and worktree.
+-- A plugin-aware fixture: retire its sessions before removing directories that
+-- an active native watcher (especially on Windows) still has open.
 function M.create_temp_git_repo()
-  return require("tests.support.repository").new({ unborn = true })
+  local repo = require("tests.support.repository").new({ unborn = true })
+  local remove = repo.cleanup
+  repo.cleanup = function()
+    local sessions = package.loaded["codediff.ui.lifecycle.session"]
+    if sessions then
+      local function belongs(path)
+        if type(path) ~= "string" then
+          return false
+        end
+        path = path:gsub("\\", "/")
+        return path == repo.dir or path:sub(1, #repo.dir + 1) == repo.dir .. "/"
+      end
+      for tab, session in pairs(sessions.get_active_diffs()) do
+        if belongs(session.git_root) or belongs(session.original and session.original.absolute) or belongs(session.modified and session.modified.absolute) then
+          require("codediff.ui.lifecycle").cleanup(tab)
+        end
+      end
+    end
+    remove()
+  end
+  return repo
 end
 
 function M.wait_async(timeout_ms, condition_fn, interval_ms)

@@ -28,6 +28,18 @@ describe("conflict block gutter on the screen grid", function()
     end)
   end
 
+  it("keeps synthetic projections intact beyond the refresh polling interval", function()
+    screen = Screen.new(120, 24)
+    local panes = gutter.open_block(screen, 3)
+    vim.wait(650)
+    screen:flush()
+    local expected = gutter.block_rows(cases[3])
+    for _, side in ipairs({ "original", "modified", "result" }) do
+      gutter.expect_pane(screen, panes[side], expected[side], "settled fixture: " .. side, panes.foreground)
+    end
+    assert.is_nil(screen:exec("return require('codediff.ui.lifecycle').get_session(...).refresh", { panes.tab }))
+  end)
+
   it("keeps BOF offsets correct when only part of the leading filler is visible", function()
     screen = Screen.new(120, 24)
     local panes = gutter.open_block(screen, 13)

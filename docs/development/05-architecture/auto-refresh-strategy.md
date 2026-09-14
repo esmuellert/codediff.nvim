@@ -23,9 +23,11 @@ consume data changes rather than managing independent refresh loops.
 Removed the `auto_refresh` entry point, Explorer scheduler and per-panel refresh
 modules. The former `refresh/apply.lua` responsibilities now live in the existing
 view helpers and renderers; there is no separate refresh rendering pipeline.
-Watcher categories remain intact, with a 500 ms polling fallback. Unchanged
-inputs do not disturb the comparison, and changed merge inputs cannot overwrite
-an edited Result.
+Watcher categories remain intact, with a 500 ms polling fallback. Poll ticks
+sample only when no selection, read or invalidation is pending; slow Git reads
+must finish rather than accumulate an endless polling backlog. Actual repository
+invalidations are still queued while a read is running. Unchanged inputs do not
+disturb the comparison, and changed merge inputs cannot overwrite an edited Result.
 
 Regression coverage includes native watcher and polling screen-grid E2Es, data
 ownership, presentation-only list updates, navigation, hunk actions and stale

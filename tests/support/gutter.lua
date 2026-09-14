@@ -3,9 +3,10 @@ local M = {}
 -- Build a block with deliberately different buffer coordinates in each pane.
 -- Only the public conflict entry points render it; no calculator/backend calls.
 function M.open_block(screen, case_index)
-  return screen:exec(
+  local panes = screen:exec(
     [[
     local case_index = ...
+    _G.gutter_fixture_ready = false
     local case = require('tests.fixtures.conflict_gutter')[case_index]
     local conflict = require('codediff.ui.conflict')
     local lifecycle = require('codediff.ui.lifecycle')
@@ -64,6 +65,12 @@ function M.open_block(screen, case_index)
     conflict.attach_gutter(original_win, modified_win)
     conflict.setup_refresh_autocmd(tab, result_buf)
     conflict.refresh(lifecycle.get_session(tab))
+    -- Synthetic projections are not a filesystem comparison. Let the scheduled
+    -- lifecycle attach complete, then retire it without disabling gutter edits.
+    vim.schedule(function()
+      require('codediff.ui.refresh').dispose(tab)
+      _G.gutter_fixture_ready = true
+    end)
     vim.api.nvim_win_call(original_win, function()
       vim.fn.winrestview({ topline = 1, topfill = case.fillers[0] or 0 })
     end)
@@ -74,6 +81,10 @@ function M.open_block(screen, case_index)
   ]],
     { case_index }
   )
+  screen:await(function()
+    return screen:exec("return gutter_fixture_ready == true")
+  end, "synthetic gutter fixture did not finish setup")
+  return panes
 end
 
 function M.expect_pane(screen, win, rows, label, highlight)

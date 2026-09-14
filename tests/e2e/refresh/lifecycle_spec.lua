@@ -99,9 +99,7 @@ for _, backend in ipairs({ "native", "polling" }) do
         write_a("working-B")
         h.open(screen, repo)
         h.hold_content(screen, "a.txt")
-        write_a("index-C")
-        repo.git("add a.txt")
-        write_a("working-B")
+        repo.write_index("a.txt", { "start", "index-C", "context", "end", "tail" })
         wait_held()
         screen:exec("vim.api.nvim_set_current_win(refresh_session().modified_win); vim.api.nvim_win_set_cursor(0, { 2, 0 })")
         h.feed(screen, "ccUSER_LATE<CR>USER_LATE_TWO<Esc>")
@@ -111,6 +109,34 @@ for _, backend in ipairs({ "native", "polling" }) do
         assert.equals("index-C", h.panes(screen).original.lines[2])
         assert.same({ "start", "USER_LATE", "USER_LATE_TWO", "context", "end", "tail" }, h.panes(screen).modified.lines)
         assert.equals(4, screen:exec("return refresh_session().stored_diff_result.changes[1].modified.end_line"))
+      end)
+
+      it("[T17] settles slow Git reads without building an endless polling backlog", function()
+        write_a("index-A")
+        repo.git("add a.txt")
+        write_a("working-B")
+        h.open(screen, repo)
+        screen:exec([[
+          local git = require('codediff.core.git')
+          local read = git.get_file_content
+          refresh_test.slow_reads = 0
+          git.get_file_content = function(revision, root, path, done)
+            return read(revision, root, path, function(...)
+              local values, count = { ... }, select('#', ...)
+              vim.defer_fn(function()
+                refresh_test.slow_reads = refresh_test.slow_reads + 1
+                done(unpack(values, 1, count))
+              end, 700)
+            end)
+          end
+        ]])
+        local before = h.checkpoint(screen)
+        repo.write_index("a.txt", { "start", "slow-index", "context", "end", "tail" })
+        h.wait_event(screen, before)
+        h.expect_text(screen, "original", "slow-index")
+        h.expect_text(screen, "modified", "working-B")
+        h.idle(screen)
+        assert.is_true(screen:exec("return refresh_test.slow_reads > 0"))
       end)
 
       it("keeps the requested HEAD dependency when following a different working file", function()
