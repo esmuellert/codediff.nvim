@@ -29,7 +29,7 @@ Everything data-level:
 - `vim.uv` timers under `vim.wait`
 - keymaps via `feedkeys` with `"x"` (execute immediately) flag
 - treesitter parsers and queries
-- git operations via `tests/helpers` (`create_temp_git_repo`, `git_cmd`)
+- git operations via `require("tests.support")` (`create_temp_git_repo`, `git_cmd`)
 
 ## What needs a workaround
 
@@ -42,13 +42,18 @@ vim.api.nvim_exec_autocmds("WinScrolled", {})
 
 This is what existing specs already do.
 
-## What is not possible
+## What requires a separate UI
 
-- **Rendered screen content** (which character is at row/col, its color).
-  Neovim's own test suite solves this by spawning a child `nvim --embed` and
-  attaching a fake UI over RPC — a different architecture from ours.
-- **`UIEnter`** never fires. Plugins that lazy-load on `UIEnter` (e.g.
-  `snacks.nvim`) must be initialized manually with `.enable()` or equivalent.
+- **Rendered screen content** (which character is at row/col, its color) is not
+  observable in the synchronous headless test process. Use
+  `tests/framework/screen.lua`, which starts `nvim --embed` and attaches an RPC
+  UI. Close it in `after_each`, even on assertion failure.
+- **`UIEnter`** does not fire without an attached UI. Plugins that lazy-load on
+  it (e.g. `snacks.nvim`) need explicit initialization in a plain headless spec.
+
+The observation tool does not define the test level. Screen checks that call
+renderers directly are integration tests; public commands or actual key input
+through the complete application belong in `tests/e2e/`.
 
 ## Driving styles
 
@@ -94,8 +99,9 @@ vim.defer_fn(resume, 100)
 | What | Where |
 |---|---|
 | Test bootstrap | `tests/init.lua` |
-| Helpers (git repos, waiters) | `tests/helpers.lua` |
+| Helpers (git repos, waiters) | `tests/support/init.lua` (`require("tests.support")`) |
 | Framework (describe/it/assert) | `tests/framework/init.lua` |
 | Run all specs | `./tests/run_tests.sh` or `make test-lua` |
-| Run one spec | `nvim --headless --noplugin -u tests/init.lua -c "lua require('tests.framework').run_and_exit('tests/path/to_spec.lua')"` |
+| Run one layer | `./tests/run_tests.sh unit` / `integration` / `e2e` |
+| Run one spec | `./tests/run_tests.sh tests/unit/core/path_spec.lua` |
 | Throwaway repro | Save to `/tmp/repro.lua`, run with `nvim --headless -u tests/init.lua -c "luafile /tmp/repro.lua" -c "qa!"` |

@@ -73,6 +73,7 @@ function M.run(range, file_path, flags, line_range, global_opts)
               file_path = history_opts.path,
               base_revision = flags.base,
               line_range = line_range,
+              reverse = flags.reverse,
             },
           },
           git_root = git_root,

@@ -1,131 +1,96 @@
--- Keep a diff pointed at whatever file the working window holds.
---
--- Sibling to auto_refresh, which watches buffer *content*. This watches the
--- working window's *file*: with one side pinned to a git revision and the other
--- showing the working file, opening a different file in that window rebuilds
--- the diff around it, rather than leaving a stale pair on screen.
---
--- Applies to a session with no side panel (`panel == nil`) where exactly one
--- side is a git revision. Explorer and history drive their own file switching
--- through view.update, and a diff of two real files has nothing to follow.
---
--- Registered per tabpage; the augroup is torn down in lifecycle/cleanup.
+-- Follow file navigation in a bare revision/worktree comparison. Content
+-- invalidations belong to ui.refresh; this changes the comparison itself.
 local M = {}
 
--- Lazy require to avoid a cycle: session -> accessors -> ... -> this module
-local function get_active_diffs()
-  return require("codediff.ui.lifecycle.session").get_active_diffs()
-end
-
---- Watch the working window and re-target the diff when its file changes.
---- No-op unless exactly one side is a git revision.
---- @param tabpage number
---- @param original_is_virtual boolean Original side is a git revision
---- @param modified_is_virtual boolean Modified side is a git revision
 function M.enable(tabpage, original_is_virtual, modified_is_virtual)
-  -- Nothing to follow when both sides are revisions, or both are real files.
   if original_is_virtual == modified_is_virtual then
     return
   end
-
-  local active_diffs = get_active_diffs()
-  local sess = active_diffs[tabpage]
-  if not sess then
-    vim.notify("[codediff] No session found for working-file follow", vim.log.levels.ERROR)
+  local lifecycle = require("codediff.ui.lifecycle")
+  local session = lifecycle.get_session(tabpage)
+  if not session or session.panel then
     return
   end
 
-  -- Determine which window is working
-  local working_win = original_is_virtual and sess.modified_win or sess.original_win
   local working_side = original_is_virtual and "modified" or "original"
-
-  if not working_win or not vim.api.nvim_win_is_valid(working_win) then
-    vim.notify("[codediff] Working window not found for working-file follow", vim.log.levels.WARN)
-    return
-  end
-
-  -- Session stores paths as PathRefs, so read .absolute for identity comparison.
-  -- (The old sess[working_side .. "_path"] field is gone and left this nil, which
-  -- defeated the change guard below and caused spurious re-updates.)
-  local working_ref = sess[working_side]
-  local current_path = working_ref and working_ref.absolute or nil
-
-  -- Setup listener using BufWinEnter (fires when buffer enters window, even if existing buffer)
-  local sync_group = vim.api.nvim_create_augroup("codediff_working_sync_" .. tabpage, { clear = true })
-
-  -- Listen to BufWinEnter - fires when ANY buffer enters the window (including existing buffers)
+  local virtual_side = original_is_virtual and "original" or "modified"
+  local pending_path
+  local group = vim.api.nvim_create_augroup("codediff_working_sync_" .. tabpage, { clear = true })
   vim.api.nvim_create_autocmd("BufWinEnter", {
-    group = sync_group,
-    callback = function(args)
-      -- Check if this buffer is in the working window
-      local buf_win = vim.fn.bufwinid(args.buf)
-      if buf_win ~= working_win then
+    group = group,
+    callback = function(event)
+      if lifecycle.get_session(tabpage) ~= session or session.refresh and session.refresh.applying then
         return
       end
-
+      local win = session[working_side .. "_win"]
+      if not win or not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_buf(win) ~= event.buf then
+        return
+      end
+      if vim.bo[event.buf].buftype ~= "" then
+        return
+      end
       local path = require("codediff.core.path")
-      local new_path = vim.api.nvim_buf_get_name(args.buf)
-
-      -- Skip virtual files - they're programmatic, not user navigation
-      if new_path:match("^codediff://") then
+      local name = vim.api.nvim_buf_get_name(event.buf)
+      local new_path = name ~= "" and path.make_ref(name, nil).absolute or ""
+      if new_path == "" or new_path == pending_path or new_path == session[working_side].absolute then
         return
       end
+      pending_path = new_path
 
-      -- Normalize to the same absolute form used for the session PathRefs so the
-      -- identity comparison is reliable across platforms.
-      new_path = new_path ~= "" and path.make_ref(new_path, nil).absolute or ""
-
-      -- Check if file changed
-      if new_path == "" or new_path == current_path then
-        return
+      local refresh = require("codediff.ui.refresh")
+      local generation = refresh.begin(tabpage)
+      local requested = vim.deepcopy(session.source_revisions or {})
+      requested[virtual_side] = requested[virtual_side] or session[virtual_side .. "_revision"]
+      requested[working_side] = "WORKING"
+      local revision = requested[virtual_side]
+      local function current()
+        return refresh.is_current(tabpage, session, generation) and pending_path == new_path
       end
-
-      -- Update tracked path
-      current_path = new_path
-
-      -- Path changed! Need to update both sides
-      vim.schedule(function()
-        -- Get git root (might have changed if user switched to different repo)
-        local git = require("codediff.core.git")
-        local view = require("codediff.ui.view")
-
-        git.get_git_root(new_path, function(err, new_git_root)
-          if err then
-            -- Not in git, just update paths without git context
-            vim.schedule(function()
-              -- Get relative path if possible
-              local relative_path = new_path
-              if sess.git_root then
-                relative_path = git.get_relative_path(new_path, sess.git_root)
-              end
-
-              -- No pre-fetching needed, buffers will load content
-              view.update(tabpage, {
-                panel = sess.panel,
-                git_root = nil,
-                original = path.make_ref(working_side == "original" and new_path or relative_path, nil),
-                modified = path.make_ref(working_side == "modified" and new_path or relative_path, nil),
-                original_revision = working_side == "original" and nil or sess.original_revision,
-                modified_revision = working_side == "modified" and nil or sess.modified_revision,
-              })
-            end)
+      local function update(root, resolved)
+        vim.schedule(function()
+          if not current() then
             return
           end
+          local target = path.make_ref(new_path, root)
+          local options = {
+            git_root = root,
+            original = root and target or path.empty(),
+            modified = root and target or path.empty(),
+            source_revisions = requested,
+          }
+          options[working_side] = target
+          options[virtual_side .. "_revision"] = resolved
+          require("codediff.ui.view").update(tabpage, options)
+        end)
+      end
 
-          -- In git! Get relative path
-          local relative_path = git.get_relative_path(new_path, new_git_root)
-
-          -- No pre-fetching needed, buffers will load content
-          vim.schedule(function()
-            view.update(tabpage, {
-              panel = sess.panel,
-              git_root = new_git_root,
-              original = path.make_ref(relative_path, new_git_root),
-              modified = path.make_ref(relative_path, new_git_root),
-              original_revision = sess.original_revision,
-              modified_revision = sess.modified_revision,
-            })
-          end)
+      local git = require("codediff.core.git")
+      git.get_git_root(new_path, function(err, root)
+        vim.schedule(function()
+          if not current() then
+            return
+          end
+          if err then
+            update(nil, nil)
+          elseif revision:match("^:[0-3]:?$") then
+            update(root, revision)
+          else
+            -- A requested HEAD/branch is resolved in the destination repository,
+            -- not replaced by the SHA from the file we just left.
+            git.resolve_revision(revision, root, function(resolve_error, hash)
+              vim.schedule(function()
+                if not current() then
+                  return
+                end
+                if resolve_error then
+                  vim.notify(resolve_error, vim.log.levels.WARN)
+                  refresh.ready(tabpage)
+                else
+                  update(root, hash)
+                end
+              end)
+            end)
+          end
         end)
       end)
     end,

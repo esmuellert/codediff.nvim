@@ -2,7 +2,7 @@
 local config = require("codediff.config")
 local resolve = require("codediff.keymap.resolve")
 local actions_module = require("codediff.ui.explorer.actions")
-local refresh_module = require("codediff.ui.explorer.refresh")
+local refresh = require("codediff.ui.refresh")
 local tree_utils = require("codediff.ui.lib.tree_utils")
 
 local M = {}
@@ -12,7 +12,7 @@ local M = {}
 function M.setup(explorer)
   local tree = explorer.tree
   local split = explorer.split
-  local git_root = explorer.git_root
+  local git_root = explorer.data.git_root
 
   local map_options = { noremap = true, silent = true, nowait = true }
   local explorer_keymaps = resolve.keymaps_for("explorer")
@@ -135,11 +135,7 @@ function M.setup(explorer)
   -- Refresh explorer (R key)
   if explorer_keymaps.refresh then
     panel_map(explorer_keymaps.refresh, function()
-      if explorer._request_auto_refresh then
-        explorer._request_auto_refresh()
-      else
-        refresh_module.refresh(explorer)
-      end
+      refresh.request(explorer.tabpage, { full = true })
     end, "Refresh explorer")
   end
 

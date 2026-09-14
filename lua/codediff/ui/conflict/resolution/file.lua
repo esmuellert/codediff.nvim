@@ -2,7 +2,7 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
+local refresh = require("codediff.ui.refresh")
 local tracking = require("codediff.ui.conflict.tracking")
 local gutter = require("codediff.ui.conflict.gutter")
 local apply_to_result = require("codediff.ui.conflict.resolution.replace").apply_to_result
@@ -48,7 +48,7 @@ function M.accept_all_incoming(tabpage)
   end)
 
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   vim.notify(string.format("[codediff] Accepted %d incoming change(s)", count), vim.log.levels.INFO)
   return count > 0
 end
@@ -92,7 +92,7 @@ function M.accept_all_current(tabpage)
   end)
 
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   vim.notify(string.format("[codediff] Accepted %d current change(s)", count), vim.log.levels.INFO)
   return count > 0
 end
@@ -150,7 +150,7 @@ function M.accept_all_both(tabpage, first_input)
   end)
 
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   vim.notify(string.format("[codediff] Accepted %d combined change(s)", count), vim.log.levels.INFO)
   return count > 0
 end
@@ -201,7 +201,7 @@ function M.discard_all(tabpage)
   end)
 
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   vim.notify(string.format("[codediff] Reset %d conflict(s) to base", count), vim.log.levels.INFO)
   return count > 0
 end

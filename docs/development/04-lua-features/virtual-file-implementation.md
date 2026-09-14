@@ -62,5 +62,5 @@ not be passed to tools or language servers that only accept `file://` URIs.
 - `lua/codediff/core/virtual_file.lua` — URI parsing, loading, and Tree-sitter setup
 - `lua/codediff/ui/view/render.lua` — side-by-side rendering after load
 - `lua/codediff/ui/inline_view/render.lua` — inline rendering after load
-- `tests/core/virtual_file_lsp_spec.lua` — regression coverage ensuring virtual
+- `tests/integration/core/virtual_file_spec.lua` — regression coverage ensuring virtual
   buffers do not trigger LSP attachment

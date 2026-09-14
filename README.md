@@ -683,13 +683,14 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure -C Release
 ```
 
-Run the Lua integration suite:
+Run the Lua test suite or select a test layer:
 
 ```bash
-./tests/run_tests.sh
+./tests/run_tests.sh          # all tests
+./tests/run_tests.sh e2e      # or: unit, integration
 ```
 
-On Windows, use `tests\run_tests.cmd`.
+On Windows, use `tests\run_tests.cmd` with the same arguments. See [tests/README.md](tests/README.md) for test organization and fixtures.
 
 Check Lua formatting:
 
@@ -700,8 +701,7 @@ stylua --check lua
 Run one Lua spec:
 
 ```bash
-nvim --headless --noplugin -u tests/init.lua \
-  -c "lua require('tests.framework').run_and_exit('tests/path/to/spec.lua')"
+./tests/run_tests.sh tests/unit/core/path_spec.lua
 ```
 
 ## Contributing

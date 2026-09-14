@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local config = require("codediff.config")
 local layout = require("codediff.ui.layout")
 local welcome_window = require("codediff.ui.view.welcome_window")
@@ -257,9 +256,6 @@ function M.create(session_config, filetype, on_ready)
     })
 
     mark_inline(tabpage)
-
-    auto_refresh.enable(original_info.bufnr)
-    auto_refresh.enable(modified_info.bufnr)
 
     setup_keymaps(tabpage, original_info.bufnr, modified_info.bufnr)
 

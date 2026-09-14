@@ -6,7 +6,7 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
+local refresh = require("codediff.ui.refresh")
 local hunk_actions = require("codediff.ui.view.actions.hunk")
 
 function M.diff_get(ctx)
@@ -30,7 +30,7 @@ function M.diff_get(ctx)
 
     local orig_lines = vim.api.nvim_buf_get_lines(ctx.original_bufnr, hunk.original.start_line - 1, hunk.original.end_line - 1, false)
     vim.api.nvim_buf_set_lines(ctx.modified_bufnr, hunk.modified.start_line - 1, hunk.modified.end_line - 1, false, orig_lines)
-    auto_refresh.trigger(ctx.modified_bufnr)
+    refresh.buffer_changed(ctx.modified_bufnr)
     vim.api.nvim_echo({ { string.format("Reverted hunk %d", hunk_idx), "None" } }, false, {})
     return
   end
@@ -64,7 +64,7 @@ function M.diff_get(ctx)
   vim.api.nvim_buf_set_lines(target_buf, target_range.start_line - 1, target_range.end_line - 1, false, source_lines)
 
   -- Trigger diff refresh to update highlights
-  auto_refresh.trigger(target_buf)
+  refresh.buffer_changed(target_buf)
 
   vim.api.nvim_echo({ { string.format("Obtained hunk %d", hunk_idx), "None" } }, false, {})
 end
@@ -110,7 +110,7 @@ function M.diff_put(ctx)
   vim.api.nvim_buf_set_lines(target_buf, target_range.start_line - 1, target_range.end_line - 1, false, source_lines)
 
   -- Trigger diff refresh to update highlights
-  auto_refresh.trigger(target_buf)
+  refresh.buffer_changed(target_buf)
 
   vim.api.nvim_echo({ { string.format("Put hunk %d", hunk_idx), "None" } }, false, {})
 end

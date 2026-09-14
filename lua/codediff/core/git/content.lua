@@ -83,8 +83,8 @@ end
 -- rel_path: relative path from git root (with forward slashes)
 -- callback: function(err, lines) where lines is a table of strings
 function M.get_file_content(revision, git_root, rel_path, callback)
-  -- Don't cache mutable revisions (staged index can change with git add/reset)
-  local is_mutable = revision:match("^:[0-3]$")
+  -- Branches, HEAD and index stages can change without changing the path.
+  local is_mutable = not require("codediff.core.git.revision").is_fixed(revision)
 
   -- Check cache first (only for immutable revisions)
   if not is_mutable then
@@ -100,7 +100,7 @@ function M.get_file_content(revision, git_root, rel_path, callback)
 
   run_git_async({ "show", git_object }, { cwd = git_root }, function(err, output)
     if err then
-      if err:match("does not exist") or err:match("exists on disk, but not in") then
+      if err:match("does not exist") or err:match("exists on disk, but not in") or err:match("is in the index, but not at stage") then
         callback(string.format("File '%s' not found in revision '%s'", rel_path, revision), nil)
       else
         callback(err, nil)

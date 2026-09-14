@@ -1,6 +1,39 @@
-# VSCode Diff Highlighting Refresh Strategy - Investigation Report
+# Refresh Strategy
 
-## Overview
+## Session-data refactor (#558)
+
+Repository watching, polling, invalidation coalescing and stale-result checks now
+belong to `lua/codediff/ui/refresh/init.lua`. Explorer, History and diff views
+consume data changes rather than managing independent refresh loops.
+
+- `session.panel.data` owns list data, query parameters and the selected file.
+  Panel views hold a reference to that data and receive `on_data(data, changes)`
+  notifications. They retain tree expansion, cursor and layout state locally.
+- `refresh/panel.lua` reads status, commit lists and commit files, and derives
+  comparison definitions from selections. User selection goes through
+  `refresh.select`; a list update never asks the view to reselect an unchanged
+  comparison.
+- `refresh/inputs.lua` reads the session's explicit input definitions, waits for
+  every candidate and validates working-buffer ticks. It does not inspect panels.
+- The controller publishes only actual input changes to `view/render.lua`.
+  Initial rendering and in-place updates share diff rendering; merge input and
+  Result rendering remain in `conflict/view/`. Working and Result buffers stay
+  authoritative for user edits.
+
+Removed the `auto_refresh` entry point, Explorer scheduler and per-panel refresh
+modules. The former `refresh/apply.lua` responsibilities now live in the existing
+view helpers and renderers; there is no separate refresh rendering pipeline.
+Watcher categories remain intact, with a 500 ms polling fallback. Poll ticks
+sample only when no selection, read or invalidation is pending; slow Git reads
+must finish rather than accumulate an endless polling backlog. Actual repository
+invalidations are still queued while a read is running. Unchanged inputs do not
+disturb the comparison, and changed merge inputs cannot overwrite an edited Result.
+
+Regression coverage includes native watcher and polling screen-grid E2Es, data
+ownership, presentation-only list updates, navigation, hunk actions and stale
+callbacks. The investigation below records the earlier VSCode design reference.
+
+## Earlier investigation: VSCode Quick Diff
 VSCode uses a sophisticated system called "Quick Diff" (also known as "Dirty Diff") to display real-time diff decorations in the gutter and overview ruler. The implementation is found primarily in two files:
 - `quickDiffModel.ts` - Manages diff computation and change tracking
 - `quickDiffDecorator.ts` - Handles visual decorations in the editor

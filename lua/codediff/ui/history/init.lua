@@ -11,7 +11,6 @@ local render = require("codediff.ui.history.render")
 -- width: optional width override
 -- opts: { range, path, ... } original options
 M.create = render.create
-M.rerender_current = render.rerender_current
 
 -- Navigation (files within expanded commits)
 M.navigate_next = render.navigate_next
@@ -26,10 +25,5 @@ M.toggle_visibility = render.toggle_visibility
 
 -- Get all files (for external navigation)
 M.get_all_files = render.get_all_files
-
--- Refresh
-local refresh = require("codediff.ui.history.refresh")
-M.refresh = refresh.refresh
-M.setup_auto_refresh = refresh.setup_auto_refresh
 
 return M

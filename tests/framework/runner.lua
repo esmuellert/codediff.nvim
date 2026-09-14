@@ -52,14 +52,16 @@ local function run_test(test)
   for _, hook in ipairs(busted.hooks_for(test, "before_each")) do
     local ok, err = guarded(hook)
     if not ok then
-      before_err = err
+      if err ~= busted.PENDING_SENTINEL then
+        before_err = err
+      end
       break
     end
   end
 
   -- Run the test body
   local test_err
-  if not before_err then
+  if not before_err and not test.pending then
     local ok, err = guarded(test.fn)
     if not ok and err ~= busted.PENDING_SENTINEL then
       test_err = err
@@ -88,8 +90,8 @@ local function run_test(test)
     return "fail"
   end
 
-  if test.pending then
-    -- pending() was called inside the running body
+  if test.pending and #after_errs == 0 then
+    -- pending() was called during setup or inside the running body
     reporter.print_test(desc, test.name, "pending", test.pending_msg)
     return "pending"
   end

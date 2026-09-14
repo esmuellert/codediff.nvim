@@ -3,7 +3,7 @@ local M = {}
 
 local config = require("codediff.config")
 local git = require("codediff.core.git")
-local refresh_module = require("codediff.ui.explorer.refresh")
+local tree_module = require("codediff.ui.explorer.tree")
 local layout = require("codediff.ui.layout")
 
 -- Find line number for a file node by scanning the tree
@@ -21,15 +21,14 @@ end
 
 -- Navigate to next file in explorer
 function M.navigate_next(explorer)
-  local all_files = refresh_module.get_all_files(explorer.tree)
+  local all_files = tree_module.get_all_files(explorer.tree)
   if #all_files == 0 then
     vim.notify("No files in explorer", vim.log.levels.WARN)
     return
   end
 
-  -- Use tracked current file path and group
-  local current_path = explorer.current_file_path
-  local current_group = explorer.current_file_group
+  local current_path = explorer.data.current_file_path
+  local current_group = explorer.data.current_file_group
 
   -- If no current path, select first file
   if not current_path then
@@ -74,15 +73,14 @@ end
 
 -- Navigate to previous file in explorer
 function M.navigate_prev(explorer)
-  local all_files = refresh_module.get_all_files(explorer.tree)
+  local all_files = tree_module.get_all_files(explorer.tree)
   if #all_files == 0 then
     vim.notify("No files in explorer", vim.log.levels.WARN)
     return
   end
 
-  -- Use tracked current file path and group
-  local current_path = explorer.current_file_path
-  local current_group = explorer.current_file_group
+  local current_path = explorer.data.current_file_path
+  local current_group = explorer.data.current_file_group
 
   -- If no current path, select last file
   if not current_path then
@@ -141,9 +139,7 @@ function M.toggle_visibility(explorer)
     explorer.split:show()
     explorer.is_hidden = false
     explorer.winid = explorer.split.winid
-    if explorer._request_auto_refresh then
-      explorer._request_auto_refresh()
-    end
+    require("codediff.ui.refresh").request(explorer.tabpage, { full = true })
 
     vim.schedule(function()
       layout.arrange(tabpage)
@@ -171,11 +167,8 @@ function M.toggle_view_mode(explorer)
   -- Update config
   config.options.explorer.view_mode = new_mode
 
-  -- View-mode change is client-only: git status is unchanged, so the async
-  -- refresh() path would hit the deep_equal skip introduced in #486 and
-  -- silently no-op. Rebuild synchronously from the cached status instead
-  -- (same pattern as toggle_group) so the new mode takes effect immediately.
-  refresh_module.rebuild_from_cache(explorer)
+  -- Presentation changes render the current data without requesting Git.
+  tree_module.rebuild(explorer)
 
   vim.notify("Explorer view: " .. new_mode, vim.log.levels.INFO)
 end
@@ -197,18 +190,18 @@ function M.toggle_staged_view(explorer)
   if not explorer then
     return false
   end
-  if not explorer.git_root then
+  if not explorer.data.git_root then
     vim.notify("Toggle staged view only available in git mode", vim.log.levels.WARN)
     return false
   end
   -- Status Mode is the only mode with distinct staged/unstaged groups.
-  if explorer.base_revision or explorer.target_revision then
+  if explorer.data.base_revision or explorer.data.target_revision then
     vim.notify("Toggle staged view only available in Status Mode (:CodeDiff with no revision)", vim.log.levels.WARN)
     return false
   end
 
-  local current_path = explorer.current_file_path
-  local current_group = explorer.current_file_group
+  local current_path = explorer.data.current_file_path
+  local current_group = explorer.data.current_file_group
 
   if not current_path or not current_group then
     vim.notify("No file selected", vim.log.levels.WARN)
@@ -220,7 +213,7 @@ function M.toggle_staged_view(explorer)
   end
 
   local target_group = (current_group == "staged") and "unstaged" or "staged"
-  local status_result = explorer.status_result or {}
+  local status_result = explorer.data.status_result or {}
   local target_list = status_result[target_group] or {}
 
   local target_file
@@ -255,7 +248,7 @@ function M.toggle_staged_view(explorer)
     path = target_file.path,
     old_path = target_file.old_path,
     status = target_file.status,
-    git_root = explorer.git_root,
+    git_root = explorer.data.git_root,
     group = target_group,
   })
   return true
@@ -268,10 +261,8 @@ function M.toggle_group(explorer, group_name)
   end
 
   explorer.visible_groups[group_name] = not explorer.visible_groups[group_name]
-  -- Group visibility changed but git status did not: rebuild the tree
-  -- synchronously from the cached status so the hidden/shown group takes effect
-  -- immediately (navigation reads the tree, so this also keeps ]f/[f correct).
-  refresh_module.rebuild_from_cache(explorer)
+  -- Keep the tree and navigation in sync without refreshing repository data.
+  tree_module.rebuild(explorer)
 
   local state = explorer.visible_groups[group_name] and "shown" or "hidden"
   local label = ({ staged = "Staged Changes", unstaged = "Changes", conflicts = "Merge Changes" })[group_name] or group_name
@@ -359,7 +350,7 @@ end
 
 -- Stage/unstage toggle for the selected entry in explorer (file or directory)
 function M.toggle_stage_entry(explorer, tree)
-  if not explorer or not explorer.git_root then
+  if not explorer or not explorer.data.git_root then
     vim.notify("Stage/unstage only available in git mode", vim.log.levels.WARN)
     return
   end
@@ -376,25 +367,25 @@ function M.toggle_stage_entry(explorer, tree)
     -- Directory uses dir_path, not path
     local dir_path = node.data.dir_path
     if dir_path then
-      toggle_stage_directory(explorer.git_root, dir_path, group)
+      toggle_stage_directory(explorer.data.git_root, dir_path, group)
     end
   else
     -- File uses path
     local path = node.data.path
     if path then
-      M.toggle_stage_file(explorer.git_root, path, group)
+      M.toggle_stage_file(explorer.data.git_root, path, group)
     end
   end
 end
 
 -- Stage all files
 function M.stage_all(explorer)
-  if not explorer or not explorer.git_root then
+  if not explorer or not explorer.data.git_root then
     vim.notify("Stage all only available in git mode", vim.log.levels.WARN)
     return
   end
 
-  git.stage_all(explorer.git_root, function(err)
+  git.stage_all(explorer.data.git_root, function(err)
     if err then
       vim.schedule(function()
         vim.notify(err, vim.log.levels.ERROR)
@@ -405,12 +396,12 @@ end
 
 -- Unstage all files
 function M.unstage_all(explorer)
-  if not explorer or not explorer.git_root then
+  if not explorer or not explorer.data.git_root then
     vim.notify("Unstage all only available in git mode", vim.log.levels.WARN)
     return
   end
 
-  git.unstage_all(explorer.git_root, function(err)
+  git.unstage_all(explorer.data.git_root, function(err)
     if err then
       vim.schedule(function()
         vim.notify(err, vim.log.levels.ERROR)
@@ -421,7 +412,7 @@ end
 
 -- Restore/discard changes to the selected file or directory
 function M.restore_entry(explorer, tree)
-  if not explorer or not explorer.git_root then
+  if not explorer or not explorer.data.git_root then
     vim.notify("Restore only available in git mode", vim.log.levels.WARN)
     return
   end
@@ -460,7 +451,7 @@ function M.restore_entry(explorer, tree)
   if choice == 1 then
     if is_untracked then
       -- Delete untracked file/directory
-      git.delete_untracked(explorer.git_root, entry_path, function(err)
+      git.delete_untracked(explorer.data.git_root, entry_path, function(err)
         if err then
           vim.schedule(function()
             vim.notify(err, vim.log.levels.ERROR)
@@ -470,8 +461,8 @@ function M.restore_entry(explorer, tree)
     elseif is_directory then
       -- Directory may contain both tracked and untracked files
       -- Run git restore for tracked changes, then git clean for untracked
-      git.restore_file(explorer.git_root, entry_path, explorer.base_revision, function(restore_err)
-        git.delete_untracked(explorer.git_root, entry_path, function(clean_err)
+      git.restore_file(explorer.data.git_root, entry_path, explorer.data.base_revision, function(restore_err)
+        git.delete_untracked(explorer.data.git_root, entry_path, function(clean_err)
           if restore_err and clean_err then
             vim.schedule(function()
               vim.notify("Failed to restore: " .. restore_err, vim.log.levels.ERROR)
@@ -481,7 +472,7 @@ function M.restore_entry(explorer, tree)
       end)
     else
       -- Restore tracked file
-      git.restore_file(explorer.git_root, entry_path, explorer.base_revision, function(err)
+      git.restore_file(explorer.data.git_root, entry_path, explorer.data.base_revision, function(err)
         if err then
           vim.schedule(function()
             vim.notify(err, vim.log.levels.ERROR)

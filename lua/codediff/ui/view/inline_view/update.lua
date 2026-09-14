@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local layout = require("codediff.ui.layout")
 local welcome_window = require("codediff.ui.view.welcome_window")
 local helpers = require("codediff.ui.view.helpers")
@@ -15,7 +14,7 @@ local is_virtual_revision = helpers.is_virtual_revision
 local prepare_buffer = helpers.prepare_buffer
 local show_real_file_buffer = helpers.show_real_file_buffer
 local open_real_file = helpers.open_real_file
-local disable_refresh_and_clear_highlights = buffers.disable_refresh_and_clear_highlights
+local clear_highlights = buffers.clear_highlights
 local set_scratch_lines = buffers.set_scratch_lines
 local new_scratch = buffers.new_scratch
 local compute_and_render_inline = inline_render.compute_and_render_inline
@@ -31,7 +30,7 @@ local setup_keymaps = inline_keymaps.setup
 local function fetch_into_scratch(revision, git_root, relative, bufnr, done)
   require("codediff.core.git").get_file_content(revision, git_root, relative, function(err, lines)
     vim.schedule(function()
-      if set_scratch_lines(bufnr, err and {} or lines) then
+      if require("codediff.core.virtual_file").set_content(bufnr, err and {} or lines, relative) then
         done()
       end
     end)
@@ -50,10 +49,6 @@ local function open_modified_for_update(win, session_config, is_virtual)
     local mod_buf = new_scratch()
     vim.bo[mod_buf].modifiable = true
     vim.api.nvim_win_set_buf(win, mod_buf)
-    local ft = vim.filetype.match({ filename = session_config.modified.absolute })
-    if ft then
-      vim.bo[mod_buf].filetype = ft
-    end
     return mod_buf
   end
 
@@ -80,7 +75,7 @@ local function fill_original_for_update(orig_buf, session_config, is_virtual, do
     return
   end
 
-  local orig_path = (session_config.original.absolute ~= "" and session_config.original.absolute) or session_config.modified.absolute
+  local orig_path = session_config.original.absolute
   if orig_path and orig_path ~= "" then
     local real_bufnr = vim.fn.bufadd(orig_path)
     vim.fn.bufload(real_bufnr)
@@ -104,9 +99,6 @@ local function commit_update(tabpage, session_config, orig_buf, mod_buf, lines_d
   lifecycle.update_changedtick(tabpage, vim.api.nvim_buf_get_changedtick(orig_buf), vim.api.nvim_buf_get_changedtick(mod_buf))
   lifecycle.update_paths(tabpage, session_config.original, session_config.modified)
 
-  auto_refresh.enable(orig_buf)
-  auto_refresh.enable(mod_buf)
-
   setup_keymaps(tabpage, orig_buf, mod_buf)
   layout.arrange(tabpage)
 
@@ -127,13 +119,14 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     return false
   end
 
+  local generation = session.refresh and session.refresh.generation
   local modified_win = session.modified_win
   if not modified_win or not vim.api.nvim_win_is_valid(modified_win) then
     return false
   end
 
   -- ns_highlight/ns_filler may linger after toggling from side-by-side.
-  disable_refresh_and_clear_highlights(session)
+  clear_highlights(session)
 
   session.single_side = nil
   lifecycle.update_diff_result(tabpage, nil)
@@ -152,6 +145,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   local should_auto_scroll = auto_scroll_to_first_hunk == true
 
   local render = function()
+    if not require("codediff.ui.refresh").is_current(tabpage, session, generation) then
+      return
+    end
     if not vim.api.nvim_win_is_valid(modified_win) then
       return
     end

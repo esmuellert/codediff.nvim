@@ -15,23 +15,39 @@ local M = {}
 -- ---------------------------------------------------------------------------
 
 local function tty_supports_color()
-  if vim.env.NO_COLOR and vim.env.NO_COLOR ~= "" then return false end
-  if vim.env.CODEDIFF_TEST_NO_COLOR and vim.env.CODEDIFF_TEST_NO_COLOR ~= "" then return false end
+  if vim.env.NO_COLOR and vim.env.NO_COLOR ~= "" then
+    return false
+  end
+  if vim.env.CODEDIFF_TEST_NO_COLOR and vim.env.CODEDIFF_TEST_NO_COLOR ~= "" then
+    return false
+  end
   -- CI environments (GitHub Actions) render ANSI colors in logs.
   return true
 end
 
 local use_color = tty_supports_color()
 local function color(s, code)
-  if not use_color then return s end
+  if not use_color then
+    return s
+  end
   return "\27[" .. code .. "m" .. s .. "\27[0m"
 end
 
-local function red(s) return color(s, "31") end
-local function green(s) return color(s, "32") end
-local function yellow(s) return color(s, "33") end
-local function cyan(s) return color(s, "36") end
-local function dim(s) return color(s, "2") end
+local function red(s)
+  return color(s, "31")
+end
+local function green(s)
+  return color(s, "32")
+end
+local function yellow(s)
+  return color(s, "33")
+end
+local function cyan(s)
+  return color(s, "36")
+end
+local function dim(s)
+  return color(s, "2")
+end
 
 -- ---------------------------------------------------------------------------
 -- Output primitives
@@ -47,7 +63,9 @@ end
 local function indent(prefix, block)
   local out = {}
   for line in tostring(block):gmatch("([^\n]*)\n?") do
-    if line ~= "" then table.insert(out, prefix .. line) end
+    if line ~= "" then
+      table.insert(out, prefix .. line)
+    end
   end
   return table.concat(out, "\n")
 end
@@ -135,12 +153,18 @@ local BOX_WIDTH = 62
 --- color codes (which occupy zero columns) don't skew the border alignment.
 local function box_row(text, plain)
   local pad = BOX_WIDTH - 1 - vim.fn.strdisplaywidth(plain or text)
-  if pad < 0 then pad = 0 end
+  if pad < 0 then
+    pad = 0
+  end
   return "║ " .. text .. string.rep(" ", pad) .. "║"
 end
 
-local function box_top() return "╔" .. string.rep("═", BOX_WIDTH) .. "╗" end
-local function box_bottom() return "╚" .. string.rep("═", BOX_WIDTH) .. "╝" end
+local function box_top()
+  return "╔" .. string.rep("═", BOX_WIDTH) .. "╗"
+end
+local function box_bottom()
+  return "╚" .. string.rep("═", BOX_WIDTH) .. "╝"
+end
 
 --- Banner printed once, before any spec runs.
 -- @param spec_count number
@@ -156,11 +180,30 @@ function M.print_suite_header(spec_count, mode, jobs, reason)
     detail = string.format("%d spec files, %d parallel workers", spec_count, jobs)
   else
     detail = string.format("%d spec files, sequential", spec_count)
-    if reason then detail = detail .. " (" .. reason .. ")" end
+    if reason then
+      detail = detail .. " (" .. reason .. ")"
+    end
   end
   write(box_row(dim(detail), detail))
   write(box_bottom())
   write("")
+end
+
+function M.print_spec_start(spec)
+  write(cyan("▶ RUN ") .. spec)
+  io.stdout:flush()
+end
+
+function M.print_running(active, now)
+  local names = {}
+  for spec, started in pairs(active) do
+    names[#names + 1] = string.format("%s (%.0fs)", spec, (now - started) / 1e9)
+  end
+  if #names > 0 then
+    table.sort(names)
+    write(dim("… running: " .. table.concat(names, ", ")))
+    io.stdout:flush()
+  end
 end
 
 --- Emit one spec's captured output as a single contiguous block.
@@ -188,7 +231,9 @@ function M.emit_block(spec, stdout, stderr)
     chunk = chunk:gsub("\n*$", "\n") .. dim(label) .. "\n" .. stderr
   end
   chunk = chunk:gsub("\n*$", "")
-  if chunk == "" then return end
+  if chunk == "" then
+    return
+  end
   write(chunk)
 end
 
@@ -198,11 +243,15 @@ end
 function M.print_suite_summary(results, total_ms)
   local failures = {}
   for _, r in ipairs(results) do
-    if not r.ok then table.insert(failures, r) end
+    if not r.ok then
+      table.insert(failures, r)
+    end
   end
 
   -- Deterministic regardless of completion order, so CI logs stay diffable.
-  table.sort(failures, function(a, b) return a.spec < b.spec end)
+  table.sort(failures, function(a, b)
+    return a.spec < b.spec
+  end)
 
   write("")
   if #failures > 0 then

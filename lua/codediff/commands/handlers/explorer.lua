@@ -41,6 +41,7 @@ function M.run(revision, revision2, global_opts, pathspec)
               status_result = status_result,
               focus_file = focus_file, -- Focus on current file if changed
               pathspec = pathspec, -- Scope (#74): preserved so refresh re-applies it
+              source_revisions = revision and { original = revision, modified = revision2 or "WORKING" } or nil,
             },
           },
           git_root = git_root,

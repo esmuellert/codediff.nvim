@@ -18,7 +18,6 @@ local show_real_file_buffer = helpers.show_real_file_buffer
 local open_real_file = helpers.open_real_file
 local compute_and_render = render.compute_and_render
 local compute_and_render_conflict = conflict_view.compute_and_render_conflict
-local setup_auto_refresh = render.setup_auto_refresh
 local setup_conflict_result_window = conflict_view.setup_conflict_result_window
 local setup_all_keymaps = view_keymaps.setup_all_keymaps
 
@@ -247,8 +246,6 @@ local function render_diff_view(ctx)
     reapply_keymaps = make_reapply_keymaps(tabpage),
   })
 
-  -- Real file buffers only; virtual ones never change under us.
-  setup_auto_refresh(original_info.bufnr, modified_info.bufnr, ctx.original_is_virtual, ctx.modified_is_virtual)
   setup_all_keymaps(tabpage, original_info.bufnr, modified_info.bufnr, false)
   require("codediff.ui.follow_working_file").enable(tabpage, ctx.original_is_virtual, ctx.modified_is_virtual)
 

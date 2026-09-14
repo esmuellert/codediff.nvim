@@ -23,21 +23,8 @@ function M.setup_explorer(tabpage, session_config, original_win, modified_win)
   end
 
   local explorer_config = config.options.explorer or {}
-  local status_result = panel.data.status_result
-
-  local explorer_opts = {}
-  if not session_config.git_root then
-    explorer_opts.dir1 = session_config.original.absolute
-    explorer_opts.dir2 = session_config.modified.absolute
-  end
-  if panel.data.focus_file then
-    explorer_opts.focus_file = panel.data.focus_file
-  end
-  -- Scope (#74): carry the pathspec so auto-refresh re-applies it (see refresh.lua).
-  explorer_opts.pathspec = panel.data.pathspec
-
-  local explorer_obj =
-    explorer_module.create(status_result, session_config.git_root, tabpage, nil, session_config.original_revision, session_config.modified_revision, explorer_opts)
+  local data = lifecycle.get_panel(tabpage).data
+  local explorer_obj = explorer_module.create(data, tabpage)
 
   lifecycle.set_panel_view(tabpage, explorer_obj)
 
@@ -65,14 +52,8 @@ function M.setup_history(tabpage, session_config, original_win, modified_win)
   end
 
   local history_config = config.options.history or {}
-  local commits = panel.data.commits
-
-  local history_obj = history_module.create(commits, session_config.git_root, tabpage, nil, {
-    range = panel.data.range,
-    file_path = panel.data.file_path,
-    base_revision = panel.data.base_revision,
-    line_range = panel.data.line_range,
-  })
+  local data = lifecycle.get_panel(tabpage).data
+  local history_obj = history_module.create(data, tabpage)
 
   lifecycle.set_panel_view(tabpage, history_obj)
 

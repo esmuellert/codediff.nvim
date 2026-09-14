@@ -12,6 +12,15 @@ local run_git_sync = runner.run_sync
 -- see #498).
 local GIT_EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
+--- Only full object IDs and their ancestry expressions are immutable cache keys.
+function M.is_fixed(revision)
+  if type(revision) ~= "string" then
+    return false
+  end
+  local hash, suffix = revision:match("^(%x+)(.*)$")
+  return hash ~= nil and (#hash == 40 or #hash == 64) and (suffix == "" or suffix:match("^[~^%d]+$") ~= nil)
+end
+
 -- Resolve a git revision to its commit hash (async, atomic)
 -- revision: branch name, tag, or commit reference
 -- git_root: absolute path to git repository root

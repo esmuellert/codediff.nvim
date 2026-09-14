@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local core = require("codediff.ui.core")
 local path = require("codediff.core.path")
 local layout = require("codediff.ui.layout")
@@ -50,6 +49,7 @@ local function show_single_file(tabpage, opts)
   end
 
   if single_file_unchanged(session, opts) then
+    require("codediff.ui.refresh").ready(tabpage)
     return
   end
 
@@ -59,11 +59,9 @@ local function show_single_file(tabpage, opts)
   -- Clear highlights from current session buffers
   local old_orig_buf, old_mod_buf = lifecycle.get_buffers(tabpage)
   if old_orig_buf then
-    auto_refresh.disable(old_orig_buf)
     lifecycle.clear_highlights(old_orig_buf)
   end
   if old_mod_buf then
-    auto_refresh.disable(old_mod_buf)
     lifecycle.clear_highlights(old_mod_buf)
   end
 
@@ -154,7 +152,11 @@ end
 -- Load a real file from disk, return bufnr
 local function load_real_file(file_path)
   local bufnr = vim.fn.bufadd(file_path)
+  local loaded = vim.api.nvim_buf_is_loaded(bufnr)
   vim.fn.bufload(bufnr)
+  if not loaded then
+    vim.bo[bufnr].modified = false
+  end
   return bufnr
 end
 

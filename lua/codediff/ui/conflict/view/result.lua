@@ -2,7 +2,6 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
 local config = require("codediff.config")
 local layout = require("codediff.ui.layout")
 
@@ -34,6 +33,33 @@ local function create_center_layout(modified_win, original_win)
   local result_win = vim.api.nvim_open_win(scratch, true, { split = "right", win = left_win })
 
   return result_win
+end
+
+-- Shared by initial construction and accepted changes to untouched merge inputs.
+function M.set_inputs(session, base_lines, diffs)
+  local lines, blocks = require("codediff.ui.conflict.merge").compute_auto_merged_result(
+    diffs.base_to_original_diff,
+    diffs.base_to_modified_diff,
+    base_lines,
+    diffs.original_lines,
+    diffs.modified_lines
+  )
+  require("codediff.ui.view.helpers").set_lines(session.result_bufnr, lines)
+  session.result_base_lines, session.merge_base_lines, session.conflict_blocks = lines, base_lines, blocks
+  require("codediff.ui.conflict").initialize_tracking(session.result_bufnr, blocks)
+end
+
+function M.render(session)
+  if not session.result_bufnr or not vim.api.nvim_buf_is_valid(session.result_bufnr) or not session.result_base_lines then
+    return
+  end
+  local lines = vim.api.nvim_buf_get_lines(session.result_bufnr, 0, -1, false)
+  local options = require("codediff.ui.view.render").diff_options()
+  local result = require("codediff.core.diff").compute_diff(session.result_base_lines, lines, options)
+  if result then
+    require("codediff.ui.core").render_single_buffer(session.result_bufnr, result, "modified")
+  end
+  require("codediff.ui.conflict").refresh(session)
 end
 
 -- Common logic: Setup conflict result window
@@ -96,28 +122,6 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
 
   result_bufnr = vim.api.nvim_get_current_buf()
 
-  -- Compute the auto-merged result: BASE + every non-conflicting change from
-  -- both sides applied. Only true two-sided conflicts remain as BASE for the
-  -- user to resolve. This matches VSCode's MergeEditorModel.computeAutoMergedResult.
-  -- conflict_diffs.conflict_blocks (from compute_merge_fillers_and_conflicts) is
-  -- the visual filler list for the side panes; the Result-buffer-oriented blocks
-  -- (with result_range) come from compute_auto_merged_result.
-  local merge_alignment = require("codediff.ui.conflict.merge")
-  local result_lines, result_conflict_blocks = merge_alignment.compute_auto_merged_result(
-    conflict_diffs.base_to_original_diff,
-    conflict_diffs.base_to_modified_diff,
-    base_lines,
-    conflict_diffs.original_lines,
-    conflict_diffs.modified_lines
-  )
-
-  -- Replace the result buffer (which currently contains the raw file with
-  -- `<<<<<<<`/`=======`/`>>>>>>>` markers) with the auto-merged content.
-  -- We always replace in the conflict path so the markers never persist into
-  -- a manual save.
-  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, result_lines)
-  vim.bo[result_bufnr].modified = true
-
   -- Set window options for result
   vim.wo[result_win].wrap = false
   vim.wo[result_win].cursorline = true
@@ -129,14 +133,8 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   -- Update lifecycle with result buffer/window FIRST
   -- (This must happen before setting winbar so ensure_no_winbar knows we're in conflict mode)
   lifecycle.set_result(tabpage, result_bufnr, result_win)
-  -- result_base_lines is the seed of the Result buffer (the auto-merged
-  -- content), used by is_block_active to decide whether a conflict region is
-  -- still in its initial unresolved state. merge_base_lines keeps the true
-  -- merge base (stage :1) for operations that need merge-base coordinates
-  -- such as accept_both's smart-combine and discard.
-  lifecycle.set_result_base_lines(tabpage, result_lines)
-  lifecycle.set_merge_base_lines(tabpage, base_lines)
-  lifecycle.set_conflict_blocks(tabpage, result_conflict_blocks)
+  M.set_inputs(lifecycle.get_session(tabpage), base_lines, conflict_diffs)
+  vim.bo[result_bufnr].modified = true
   lifecycle.track_conflict_file(tabpage, abs_path)
 
   -- Arrange all windows now that lifecycle knows about result_win
@@ -161,12 +159,7 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
     end
   end
 
-  -- Enable auto-refresh for result buffer
-  auto_refresh.enable_for_result(result_bufnr)
-
-  -- Initialize conflict tracking (keymaps setup separately after setup_all_keymaps)
   local conflict = require("codediff.ui.conflict")
-  conflict.initialize_tracking(result_bufnr, conflict_diffs.conflict_blocks)
   conflict.attach_gutter(original_win, modified_win)
 
   -- Setup autocmd to refresh markers when the result buffer changes.

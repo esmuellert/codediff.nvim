@@ -10,7 +10,7 @@ local helpers = require("codediff.ui.view.helpers")
 local buffers = require("codediff.ui.view.inline_view.buffers")
 
 local open_real_file = helpers.open_real_file
-local disable_refresh_and_clear_highlights = buffers.disable_refresh_and_clear_highlights
+local clear_highlights = buffers.clear_highlights
 
 --- Display a single file in the inline diff window without any diff decorations.
 --- Used for untracked (??), added (A), and deleted (D) files in explorer/history.
@@ -31,9 +31,8 @@ function M.show_single_file(tabpage, file_path, opts)
     return
   end
 
-  -- Clear old inline decorations
-  -- Disable old auto-refresh
-  disable_refresh_and_clear_highlights(session)
+  -- Clear old inline decorations.
+  clear_highlights(session)
 
   -- Load the file
   local file_bufnr
@@ -96,7 +95,7 @@ function M.show_welcome(tabpage, load_bufnr)
     return
   end
 
-  disable_refresh_and_clear_highlights(session)
+  clear_highlights(session)
   session.single_side = nil
 
   vim.api.nvim_win_set_buf(mod_win, load_bufnr)

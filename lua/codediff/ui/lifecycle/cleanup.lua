@@ -34,43 +34,33 @@ local function cleanup_diff(tabpage)
     },
   })
 
-  -- Disable auto-refresh for both buffers
-  local auto_refresh = require("codediff.ui.auto_refresh")
-  auto_refresh.disable(diff.original_bufnr)
-  auto_refresh.disable(diff.modified_bufnr)
-  if diff.result_bufnr then
-    auto_refresh.disable_result(diff.result_bufnr)
-  end
+  require("codediff.ui.refresh").dispose(tabpage)
 
   -- Restore gutter options before deleting buffers can close or reuse windows.
   require("codediff.ui.conflict").teardown_gutter(tabpage)
 
-  -- Clear highlights from both buffers
-  state.clear_buffer_highlights(diff.original_bufnr)
-  state.clear_buffer_highlights(diff.modified_bufnr)
-
-  -- Restore buffer states
-  state.restore_buffer_state(diff.original_bufnr, diff.original_state)
-  state.restore_buffer_state(diff.modified_bufnr, diff.modified_state)
+  -- Another tab may still own the same working or revision buffer.
+  if not accessors.is_buffer_shared(diff.original_bufnr, tabpage) then
+    state.clear_buffer_highlights(diff.original_bufnr)
+    state.restore_buffer_state(diff.original_bufnr, diff.original_state)
+  end
+  if not accessors.is_buffer_shared(diff.modified_bufnr, tabpage) then
+    state.clear_buffer_highlights(diff.modified_bufnr)
+    state.restore_buffer_state(diff.modified_bufnr, diff.modified_state)
+  end
 
   -- Hand every mapped key back to whatever owned it before codediff
   keymaps.dispose_keymaps(tabpage)
 
-  -- Call the panel's cleanup function to stop file watchers
-  local panel_view = diff.panel and diff.panel.view
-  if panel_view and panel_view._cleanup_auto_refresh then
-    pcall(panel_view._cleanup_auto_refresh)
-  end
-
   -- Delete virtual buffers if they're still valid
   if vim.api.nvim_buf_is_valid(diff.original_bufnr) then
-    if is_virtual_revision(diff.original_revision) then
+    if is_virtual_revision(diff.original_revision) and not accessors.is_buffer_shared(diff.original_bufnr, tabpage) then
       pcall(vim.api.nvim_buf_delete, diff.original_bufnr, { force = true })
     end
   end
 
   if vim.api.nvim_buf_is_valid(diff.modified_bufnr) then
-    if is_virtual_revision(diff.modified_revision) then
+    if is_virtual_revision(diff.modified_revision) and not accessors.is_buffer_shared(diff.modified_bufnr, tabpage) then
       pcall(vim.api.nvim_buf_delete, diff.modified_bufnr, { force = true })
     end
   end

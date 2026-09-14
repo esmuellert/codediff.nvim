@@ -5,12 +5,9 @@
 -- busted-style DSL (`describe`, `it`, `before_each`, `after_each`, `pending`),
 -- and exposing `run_file(spec)` / `run_and_exit(spec)` for the shell scripts.
 --
--- Rationale: mirrors the "own the small dep" pattern already established by
--- `lua/codediff/ui/lib/` (which replaced `nui.nvim` with a ~300 LOC in-tree
--- copy of just the pieces this plugin actually uses). Replacing plenary.nvim
--- required ~500 LOC of pure Lua + Neovim built-ins — no `git clone` on CI, no
--- external network dependency, and the identical `describe/it/assert.*` API
--- means zero changes to any of the 66 existing `*_spec.lua` files.
+-- The framework has no external test dependency. Runnable specs, including its
+-- own self-tests, live in unit/, integration/ and e2e/ rather than beside the
+-- runner implementation. Shared feature drivers live separately in support/.
 
 local M = {}
 
@@ -19,7 +16,9 @@ local installed = false
 --- Install framework globals and start collecting tests.
 -- Idempotent — calling it more than once is a no-op.
 function M.setup()
-  if installed then return end
+  if installed then
+    return
+  end
   installed = true
 
   -- Assertion library replaces `_G.assert`. It is a callable table so the
@@ -31,7 +30,9 @@ function M.setup()
   -- Some legacy spec files explicitly do `local assert = require("luassert")`.
   -- Route those requires to our in-tree assert module so those specs work
   -- unchanged.
-  package.preload["luassert"] = function() return a end
+  package.preload["luassert"] = function()
+    return a
+  end
 
   -- describe/it/before_each/after_each/pending globals
   require("tests.framework.busted").install()

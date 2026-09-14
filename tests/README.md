@@ -1,143 +1,162 @@
-# Test Suite
+# Test suite
 
-Integration tests for codediff.nvim using an in-tree, self-contained test framework
-(`tests/framework/`) that implements the familiar `describe/it/before_each/after_each/assert.*`
-API in pure Lua + Neovim built-ins. No external test dependencies are required.
+The Lua suite runs in Neovim with the in-tree framework; no Plenary/Busted
+installation is needed. Build the native library first (`make build`). Native
+algorithm tests remain in `c-diff-core/tests/` and run with `make test-c`.
 
-## Test Coverage
+## Directory contract
 
-### ✅ FFI Integration (ffi_integration_spec.lua)
-C ↔ Lua boundary validation:
-- Data structure conversion
-- Memory management (no leaks)
-- Native and Lua version agreement
-- Edge cases (empty diffs, large files)
-
-**10 tests**
-
-### ✅ Git Integration (git_integration_spec.lua)
-Git operations and async handling:
-- Repository detection
-- Async callbacks
-- Error handling for invalid revisions
-- Path calculation
-- LRU cache validation
-
-**9 tests**
-
-### ✅ Installer (installer_spec.lua)
-Automatic binary installation and version management:
-- Module API validation
-- VERSION loading from version.lua
-- Library path construction
-- Version detection from filenames
-- Update necessity logic
-- Platform-specific extension handling
-
-**10 tests**
-
-### ✅ Auto-scroll (autoscroll_spec.lua)
-Diff view scrolling behavior:
-- Scroll to first change
-- Window centering
-- Scroll sync activation
-
-**5 tests**
-
-## Running Tests
-
-### All tests:
-```bash
-./tests/run_tests.sh          # or: make test-lua
+```text
+tests/
+├── unit/              isolated logic and controlled collaborators
+│   ├── core/          argparse, paths, installer policy, watcher protocol/manager
+│   └── ui/            filters, tree data, merge alignment, refresh policy, readiness
+├── integration/       component boundaries with Neovim, Git or the native library
+│   ├── commands/      completion queries
+│   ├── core/          Git, filesystem, FFI, installer and virtual-buffer integration
+│   ├── framework/     runner and discovery self-tests
+│   ├── keymap/        real buffer mappings, ownership and golden captures
+│   ├── plugin/        public exports, module loading and setup compatibility
+│   ├── support/       fixture-factory isolation and cleanup tests
+│   └── ui/            rendering, windows, sessions and panel/controller integration
+├── e2e/               public commands/keys through the complete application
+│   ├── commands/      dispatch, completion, merge commands, standalone-build smoke
+│   ├── conflict/      resolution actions and refresh protection
+│   ├── explorer/      file actions and navigation
+│   ├── history/       commit/file operations
+│   ├── refresh/       repository/file inputs, transport and session lifetime
+│   ├── view/          hunk operations and working-file following
+│   └── virtual_file/  public revision URI and diagnostic isolation
+├── fixtures/          deterministic repository profiles and hand-authored golden data
+├── support/           shared Git factory, plugin helpers and UI drivers
+├── framework/         collector, assertions, reporter, runner and RPC screen transport
+├── init.lua           shared Neovim/Git sandbox bootstrap
+└── run_tests.{sh,cmd}  equivalent POSIX/Windows entry points
 ```
 
-Spec files are auto-discovered under `tests/`, so a new `*_spec.lua` is picked
-up with no runner changes.
+**The first directory defines the test level; the next directories define the
+feature.** All runnable `*_spec.lua` files live in `unit/`, `integration/` or
+`e2e/`, including tests of the test infrastructure itself. Discovery self-tests
+enforce this boundary and verify that the layers form a complete, disjoint suite.
 
-### Individual spec:
+- **Unit:** isolated logic such as parsing, policy or data transformations.
+  Neovim supplies LuaJIT and `vim` utilities; this does not make a test E2E.
+- **Integration:** exercises component APIs and their real boundaries. Creating a
+  view directly, invoking a registered callback, supplying synthetic conflict
+  ranges or manually emitting an autocmd belongs here. The gutter screen tests
+  are integration tests even though they attach a real RPC UI.
+- **E2E:** starts at a public command or user input, runs the real Git/file/view
+  pipeline, and checks observable outcomes. Older command scenarios inspect
+  buffers and window state; the interaction/refresh matrix also asserts actual
+  screen cells. Git-backed cases use disposable fixtures, not checkout history.
+
+Name files for their behavior, not an issue number or test level. For example,
+`e2e/explorer/untracked_tab_spec.lua` retains its issue reference inside the test.
+Do not add redundant `_e2e`/`_integration` suffixes or helper compatibility shims.
+Extend an existing spec when it covers the same responsibility.
+
+## Running tests
+
+```bash
+./tests/run_tests.sh                                      # all layers; same as make test-lua
+./tests/run_tests.sh unit
+./tests/run_tests.sh integration
+./tests/run_tests.sh e2e
+./tests/run_tests.sh tests/e2e/conflict                    # one feature
+./tests/run_tests.sh tests/unit/core/path_spec.lua         # one file
+./tests/run_tests.sh --help
+```
+
+Use `tests\run_tests.cmd` with the same arguments on Windows. Targets may be
+layer names, directories or individual specs. Paths are resolved from the
+checkout root, regardless of the shell's starting directory. Missing targets
+and selections containing no specs fail rather than reporting a green empty run.
+
+For direct Neovim use:
+
 ```bash
 nvim --headless --noplugin -u tests/init.lua \
-  -c "lua require('tests.framework').run_and_exit('tests/core/ffi_integration_spec.lua')"
+  -c "lua require('tests.framework').run_all_and_exit({ dir = 'e2e' })"
 ```
 
-### How the suite runs
+Each spec gets its own child Neovim process. The supervisor discovers files
+recursively, runs a bounded worker pool and prints each child's output as one
+block. Start messages and a 30-second active-worker heartbeat distinguish long
+specs from a stalled runner. New specs need no manifest or CI enumeration changes.
+Windows CI uses four workers and a 15-minute per-spec budget for large E2E
+matrices; individual asynchronous assertions retain their own bounded waits.
 
-Each spec file gets its own child `nvim --headless` process, so specs stay
-isolated from one another. `tests/framework/supervisor.lua` runs those children
-concurrently from a single parent Neovim, which cuts the suite from ~150s to
-~35s on a 4-core machine.
-
-Children never share the parent's stdout: their output is buffered in full and
-printed as one contiguous block when they exit. Letting concurrent processes
-write to the same stream interleaves their output, both block-wise (stdout is
-fully buffered when it isn't a tty) and line-wise (Neovim writes some messages
-without a trailing newline).
-
-Concurrency needs `vim.system()` (Neovim 0.10+). On older versions the suite
-automatically falls back to running the same children one at a time, producing
-the same output, just slower.
-
-### Test environment
-
-`tests/init.lua` is the bootstrap every child loads. Besides putting the plugin
-on the runtimepath it disables a few pieces of Neovim that fight with throwaway
-temp repositories: ShaDa, swap files, and the filewatcher backing for
-`'autoread'` (via `g:loaded_autoread`, which must stay set before the
-`runtime! plugin/*.lua` line that sources Neovim's own runtime plugins).
-
-The `'autoread'` option itself stays on, so `:checktime` still reloads buffers
-silently. Only the per-buffer `uv_fs_event` goes away — specs delete the repos
-they opened files from, and a watcher left pointing at a deleted path prints
-`E211` on Linux and raises `EPERM` in an unbreakable loop on Windows.
-
-| Env var | Default | Purpose |
+| Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `CODEDIFF_TEST_JOBS` | 2x CPUs, capped at 16 | Concurrent spec workers. `1` forces sequential. |
-| `CODEDIFF_TEST_TIMEOUT` | `300000` | Per-spec timeout in ms; guards against a hung spec stalling CI. |
-| `NO_COLOR` / `CODEDIFF_TEST_NO_COLOR` | unset | Disable ANSI colors. |
+| `CODEDIFF_TEST_TARGET` | `all` | Same selector as the positional argument; an explicit argument wins |
+| `CODEDIFF_TEST_JOBS` | 2× CPUs, capped at 16 | Concurrent spec workers; `1` runs sequentially |
+| `CODEDIFF_TEST_TIMEOUT` | `300000` | Per-spec timeout in milliseconds |
+| `NO_COLOR` / `CODEDIFF_TEST_NO_COLOR` | unset | Disable ANSI output |
+| `CODEDIFF_WATCHER_PATH` | installer default | Existing native watcher executable for offline E2Es |
+| `CODEDIFF_TEST_UPSTREAM_SCROLLBIND` | unset | Opt into the strict tall-virtual-line regression on a Neovim build carrying the upstream fix |
 
-## Screen-grid regressions
+## Fixtures and shared support
 
-`tests/framework/screen.lua` starts a separate `nvim --embed` and attaches an
-RPC UI. Assertions read actual `grid_line` cells and highlight colors, not
-extmark metadata or screen functions in the headless test process. It uses
-Neovim's bundled MessagePack and libuv, with no external dependencies.
+Import helpers as modules, not cwd-relative `dofile` calls:
 
-The conflict gutter has three automatically discovered specs:
-
-- `ui/conflict/gutter_grid_spec.lua`: hand-authored block shapes from
-  `fixtures/conflict_gutter.lua`, including empty/filler-only blocks, BOF/EOF,
-  partial scrolling, unrelated blank rows, multiple blocks and Result
-  projections. Checks both glyph cells and colors in all three panes under
-  each focus state. Fixtures go through the production conflict renderer;
-  expected rows do not call or duplicate the gutter calculator.
-- `ui/conflict/gutter_options_spec.lua`: compares ordinary columns against
-  Neovim's native rendering, including relative/hybrid numbers, folds, wrapped
-  rows and other signs; checks custom-option ownership and restoration.
-- `ui/conflict/gutter_lifecycle_spec.lua`: real Git merges, file/window/tab
-  transitions, resizing, accept/undo/redo/discard, manual Result edits and
-  teardown of stale callbacks and invalid sessions.
-
-Run these like any other spec, for example:
-
-```bash
-nvim --headless --noplugin -u tests/init.lua \
-  -c "lua require('tests.framework').run_and_exit('tests/ui/conflict/gutter_grid_spec.lua')"
+```lua
+local h = require("tests.support")
+local ui = require("tests.support.e2e")
+local repositories = require("tests.support.repository")
+local fixture = require("tests.fixtures.refresh_repo")
 ```
 
-Always close the embedded UI in `after_each`, including when an assertion
-fails. A grid failure reports the pane/focus context, display row, expected
-text and actual text. These are cell-level checks, not font or pixel snapshots.
+- `support/repository.lua` owns the isolated TMP repository/worktree factory.
+  Cases never share mutable refs, indexes or object files.
+- `fixtures/refresh_repo.lua` supplies the basic, hunks, workspace, history and
+  merge profiles; `fixtures/conflict_gutter.lua` supplies independent visual
+  expectations and the focused gutter merge fixture.
+- `support/init.lua` exposes plugin waiters and `project_root`. Tests must not
+  infer the checkout root by counting their own parent directories.
+- `support/e2e.lua` drives embedded UI workflows. `support/gutter.lua` drives
+  focused renderer checks. `support/keymaps.lua` captures mapping matrices.
+- `framework/screen.lua` owns generic RPC transport and screen-grid observation,
+  not feature fixtures or business assertions.
 
-## Test Philosophy
+Close embedded UIs before cleaning up their repositories, including on failed
+assertions. Skipping during setup still runs cleanup; cleanup failures must not
+be hidden by a skip. See [fixtures/README.md](fixtures/README.md) for the graph,
+factory options, cleanup guarantees and interactive reproduction commands.
 
-Focus on **integration points** that C tests cannot validate:
-- FFI boundary integrity
-- Lua async operations
-- System integration (git)
-- UI behavior (scrolling, rendering)
+## Environment and observable behavior
 
-## What's NOT Covered
+`init.lua` disables auto-installation, ShaDa and swap files, isolates Git config,
+and removes inherited repository/index overrides. It pins `core.autocrlf=false`
+for all Git children, including on Windows. Neovim's per-buffer autoread watcher
+is disabled to avoid watching deleted fixture paths, while `autoread` itself
+remains available to `:checktime`.
 
-❌ **Diff algorithm** - Validated by C tests in `c-diff-core/tests/` (3,490 lines)
-❌ **Other visual features and third-party UI integrations** - Manual testing unless covered by a dedicated grid spec
+Synchronous headless specs can inspect buffers, extmarks, windows and options.
+They cannot observe rendered cells or naturally dispatched `WinScrolled` /
+`WinResized` merely by calling `vim.wait`. Use `framework/screen.lua` and a
+separate `nvim --embed` for those observations. Always close the screen in
+`after_each`.
+
+Native refresh E2Es require a real watcher and verify that it became ready;
+silent fallback is not a native-test pass. Polling cases disable native startup
+and exercise the 500 ms fallback. Android skips native cases only. Race tests
+may delay delivery of real Git results, but do not fabricate their contents.
+
+The tall-virtual-line monotonicity check is an upstream Neovim probe, not a
+CodeDiff workaround. Neovim reverted #41519 in `0c9012f`, so a `0.13` version
+check is insufficient. Its assertion remains opt-in on fixed builds; CodeDiff's
+own scrollbind setup is checked unconditionally. Synthetic gutter fixtures
+retire their comparison controller so periodic input reads cannot overwrite the
+hand-authored projections; real merge E2Es keep the full controller active.
+
+## Behavioral coverage
+
+[e2e/COVERAGE.md](e2e/COVERAGE.md) maps the refresh changes against `main` to
+scenario IDs and parameterized executions. Its 133 named scenarios / 548
+executions are a specific cross-feature matrix, **not the total E2E suite** and
+not a count of unit or integration tests. Additional command and working-file
+E2Es live alongside it. The runner reports the selected suite's actual counts.
+
+These tests provide evidence for documented behaviors, not an absolute safety
+guarantee, pixel/font snapshots, or coverage of every external LSP, UI plugin,
+filesystem and operating-system combination.

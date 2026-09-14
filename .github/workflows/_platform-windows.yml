@@ -33,6 +33,7 @@ jobs:
   build:
     name: ${{ inputs.artifact }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -60,6 +61,12 @@ jobs:
 
       - name: Run Neovim tests
         shell: bash
+        env:
+          # E2E specs create up to 120 isolated Git/Neovim instances. Avoid
+          # oversubscribing process startup and give the whole spec a budget;
+          # individual async assertions retain their bounded timeouts.
+          CODEDIFF_TEST_JOBS: '4'
+          CODEDIFF_TEST_TIMEOUT: '900000'
         run: ./tests/run_tests.sh
 
       - name: Upload build artifacts
