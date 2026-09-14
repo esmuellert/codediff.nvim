@@ -150,7 +150,10 @@ failover. Plain file/directory comparisons use polling without Git metadata.
 `ui/refresh/policy_spec.lua`, `ui/auto_refresh_spec.lua` and
 `ui/explorer/native_watcher_spec.lua` cover dependency selection, settled input
 snapshots, event coalescing, retries and stale callback rejection independently
-of the screen tests.
+of the screen tests. Controller tests also check that unchanged inputs do not
+notify the diff renderer and list-only updates do not invoke file selection.
+Explorer and History specs verify that their `on_data` handlers render supplied
+session data without fetching Git data from the view.
 
 ## Test Philosophy
 

@@ -2,25 +2,14 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local config = require("codediff.config")
-local diff_module = require("codediff.core.diff")
-local inline = require("codediff.ui.inline")
+local render = require("codediff.ui.view.render")
 local cursor_util = require("codediff.ui.view.cursor")
 
 function M.compute_and_render_inline(modified_buf, original_buf, original_lines, modified_lines, original_is_virtual, modified_is_virtual, modified_win, auto_scroll_to_first_hunk)
-  local diff_options = {
-    max_computation_time_ms = config.options.diff.max_computation_time_ms,
-    ignore_trim_whitespace = config.options.diff.ignore_trim_whitespace,
-    compute_moves = config.options.diff.compute_moves,
-  }
-
-  local lines_diff = diff_module.compute_diff(original_lines, modified_lines, diff_options)
+  local lines_diff = render.render_diff(original_buf, modified_buf, original_lines, modified_lines, "inline")
   if not lines_diff then
-    vim.notify("Failed to compute diff", vim.log.levels.ERROR)
-    return nil
+    return
   end
-
-  inline.render_inline_diff(modified_buf, lines_diff, original_lines, modified_lines)
 
   if modified_win and vim.api.nvim_win_is_valid(modified_win) then
     vim.wo[modified_win].wrap = false
@@ -64,15 +53,8 @@ function M.rerender(tabpage)
   local original_lines = vim.api.nvim_buf_get_lines(original_bufnr, 0, -1, false)
   local modified_lines = vim.api.nvim_buf_get_lines(modified_bufnr, 0, -1, false)
 
-  local diff_options = {
-    max_computation_time_ms = config.options.diff.max_computation_time_ms,
-    ignore_trim_whitespace = config.options.diff.ignore_trim_whitespace,
-    compute_moves = config.options.diff.compute_moves,
-  }
-
-  local lines_diff = diff_module.compute_diff(original_lines, modified_lines, diff_options)
+  local lines_diff = render.render_diff(original_bufnr, modified_bufnr, original_lines, modified_lines, "inline")
   if lines_diff then
-    inline.render_inline_diff(modified_bufnr, lines_diff, original_lines, modified_lines)
     lifecycle.update_diff_result(tabpage, lines_diff)
   end
 end

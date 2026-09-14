@@ -204,8 +204,7 @@ describe("Inline diff mode interactions", function()
 
     -- Programmatic buffer changes (nvim_buf_set_lines) do not fire TextChanged,
     -- so trigger the auto-refresh pipeline manually.
-    local auto_refresh = require("codediff.ui.auto_refresh")
-    auto_refresh.trigger(ctx.modified_bufnr)
+    require("codediff.ui.refresh").buffer_changed(ctx.modified_bufnr)
 
     -- Wait for throttled refresh (THROTTLE_DELAY_MS = 200 + vim.schedule)
     vim.wait(500, function()

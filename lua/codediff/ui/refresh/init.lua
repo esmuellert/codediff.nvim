@@ -1,8 +1,8 @@
--- One refresh controller per session: collect invalidations, inspect data, apply changes.
+-- Session data owns refresh. Views consume changes and submit user selections.
 local M = {}
 local policy = require("codediff.ui.refresh.policy")
-local snapshot = require("codediff.ui.refresh.snapshot")
-local apply = require("codediff.ui.refresh.apply")
+local inputs = require("codediff.ui.refresh.inputs")
+local panels = require("codediff.ui.refresh.panel")
 local uv = vim.uv or vim.loop
 local Controller = {}
 Controller.__index = Controller
@@ -39,9 +39,6 @@ end
 
 function Controller:request(event, done)
   if self.closed then
-    if done then
-      done()
-    end
     return
   end
   self.pending = policy.merge(self.pending, policy.normalize(event))
@@ -51,11 +48,82 @@ function Controller:request(event, done)
   self:schedule()
 end
 
-function Controller:run()
-  if not self:visible() or self.loading or self.running then
-    return
+local function notify_panel(panel, changes)
+  if panel.view and panel.view.on_data then
+    panel.view.on_data(panel.data, changes)
   end
-  if not next(self.pending) and #self.callbacks == 0 then
+end
+
+function Controller:publish_panel(data)
+  local panel = self.session.panel
+  local previous = panel.data
+  local key = panel.name == "history" and "commits" or "status_result"
+  local list_changed = not vim.deep_equal(previous[key], data[key])
+  if vim.deep_equal(previous, data) then
+    data = previous
+  end
+  panel.data = data
+  if panel.name == "explorer" and list_changed then
+    panels.set_selection(panel, panels.reselect(previous, data.status_result))
+  end
+  local selection_changed = not panels.same_selection(previous.current_selection, data.current_selection)
+  if not vim.deep_equal(previous, data) then
+    notify_panel(panel, { list = list_changed, selection = selection_changed })
+  end
+  if selection_changed then
+    M.select(self.tabpage, data.current_selection, { no_jump = true })
+  elseif data.current_selection then
+    local comparison = panels.comparison(panel)
+    if
+      comparison
+      and self.session.single_side == comparison.single_side
+      and self.session.merge == comparison.conflict
+      and vim.deep_equal(self.session.original, comparison.original)
+      and vim.deep_equal(self.session.modified, comparison.modified)
+    then
+      self.session.source_revisions = comparison.source_revisions
+    end
+  end
+end
+
+-- Publish only actual data changes. Edited Result buffers are never reseeded.
+function Controller:publish(data, redraw)
+  local session = self.session
+  local changed = not inputs.same(self.last, data)
+  local result_changed = session.result_bufnr and not vim.deep_equal(self.last and self.last.result, inputs.lines(session.result_bufnr))
+  if session.result_bufnr and changed then
+    local seed = session.result_base_lines or {}
+    if not vim.deep_equal(inputs.lines(session.result_bufnr), #seed > 0 and seed or { "" }) then
+      if not self.blocked or not inputs.same(self.blocked, data) then
+        vim.notify("Conflict inputs changed; Result has unsaved edits. Reopen the conflict view to reload its inputs.", vim.log.levels.WARN)
+        self.blocked = data
+      end
+      if result_changed or redraw then
+        require("codediff.ui.conflict.view.result").render(session)
+      end
+      if self.last then
+        self.last.result = inputs.lines(session.result_bufnr)
+      end
+      return
+    end
+  end
+  if changed or result_changed or redraw then
+    self.applying = true
+    local ok, err = xpcall(function()
+      require("codediff.ui.view.render").update(session, data, { inputs = changed, result = result_changed, redraw = redraw })
+    end, debug.traceback)
+    self.applying = false
+    if not ok then
+      error(err)
+    end
+  end
+  self.blocked = nil
+  data.result = session.result_bufnr and inputs.lines(session.result_bufnr) or nil
+  self.last = data
+end
+
+function Controller:run()
+  if not self:visible() or self.loading or self.running or not next(self.pending) and #self.callbacks == 0 then
     return
   end
   local event, callbacks, generation = self.pending, self.callbacks, self.generation
@@ -75,8 +143,6 @@ function Controller:run()
     end
     if err or cancelled then
       self.pending = policy.merge(event, self.pending)
-      -- A completion may navigate or restore a cursor: never replay it onto
-      -- a different file or a replacement panel.
       if self.generation == generation and owns_panel() then
         vim.list_extend(self.callbacks, callbacks)
       end
@@ -95,56 +161,46 @@ function Controller:run()
   local function current()
     return not finished and self:visible() and not self.loading and self.generation == generation and owns_panel()
   end
-  local function inspect(panel_error)
+  local function inspect(err, panel_data)
     if not current() then
       finish(nil, true)
       return
     end
-    if panel_error then
-      finish(panel_error)
+    if err then
+      finish(err)
       return
     end
-    if not self.last then
-      self.last = snapshot.capture(self.session)
-    end
-    local read_ok, read_error = pcall(snapshot.read, self.session, event, self.last, function(err, data)
+    if panel_data then
+      local ok, failure = pcall(self.publish_panel, self, panel_data)
+      if not ok then
+        finish(failure)
+        return
+      end
       if not current() then
         finish(nil, true)
         return
       end
-      if err then
-        finish(err)
-        return
-      end
-      if not snapshot.valid(data) then
+    end
+    self.last = self.last or inputs.capture(self.session)
+    local read_ok, read_error = pcall(inputs.read, self.session, event, self.last, function(read_error, data)
+      if not current() then
+        finish(nil, true)
+      elseif read_error then
+        finish(read_error)
+      elseif not inputs.valid(data) then
         self.pending = policy.merge(self.pending, { buffer = true })
         finish(nil, true)
-        return
+      else
+        local ok, failure = pcall(self.publish, self, data, event.render)
+        finish(not ok and failure or nil)
       end
-      self.applying = true
-      local ok, accepted = xpcall(function()
-        return apply.run(self.session, data, self.last, event.render)
-      end, debug.traceback)
-      self.applying = false
-      if not ok then
-        finish(accepted)
-        return
-      end
-      if accepted then
-        self.blocked = nil
-        data.result = self.session.result_bufnr and snapshot.lines(self.session.result_bufnr) or nil
-        self.last = data
-      elseif self.last then
-        self.last.result = snapshot.lines(self.session.result_bufnr)
-      end
-      finish()
     end)
     if not read_ok then
       finish(read_error)
     end
   end
-  if self.panel_refresh and policy.panel_needed(self.session.panel, event) then
-    local ok, err = pcall(self.panel_refresh, inspect)
+  if panel and panel.on_data and policy.panel_needed(self.session.panel, event) then
+    local ok, err = pcall(panels.read, self.session, inspect)
     if not ok then
       finish(err)
     end
@@ -167,7 +223,6 @@ function Controller:start_polling()
   )
 end
 
--- A file-follow operation may move the session to another repository.
 function Controller:watch()
   self.watch_generation = (self.watch_generation or 0) + 1
   local generation = self.watch_generation
@@ -178,12 +233,7 @@ function Controller:watch()
   self.git_root = self.session.git_root
   self.native, self.polling = false, false
   self.poll:stop()
-  local panel = self.session.panel and self.session.panel.view
-  if panel then
-    panel._native_watcher_ready = false
-  end
-  local automatic = not (self.session.panel and self.session.panel.name == "explorer" and require("codediff.config").options.explorer.auto_refresh == false)
-  if not automatic then
+  if self.session.panel and self.session.panel.name == "explorer" and require("codediff.config").options.explorer.auto_refresh == false then
     return
   end
   self:start_polling()
@@ -195,16 +245,11 @@ function Controller:watch()
   end
   self.unsubscribe = require("codediff.core.watcher").subscribe(self.git_root, {
     on_ready = function()
-      if not current() then
-        return
+      if current() then
+        self.native, self.polling = true, false
+        self.poll:stop()
+        self:request({ full = true })
       end
-      self.native, self.polling = true, false
-      self.poll:stop()
-      local view = self.session.panel and self.session.panel.view
-      if view then
-        view._native_watcher_ready = true
-      end
-      self:request({ full = true })
     end,
     on_refresh = function(message)
       if current() then
@@ -212,16 +257,11 @@ function Controller:watch()
       end
     end,
     on_error = function()
-      if not current() then
-        return
+      if current() then
+        self.native = false
+        self:start_polling()
+        self:request({ full = true })
       end
-      self.native = false
-      local view = self.session.panel and self.session.panel.view
-      if view then
-        view._native_watcher_ready = false
-      end
-      self:start_polling()
-      self:request({ full = true })
     end,
   })
 end
@@ -269,12 +309,8 @@ function M.attach(tabpage)
       end
       local name = vim.api.nvim_buf_get_name(event.buf)
       local belongs = event.buf == session.original_bufnr or event.buf == session.modified_bufnr or event.buf == session.result_bufnr
-      if not belongs then
-        for _, input in pairs(snapshot.describe(session)) do
-          if input.path and input.path.absolute ~= "" and input.path.absolute == name then
-            belongs = true
-          end
-        end
+      for _, input in pairs(inputs.describe(session)) do
+        belongs = belongs or input.path and input.path.absolute ~= "" and input.path.absolute == name
       end
       if belongs then
         self:request({ buffer = true })
@@ -310,7 +346,6 @@ function M.attach(tabpage)
   return self
 end
 
--- Opening/retargeting owns the view until its complete input set is installed.
 function M.begin(tabpage, request)
   local self = M.attach(tabpage)
   if not self then
@@ -343,7 +378,7 @@ function M.ready(tabpage)
     if self.git_root ~= session.git_root then
       self:watch()
     end
-    self.last = snapshot.capture(session)
+    self.last = inputs.capture(session)
     self.blocked = nil
     if next(self.pending) or #self.callbacks > 0 then
       self:schedule()
@@ -351,19 +386,97 @@ function M.ready(tabpage)
   end)
 end
 
-function M.replay(tabpage)
+function M.select(tabpage, file, opts)
   local self = M.attach(tabpage)
-  if not self or self.loading then
+  local session = self and self.session
+  local panel = session and session.panel
+  if not panel then
+    return false
+  end
+  opts = opts or {}
+  local changed = not panels.same_selection(panel.data.current_selection, file)
+  panels.set_selection(panel, file)
+  if changed then
+    notify_panel(panel, { selection = true })
+  end
+  if not file then
+    M.begin(tabpage, {})
+    require("codediff.ui.view").show_welcome(tabpage)
+    return true
+  end
+  local comparison = panels.comparison(panel, file)
+  if not comparison then
+    return false
+  end
+  if panel.name == "explorer" then
+    vim.api.nvim_exec_autocmds("User", {
+      pattern = "CodeDiffFileSelect",
+      modeline = false,
+      data = { tabpage = tabpage, path = file.path, status = file.status },
+    })
+  end
+  local same = session.single_side == comparison.single_side
+    and session.merge == comparison.conflict
+    and vim.deep_equal(session.original, comparison.original)
+    and vim.deep_equal(session.modified, comparison.modified)
+    and vim.deep_equal(session.source_revisions, comparison.source_revisions)
+  if same and not opts.force then
+    return true
+  end
+  local generation = M.begin(tabpage, comparison)
+  local view = panel.view
+  panels.resolve(comparison, function(err, resolved)
+    vim.schedule(function()
+      if not M.is_current(tabpage, session, generation) or session.panel ~= panel or panel.view ~= view then
+        return
+      end
+      if err then
+        vim.notify(err, vim.log.levels.ERROR)
+        M.ready(tabpage)
+        return
+      end
+      local jump = not opts.no_jump and require("codediff.config").options.diff.jump_to_first_change
+      require("codediff.ui.view").show(tabpage, resolved, jump)
+    end)
+  end)
+  return true
+end
+
+function M.load_commit_files(tabpage, hash, done)
+  local self = M.attach(tabpage)
+  local panel = self and self.session.panel
+  if not panel or panel.name ~= "history" then
     return
   end
-  local data = snapshot.capture(self.session)
-  self.applying = true
-  local ok, err = xpcall(function()
-    apply.run(self.session, data, self.last, true)
-  end, debug.traceback)
-  self.applying = false
-  if not ok then
-    error(err)
+  local view = panel.view
+  panels.load_files(panel.data, hash, function(err, files)
+    if not self:valid() or self.session.panel ~= panel or panel.view ~= view then
+      return
+    end
+    if not err then
+      panel.data.files[hash] = files
+      notify_panel(panel, { files = hash })
+    else
+      vim.notify("Failed to load commit files: " .. err, vim.log.levels.ERROR)
+    end
+    if done then
+      done(err)
+    end
+  end)
+end
+
+function M.reopen(tabpage)
+  local session = session_for(tabpage)
+  if session and session.panel then
+    return M.select(tabpage, session.panel.data.current_selection, { force = true, no_jump = true })
+  end
+  return false
+end
+
+function M.replay(tabpage)
+  local self = M.attach(tabpage)
+  if self and not self.loading then
+    self:publish(inputs.capture(self.session), true)
   end
 end
 
@@ -371,22 +484,6 @@ function M.request(tabpage, event, done)
   local self = M.attach(tabpage)
   if self then
     self:request(event, done)
-  elseif done then
-    done()
-  end
-end
-
-function M.bind_panel(tabpage, panel, refresh)
-  local self = M.attach(tabpage)
-  if not self then
-    return function() end
-  end
-  self.panel_refresh = refresh
-  panel._native_watcher_ready = self.native == true
-  return function()
-    if self.panel_refresh == refresh then
-      self.panel_refresh = nil
-    end
   end
 end
 
@@ -402,6 +499,15 @@ function M.buffer_changed(buf)
   for tabpage, session in pairs(require("codediff.ui.lifecycle.session").get_active_diffs()) do
     if buf == session.original_bufnr or buf == session.modified_bufnr or buf == session.result_bufnr then
       M.request(tabpage, { buffer = true })
+    end
+  end
+end
+
+-- Resolution commands render their local edits synchronously, without reading Git.
+function M.refresh_result_now(buf)
+  for _, session in pairs(require("codediff.ui.lifecycle.session").get_active_diffs()) do
+    if buf == session.result_bufnr then
+      require("codediff.ui.conflict.view.result").render(session)
     end
   end
 end

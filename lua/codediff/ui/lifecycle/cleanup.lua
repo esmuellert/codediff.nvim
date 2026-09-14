@@ -50,12 +50,6 @@ local function cleanup_diff(tabpage)
   -- Hand every mapped key back to whatever owned it before codediff
   keymaps.dispose_keymaps(tabpage)
 
-  -- Call the panel's cleanup function to stop file watchers
-  local panel_view = diff.panel and diff.panel.view
-  if panel_view and panel_view._cleanup_auto_refresh then
-    pcall(panel_view._cleanup_auto_refresh)
-  end
-
   -- Delete virtual buffers if they're still valid
   if vim.api.nvim_buf_is_valid(diff.original_bufnr) then
     if is_virtual_revision(diff.original_revision) then

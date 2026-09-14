@@ -59,7 +59,6 @@ describe("explorer file select: added files", function()
   it("shows the added file's contents, not an empty diff", function()
     local tabpage, explorer = open_explorer_on(repo.dir, "kept.txt")
 
-    explorer.current_file_path = "added.txt"
     explorer.on_file_select({
       path = "added.txt",
       status = "A",
@@ -133,7 +132,6 @@ describe("explorer file select: directory comparison", function()
       "directory explorer should open"
     )
 
-    explorer.current_file_path = "f.txt"
     explorer.on_file_select({ path = "f.txt", status = "M", group = "unstaged" }, {})
 
     assert.is_true(

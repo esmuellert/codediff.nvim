@@ -14,7 +14,7 @@ local is_virtual_revision = helpers.is_virtual_revision
 local prepare_buffer = helpers.prepare_buffer
 local show_real_file_buffer = helpers.show_real_file_buffer
 local open_real_file = helpers.open_real_file
-local disable_refresh_and_clear_highlights = buffers.disable_refresh_and_clear_highlights
+local clear_highlights = buffers.clear_highlights
 local set_scratch_lines = buffers.set_scratch_lines
 local new_scratch = buffers.new_scratch
 local compute_and_render_inline = inline_render.compute_and_render_inline
@@ -130,7 +130,7 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   end
 
   -- ns_highlight/ns_filler may linger after toggling from side-by-side.
-  disable_refresh_and_clear_highlights(session)
+  clear_highlights(session)
 
   session.single_side = nil
   lifecycle.update_diff_result(tabpage, nil)

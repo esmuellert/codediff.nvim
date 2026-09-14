@@ -29,8 +29,7 @@ end
 --- @param timeout_ms? number  How long to spin (default 3000)
 local function refresh_and_wait(explorer, timeout_ms)
   timeout_ms = timeout_ms or 3000
-  local refresh = require("codediff.ui.explorer.refresh")
-  refresh.refresh(explorer)
+  require("codediff.ui.refresh").request(explorer.tabpage, { full = true })
   -- The refresh is async (git status → vim.schedule). We must let the
   -- event loop run so the callback fires and the tree / session update.
   vim.wait(timeout_ms, function()
@@ -81,8 +80,7 @@ end
 --- @param explorer table
 --- @return number
 local function count_tree_files(explorer)
-  local refresh = require("codediff.ui.explorer.refresh")
-  local files = refresh.get_all_files(explorer.tree)
+  local files = require("codediff.ui.explorer.tree").get_all_files(explorer.tree)
   return #files
 end
 
@@ -91,8 +89,7 @@ end
 --- @param path string  Relative file path
 --- @return boolean
 local function file_exists_in_tree(explorer, path)
-  local refresh = require("codediff.ui.explorer.refresh")
-  local files = refresh.get_all_files(explorer.tree)
+  local files = require("codediff.ui.explorer.tree").get_all_files(explorer.tree)
   for _, f in ipairs(files) do
     if f.data.path == path then
       return true
@@ -149,7 +146,7 @@ describe("Welcome Page After Git Operations", function()
     local welcome = require("codediff.ui.welcome")
 
     -- Precondition: file1.txt selected in unstaged
-    assert.equals("file1.txt", explorer.current_file_path, "Precondition: should be viewing file1.txt")
+    assert.equals("file1.txt", explorer.data.current_file_path, "Precondition: should be viewing file1.txt")
 
     -- Commit only file1.txt
     repo.git("add file1.txt")
@@ -168,7 +165,7 @@ describe("Welcome Page After Git Operations", function()
     -- or show a different file.
     session = lifecycle.get_session(tabpage)
     local shows_welcome = welcome.is_welcome_buffer(session.modified_bufnr)
-    local shows_different_file = explorer.current_file_path ~= "file1.txt"
+    local shows_different_file = explorer.data.current_file_path ~= "file1.txt"
     assert.is_true(shows_welcome or shows_different_file, "After committing file1: should show welcome or a different file, not stale file1 content")
   end)
 
@@ -192,8 +189,8 @@ describe("Welcome Page After Git Operations", function()
     -- Diff panes should show the welcome page
     session = lifecycle.get_session(tabpage)
     assert.is_true(welcome.is_welcome_buffer(session.modified_bufnr), "Welcome buffer should be shown after committing all files")
-    assert.is_nil(explorer.current_file_path, "Current file path should be cleared when the tree becomes empty")
-    assert.is_nil(explorer.current_file_group, "Current file group should be cleared when the tree becomes empty")
+    assert.is_nil(explorer.data.current_file_path, "Current file path should be cleared when the tree becomes empty")
+    assert.is_nil(explorer.data.current_file_group, "Current file group should be cleared when the tree becomes empty")
   end)
 
   -- --------------------------------------------------------------------------
@@ -215,7 +212,7 @@ describe("Welcome Page After Git Operations", function()
     -- Diff panes should show the welcome page
     session = lifecycle.get_session(tabpage)
     assert.is_true(welcome.is_welcome_buffer(session.modified_bufnr), "Welcome buffer should be shown after stashing all changes")
-    assert.is_nil(explorer.current_file_path, "Current file path should be cleared when the tree becomes empty")
-    assert.is_nil(explorer.current_file_group, "Current file group should be cleared when the tree becomes empty")
+    assert.is_nil(explorer.data.current_file_path, "Current file path should be cleared when the tree becomes empty")
+    assert.is_nil(explorer.data.current_file_group, "Current file group should be cleared when the tree becomes empty")
   end)
 end)

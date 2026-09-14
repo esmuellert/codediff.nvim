@@ -8,7 +8,7 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
+local refresh = require("codediff.ui.refresh")
 
 function M.find_hunk_at_cursor(ctx)
   local session = lifecycle.get_session(ctx.tabpage)
@@ -224,7 +224,7 @@ function M.discard_hunk(ctx)
     return
   end
 
-  auto_refresh.trigger(discard_mod_buf)
+  refresh.buffer_changed(discard_mod_buf)
   vim.notify(string.format("Discarded hunk %d", hunk_idx), vim.log.levels.INFO)
 end
 

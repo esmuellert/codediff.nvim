@@ -89,7 +89,7 @@ describe("explorer refresh keeps the user's view", function()
     -- would never be rebuilt and the collapse would survive for the wrong
     -- reason. Make a real change first.
     vim.fn.writefile({ "d1 new file" }, repo.dir .. "/d.txt")
-    require("codediff.ui.explorer.refresh").refresh(explorer)
+    require("codediff.ui.refresh").request(explorer.tabpage, { full = true })
     vim.wait(4000)
 
     local after
@@ -106,8 +106,6 @@ describe("explorer refresh keeps the user's view", function()
     local explorer = open()
 
     -- Review a.txt, the first file in the unstaged group.
-    explorer.current_file_path = "a.txt"
-    explorer.current_file_group = "unstaged"
     explorer.on_file_select({ path = "a.txt", status = "M", group = "unstaged", git_root = repo.dir }, {})
     vim.wait(2000)
 
@@ -115,10 +113,10 @@ describe("explorer refresh keeps the user's view", function()
     -- staged group, the refresh keeps the reviewer where they were: on
     -- whatever file now occupies that slot.
     repo.git("add a.txt")
-    require("codediff.ui.explorer.refresh").refresh(explorer)
+    require("codediff.ui.refresh").request(explorer.tabpage, { full = true })
     vim.wait(4000)
 
-    assert.equals("b.txt", explorer.current_file_path, "should advance to the file taking a.txt's slot")
+    assert.equals("b.txt", explorer.data.current_file_path, "should advance to the file taking a.txt's slot")
 
     local lifecycle = require("codediff.ui.lifecycle")
     local session = lifecycle.get_session(explorer.tabpage)

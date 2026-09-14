@@ -62,7 +62,7 @@ function M.normalize_side_by_side_layout(tabpage)
 end
 
 -- Re-render the current file in the new layout.
--- For explorer/history: call rerender_current which re-triggers on_file_select.
+-- Panels replay the session's selected comparison through the data controller.
 -- For a bare diff (no panel): rebuild session_config from existing session fields.
 local function rerender_current_file(tabpage)
   local session = lifecycle.get_session(tabpage)
@@ -70,15 +70,8 @@ local function rerender_current_file(tabpage)
     return false
   end
 
-  local panel = session.panel
-  local panel_name = panel and panel.name
-
-  if panel_name == "explorer" then
-    return panel.view and require("codediff.ui.explorer").rerender_current(panel.view) or false
-  end
-
-  if panel_name == "history" then
-    return panel.view and require("codediff.ui.history").rerender_current(panel.view) or false
+  if session.panel then
+    return require("codediff.ui.refresh").reopen(tabpage)
   end
 
   -- No panel: rebuild from session fields

@@ -63,7 +63,7 @@ describe("cycle_hunks_across_files (#161)", function()
       for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
         local s = lifecycle.get_session(tp)
         local e = lifecycle.get_panel_view(tp)
-        if has_expected_hunk_count(s, expected_hunk_count) and e and e.current_file_path == focus_file then
+        if has_expected_hunk_count(s, expected_hunk_count) and e and e.data.current_file_path == focus_file then
           return true
         end
       end
@@ -85,7 +85,7 @@ describe("cycle_hunks_across_files (#161)", function()
   local function wait_for_file_switch(tabpage, from_file, expected_hunk_count)
     local switched = vim.wait(8000, function()
       local e = lifecycle.get_panel_view(tabpage)
-      return e and e.current_file_path and e.current_file_path ~= from_file
+      return e and e.data.current_file_path and e.data.current_file_path ~= from_file
     end, 20)
     if not switched then
       return false
@@ -94,7 +94,7 @@ describe("cycle_hunks_across_files (#161)", function()
       local s = lifecycle.get_session(tabpage)
       local e = lifecycle.get_panel_view(tabpage)
       local session_path = s and s.modified.absolute ~= "" and s.modified.absolute or s and s.original.absolute
-      return session_path and e and e.current_file_path and session_path:find(e.current_file_path, 1, true) ~= nil and has_expected_hunk_count(s, expected_hunk_count)
+      return session_path and e and e.data.current_file_path and session_path:find(e.data.current_file_path, 1, true) ~= nil and has_expected_hunk_count(s, expected_hunk_count)
     end, 20)
   end
 
@@ -110,7 +110,7 @@ describe("cycle_hunks_across_files (#161)", function()
     assert.is_not_nil(explorer)
     assert.is_false(config.options.diff.cycle_hunks_across_files, "option must be false for this test")
 
-    local starting_file = explorer.current_file_path
+    local starting_file = explorer.data.current_file_path
     local changes = session.stored_diff_result.changes
     assert.is_true(#changes >= 2, "test repo must produce at least 2 hunks")
 
@@ -120,7 +120,7 @@ describe("cycle_hunks_across_files (#161)", function()
     nav.next_hunk()
     vim.wait(150)
 
-    assert.equal(starting_file, explorer.current_file_path, "with cross-file off, ]c at the last hunk must NOT change file")
+    assert.equal(starting_file, explorer.data.current_file_path, "with cross-file off, ]c at the last hunk must NOT change file")
   end)
 
   it("OFF: hunk navigation does not leave a file with no hunks", function()
@@ -130,12 +130,12 @@ describe("cycle_hunks_across_files (#161)", function()
     assert.is_not_nil(session)
     assert.is_not_nil(explorer)
     assert.equal(0, #session.stored_diff_result.changes)
-    local starting_file = explorer.current_file_path
+    local starting_file = explorer.data.current_file_path
 
     assert.is_false(nav.next_hunk())
-    assert.equal(starting_file, explorer.current_file_path)
+    assert.equal(starting_file, explorer.data.current_file_path)
     assert.is_false(nav.prev_hunk())
-    assert.equal(starting_file, explorer.current_file_path)
+    assert.equal(starting_file, explorer.data.current_file_path)
     assert.is_nil(session.pending_cursor_landing)
   end)
 
@@ -149,7 +149,7 @@ describe("cycle_hunks_across_files (#161)", function()
 
     assert.is_true(nav.next_hunk())
     assert.is_true(wait_for_file_switch(tabpage, "c-untracked.txt"))
-    assert.equal("a.txt", explorer.current_file_path)
+    assert.equal("a.txt", explorer.data.current_file_path)
     assert.is_nil(lifecycle.get_session(tabpage).pending_cursor_landing)
   end)
 
@@ -162,11 +162,11 @@ describe("cycle_hunks_across_files (#161)", function()
 
     assert.is_true(nav.prev_hunk())
     assert.is_true(wait_for_file_switch(tabpage, "c-untracked.txt", 0))
-    assert.equal("d-deleted.txt", explorer.current_file_path)
+    assert.equal("d-deleted.txt", explorer.data.current_file_path)
 
     assert.is_true(nav.prev_hunk())
     assert.is_true(wait_for_file_switch(tabpage, "d-deleted.txt"))
-    assert.equal("b.txt", explorer.current_file_path)
+    assert.equal("b.txt", explorer.data.current_file_path)
     assert.is_nil(lifecycle.get_session(tabpage).pending_cursor_landing)
   end)
 
@@ -176,7 +176,7 @@ describe("cycle_hunks_across_files (#161)", function()
     local tabpage, session, explorer = open_explorer("a.txt")
     assert.is_not_nil(session)
     assert.is_not_nil(explorer)
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
 
     local changes = session.stored_diff_result.changes
     assert.is_true(#changes >= 2)
@@ -200,7 +200,7 @@ describe("cycle_hunks_across_files (#161)", function()
     local tabpage, session, explorer = open_explorer("b.txt")
     assert.is_not_nil(session)
     assert.is_not_nil(explorer)
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
 
     local changes = session.stored_diff_result.changes
     assert.is_true(#changes >= 2)
@@ -223,7 +223,7 @@ describe("cycle_hunks_across_files (#161)", function()
 
     local tabpage, session, explorer = open_explorer("a.txt")
     assert.is_not_nil(session)
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
     local changes = session.stored_diff_result.changes
 
     vim.api.nvim_set_current_win(session.modified_win)
@@ -246,7 +246,7 @@ describe("cycle_hunks_across_files (#161)", function()
 
     local tabpage, session, explorer = open_explorer("b.txt")
     assert.is_not_nil(session)
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
     local changes = session.stored_diff_result.changes
     assert.is_true(#changes >= 2)
 
@@ -297,7 +297,7 @@ describe("cycle_hunks_across_files (#161)", function()
 
     local tabpage, session, explorer = open_explorer("b.txt")
     assert.is_not_nil(session)
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
 
     vim.api.nvim_set_current_win(session.modified_win)
     vim.api.nvim_win_set_cursor(session.modified_win, { session.stored_diff_result.changes[1].modified.start_line, 0 })
@@ -330,10 +330,10 @@ describe("cycle_hunks_across_files (#161)", function()
     assert.is_not_nil(explorer)
     assert.equal(3, vim.api.nvim_win_get_cursor(session.modified_win)[1], "EOF deletion should land on the last valid modified line")
 
-    local first_file = explorer.current_file_path
+    local first_file = explorer.data.current_file_path
     nav.next_hunk()
     assert.is_true(wait_for_file_switch(tabpage, first_file), "next hunk should advance past the EOF deletion")
-    assert.equal("b.txt", explorer.current_file_path)
+    assert.equal("b.txt", explorer.data.current_file_path)
 
     local next_session = lifecycle.get_session(tabpage)
     local first_hunk_line = next_session.stored_diff_result.changes[1].modified.start_line
@@ -342,7 +342,7 @@ describe("cycle_hunks_across_files (#161)", function()
     nav.prev_hunk()
     assert.is_true(wait_for_file_switch(tabpage, "b.txt"), "previous hunk should return to the EOF deletion")
     local previous_session = lifecycle.get_session(tabpage)
-    assert.equal("a.txt", explorer.current_file_path)
+    assert.equal("a.txt", explorer.data.current_file_path)
     assert.equal(3, vim.api.nvim_win_get_cursor(previous_session.modified_win)[1], "backward landing should clamp the EOF deletion")
   end)
 end)

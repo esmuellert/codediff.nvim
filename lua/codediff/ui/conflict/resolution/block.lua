@@ -2,7 +2,7 @@
 local M = {}
 
 local lifecycle = require("codediff.ui.lifecycle")
-local auto_refresh = require("codediff.ui.auto_refresh")
+local refresh = require("codediff.ui.refresh")
 local tracking = require("codediff.ui.conflict.tracking")
 local gutter = require("codediff.ui.conflict.gutter")
 local apply_to_result = require("codediff.ui.conflict.resolution.replace").apply_to_result
@@ -58,7 +58,7 @@ function M.accept_incoming(tabpage)
 
   apply_to_result(result_bufnr, block, incoming_lines, base_lines)
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   return true
 end
 
@@ -108,7 +108,7 @@ function M.accept_current(tabpage)
 
   apply_to_result(result_bufnr, block, current_lines, base_lines)
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   return true
 end
 
@@ -170,7 +170,7 @@ function M.accept_both(tabpage)
 
   apply_to_result(result_bufnr, block, combined, base_lines)
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   return true
 end
 
@@ -232,7 +232,7 @@ function M.discard(tabpage)
   -- content-search fallback, so pass the Result seed (auto-merged content).
   apply_to_result(result_bufnr, block, base_content, session.result_base_lines or base_lines)
   gutter.refresh(session)
-  auto_refresh.refresh_result_now(result_bufnr)
+  refresh.refresh_result_now(result_bufnr)
   return true
 end
 

@@ -1,6 +1,6 @@
 local refresh = require("codediff.ui.refresh")
-local snapshot = require("codediff.ui.refresh.snapshot")
-local apply = require("codediff.ui.refresh.apply")
+local snapshot = require("codediff.ui.refresh.inputs")
+local render = require("codediff.ui.view.render")
 local lifecycle = require("codediff.ui.lifecycle")
 local path = require("codediff.core.path")
 
@@ -46,11 +46,11 @@ describe("session refresh scheduling", function()
         end
       end,
     }
-    old_read, old_apply = snapshot.read, apply.run
+    old_read, old_apply = snapshot.read, render.update
     snapshot.read = function(_, event, _, done)
       reads[#reads + 1] = { event = event, done = done }
     end
-    apply.run = function()
+    render.update = function()
       applied = applied + 1
       return true
     end
@@ -60,7 +60,7 @@ describe("session refresh scheduling", function()
 
   after_each(function()
     refresh.dispose(tab)
-    snapshot.read, apply.run = old_read, old_apply
+    snapshot.read, render.update = old_read, old_apply
     package.loaded["codediff.core.watcher"] = old_watcher
     uv.new_timer = old_timer
     require("codediff.config").options.explorer.auto_refresh = old_auto
@@ -96,6 +96,8 @@ describe("session refresh scheduling", function()
 
   it("stops fallback after ready and preserves every queued event category", function()
     setup()
+    assert.is_true(controller == refresh.attach(tab))
+    assert.equals(2, #timers)
     assert.is_true(timers[2].started)
     handlers.on_ready()
     assert.is_false(timers[2].started)
@@ -110,7 +112,7 @@ describe("session refresh scheduling", function()
     assert.same({ worktree = true, index = true, refs = true }, reads[2].event)
   end)
 
-  it("completes callbacks only after applying a settled snapshot", function()
+  it("completes unchanged-data callbacks without notifying the diff renderer", function()
     setup()
     local completed = 0
     controller:request({ index = true }, function()
@@ -119,7 +121,7 @@ describe("session refresh scheduling", function()
     fire()
     assert.equals(0, completed)
     reads[1].done(nil, snapshot.capture(session))
-    assert.equals(1, applied)
+    assert.equals(0, applied)
     assert.equals(1, completed)
   end)
 
@@ -197,7 +199,9 @@ describe("session refresh scheduling", function()
     assert.is_false(controller.running)
     snapshot.read = reader
     fire()
-    reads[1].done(nil, snapshot.capture(session))
+    local data = snapshot.capture(session)
+    data.original = { "new content" }
+    reads[1].done(nil, data)
     assert.equals(1, applied)
   end)
 
@@ -213,6 +217,46 @@ describe("session refresh scheduling", function()
     fire()
     assert.is_true(reads[2].event.buffer)
     reads[2].done(nil, snapshot.capture(session))
+    assert.equals(1, applied)
+  end)
+
+  it("keeps working dependencies explicit without marking working panes as revisions", function()
+    setup()
+    local comparison = require("codediff.ui.refresh.panel").comparison(session.panel, { path = "a.txt", status = "M", group = "unstaged" })
+    assert.is_nil(comparison.modified_revision)
+    assert.equals("WORKING", comparison.source_revisions.modified)
+    assert.equals(":0", comparison.source_revisions.original)
+  end)
+
+  it("publishes list data without invoking selection or diff rendering", function()
+    setup()
+    local observed
+    local view = {
+      on_data = function(data, changes)
+        observed = { data = data, changes = changes }
+      end,
+      on_file_select = function()
+        error("a data notification must not select a file through the view")
+      end,
+    }
+    lifecycle.set_panel_view(tab, view)
+    local next_data = vim.deepcopy(session.panel.data)
+    next_data.status_result.unstaged = { { path = "background.txt", status = "M" } }
+    controller:publish_panel(next_data)
+    assert.is_true(session.panel.data == observed.data)
+    assert.is_true(observed.changes.list)
+    assert.is_false(observed.changes.selection)
+    controller:publish(snapshot.capture(session))
+    assert.equals(0, applied)
+  end)
+
+  it("notifies the diff renderer only when its inputs change", function()
+    setup()
+    local data = snapshot.capture(session)
+    data.modified = { "new content" }
+    controller:publish(data)
+    assert.equals(1, applied)
+    controller:publish(vim.deepcopy(data))
     assert.equals(1, applied)
   end)
 

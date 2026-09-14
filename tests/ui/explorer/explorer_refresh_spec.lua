@@ -119,8 +119,8 @@ describe("Explorer refresh and single-file stability", function()
     local tabpage, explorer = open("file1.txt")
     local lifecycle = require("codediff.ui.lifecycle")
     local git = require("codediff.core.git")
-    local refresh = require("codediff.ui.explorer.refresh")
-    local status_before = vim.deepcopy(explorer.status_result)
+    local refresh = require("codediff.ui.refresh")
+    local status_before = vim.deepcopy(explorer.data.status_result)
     local git_callback
     local completed = 0
 
@@ -128,7 +128,7 @@ describe("Explorer refresh and single-file stability", function()
     git.get_status_with_line_stats = function(_, callback)
       git_callback = callback
     end
-    refresh.refresh(explorer, function()
+    refresh.request(explorer.tabpage, { full = true }, function()
       completed = completed + 1
     end)
     assert.is_true(vim.wait(1000, function()
@@ -153,7 +153,26 @@ describe("Explorer refresh and single-file stability", function()
       return not lifecycle.get_session(tabpage).refresh.running
     end, 10))
     assert.equals(0, completed, "a retired panel must not replay navigation callbacks")
-    assert.same(status_before, explorer.status_result)
+    assert.same(status_before, explorer.data.status_result)
+  end)
+
+  it("renders supplied list data without reading Git or reopening the comparison", function()
+    config.options.explorer.auto_refresh = false
+    local tabpage, explorer = open("file1.txt")
+    select_and_settle(explorer, "file1.txt", "M", "unstaged")
+    local session = require("codediff.ui.lifecycle").get_session(tabpage)
+    local before = { session.original_bufnr, session.modified_bufnr, session.original_win, session.modified_win }
+    local git = require("codediff.core.git")
+    original_get_status_with_line_stats = git.get_status_with_line_stats
+    git.get_status_with_line_stats = function()
+      error("rendering supplied data must not read Git")
+    end
+    local data = vim.deepcopy(session.panel.data)
+    data.status_result.unstaged[#data.status_result.unstaged + 1] = { path = "supplied.txt", status = "??" }
+    session.refresh:publish_panel(data)
+    assert.is_true(explorer.data == session.panel.data)
+    assert.is_not_nil(table.concat(vim.api.nvim_buf_get_lines(explorer.bufnr, 0, -1, false), "\n"):find("supplied.txt", 1, true))
+    assert.same(before, { session.original_bufnr, session.modified_bufnr, session.original_win, session.modified_win })
   end)
 
   it("picks up an externally-created untracked file automatically", function()
@@ -166,7 +185,7 @@ describe("Explorer refresh and single-file stability", function()
 
     -- Wait for automatic refresh to observe the new working-tree state.
     local picked_up = vim.wait(3000, function()
-      for _, f in ipairs((explorer.status_result or {}).unstaged or {}) do
+      for _, f in ipairs((explorer.data.status_result or {}).unstaged or {}) do
         if f.path == "brand_new.txt" then
           return true
         end
@@ -188,10 +207,10 @@ describe("Explorer refresh and single-file stability", function()
       return vim.api.nvim_buf_get_lines(session.modified_bufnr, 0, -1, false)[2] == "line 2 modified"
     end, 50)
     assert.is_true(selected, "the initial working-tree buffer should load")
-    local before_status = vim.deepcopy(explorer.status_result)
+    local before_status = vim.deepcopy(explorer.data.status_result)
 
     vim.fn.writefile({ "line 1", "changed again" }, temp_dir .. "/file1.txt")
-    explorer._request_auto_refresh()
+    require("codediff.ui.refresh").request(explorer.tabpage, { full = true })
 
     local updated = vim.wait(5000, function()
       local session = lifecycle.get_session(tabpage)
@@ -201,7 +220,7 @@ describe("Explorer refresh and single-file stability", function()
       return vim.api.nvim_buf_get_lines(session.modified_bufnr, 0, -1, false)[2] == "changed again"
     end, 50)
     assert.is_true(updated, "the visible working-tree buffer should reload")
-    assert.same(before_status, explorer.status_result, "the Git status remained unchanged")
+    assert.same(before_status, explorer.data.status_result, "the Git status remained unchanged")
   end)
 
   it("keeps a manually resized single-file pane across a refresh", function()

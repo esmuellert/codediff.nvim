@@ -1,7 +1,7 @@
 -- Test explorer staging/unstaging workflow with virtual files
 -- This tests buffer management during file switching in explorer mode
 
-local h = dofile('tests/helpers.lua')
+local h = dofile("tests/helpers.lua")
 local path = require("codediff.core.path")
 
 -- Ensure plugin is loaded (needed when the test framework isolates specs)
@@ -13,17 +13,17 @@ describe("Explorer Buffer Management", function()
   before_each(function()
     -- Create a temp git repo using helper
     repo = h.create_temp_git_repo()
-    
+
     -- Create initial file and commit
-    repo.write_file('test.txt', {'line 1', 'line 2', 'line 3'})
-    repo.git('add test.txt')
-    repo.git('commit -m initial')
+    repo.write_file("test.txt", { "line 1", "line 2", "line 3" })
+    repo.git("add test.txt")
+    repo.git("commit -m initial")
   end)
 
   after_each(function()
     -- Close all extra tabs before cleanup
     h.close_extra_tabs()
-    
+
     -- Cleanup temp directory
     if repo then
       repo.cleanup()
@@ -31,7 +31,7 @@ describe("Explorer Buffer Management", function()
   end)
 
   it("should parse virtual file URLs correctly", function()
-    local virtual_file = require('codediff.core.virtual_file')
+    local virtual_file = require("codediff.core.virtual_file")
 
     -- Use the actual repo.dir for cross-platform compatibility
     local normalized_dir = h.normalize_path(repo.dir)
@@ -59,26 +59,28 @@ describe("Explorer Buffer Management", function()
   end)
 
   it("should load virtual file content via BufReadCmd", function()
-    local virtual_file = require('codediff.core.virtual_file')
+    local virtual_file = require("codediff.core.virtual_file")
 
     -- Listen for the loaded event
     local event_fired = false
     local event_buf = nil
-    vim.api.nvim_create_autocmd('User', {
-      pattern = 'CodeDiffVirtualFileLoaded',
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "CodeDiffVirtualFileLoaded",
       callback = function(args)
         event_fired = true
         event_buf = args.data and args.data.buf
-      end
+      end,
     })
 
     -- Create and edit a virtual file URL
-    local url = virtual_file.create_url(repo.dir, ':0', 'test.txt')
-    vim.cmd('edit! ' .. vim.fn.fnameescape(url))
+    local url = virtual_file.create_url(repo.dir, ":0", "test.txt")
+    vim.cmd("edit! " .. vim.fn.fnameescape(url))
     local buf = vim.api.nvim_get_current_buf()
 
     -- Wait for async loading to complete
-    local ok = vim.wait(5000, function() return event_fired end, 50)
+    local ok = vim.wait(5000, function()
+      return event_fired
+    end, 50)
 
     assert.is_true(ok, "Event should fire within timeout")
     assert.is_true(event_fired, "CodeDiffVirtualFileLoaded should fire")
@@ -93,22 +95,22 @@ describe("Explorer Buffer Management", function()
   it("should refresh staged content when index changes", function()
     -- This tests the full staging workflow:
     -- 1. Make change A -> validate in Changes
-    -- 2. Stage change A -> validate in Staged Changes  
+    -- 2. Stage change A -> validate in Staged Changes
     -- 3. Make change B -> validate Changes has B, Staged has A
     -- 4. Stage change B -> validate Staged has A+B
     -- 5. Unstage file -> validate Changes has A+B
-    
-    local view = require('codediff.ui.view')
-    local lifecycle = require('codediff.ui.lifecycle')
+
+    local view = require("codediff.ui.view")
+    local lifecycle = require("codediff.ui.lifecycle")
 
     -- Step 1: Make change A
-    repo.write_file('test.txt', {'line 1', 'line 2', 'line 3', 'change A'})
+    repo.write_file("test.txt", { "line 1", "line 2", "line 3", "change A" })
 
     -- Create diff view for unstaged changes (index vs working)
     local config_changes = {
       git_root = repo.dir,
-      original = path.make_ref('test.txt', repo.dir),
-      modified = path.make_ref(repo.path('test.txt'), repo.dir),
+      original = path.make_ref("test.txt", repo.dir),
+      modified = path.make_ref(repo.path("test.txt"), repo.dir),
       original_revision = ":0",
       modified_revision = "WORKING",
     }
@@ -135,8 +137,8 @@ describe("Explorer Buffer Management", function()
     -- Switch to staged view (HEAD vs index)
     local config_staged = {
       git_root = repo.dir,
-      original = path.make_ref('test.txt', repo.dir),
-      modified = path.make_ref('test.txt', repo.dir),
+      original = path.make_ref("test.txt", repo.dir),
+      modified = path.make_ref("test.txt", repo.dir),
       original_revision = "HEAD",
       modified_revision = ":0",
     }
@@ -151,7 +153,7 @@ describe("Explorer Buffer Management", function()
     h.assert_contains(content, "change A", "Staged should show change A after staging")
 
     -- Step 3: Make change B (while A is staged)
-    repo.write_file('test.txt', {'line 1', 'line 2', 'line 3', 'change A', 'change B'})
+    repo.write_file("test.txt", { "line 1", "line 2", "line 3", "change A", "change B" })
 
     -- Switch back to Changes view (index vs working)
     view.update(tabpage, config_changes, false)
@@ -219,7 +221,7 @@ end)
 describe("Explorer review-flow re-selection (issue #347)", function()
   local repo
   local lifecycle = require("codediff.ui.lifecycle")
-  local refresh_module = require("codediff.ui.explorer.refresh")
+  local refresh_module = require("codediff.ui.refresh")
   local explorer_actions = require("codediff.ui.explorer.actions")
 
   before_each(function()
@@ -243,7 +245,9 @@ describe("Explorer review-flow re-selection (issue #347)", function()
   after_each(function()
     h.close_extra_tabs()
     lifecycle.cleanup_all()
-    if repo then repo.cleanup() end
+    if repo then
+      repo.cleanup()
+    end
   end)
 
   -- Open a fresh explorer focused on `focus_rel` and return its explorer object.
@@ -256,7 +260,7 @@ describe("Explorer review-flow re-selection (issue #347)", function()
     local ready = vim.wait(8000, function()
       for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
         local sess = lifecycle.get_session(tp)
-        if sess and (sess.panel or {}).view and (sess.panel or {}).view.current_file_path ~= nil then
+        if sess and (sess.panel or {}).view and (sess.panel or {}).view.data.current_file_path ~= nil then
           explorer = (sess.panel or {}).view
           return true
         end
@@ -283,77 +287,88 @@ describe("Explorer review-flow re-selection (issue #347)", function()
     assert.is_true(ready, "explorer should open with an initial selection")
 
     local settled = vim.wait(3000, function()
-      return explorer.current_file_path == "a.txt" and explorer.current_file_group == "unstaged"
+      return explorer.data.current_file_path == "a.txt" and explorer.data.current_file_group == "unstaged"
     end, 50)
     assert.is_true(settled, "initial selection should be a.txt/unstaged")
 
     -- Stage a.txt, then refresh (this is what the .git fs-watcher triggers).
     repo.git("add a.txt")
-    refresh_module.refresh(explorer)
+    refresh_module.request(explorer.tabpage, { full = true })
 
     -- Pre-fix: re-selection followed a.txt into the staged group
     -- (current_file_path=a.txt / group=staged). Post-fix: it advances to the
     -- next unstaged file, b.txt.
     local advanced = vim.wait(4000, function()
-      return explorer.current_file_path == "b.txt" and explorer.current_file_group == "unstaged"
+      return explorer.data.current_file_path == "b.txt" and explorer.data.current_file_group == "unstaged"
     end, 50)
-    assert.is_true(advanced,
-      "after staging a.txt the reviewer should advance to b.txt/unstaged, got "
-        .. tostring(explorer.current_file_path) .. "/" .. tostring(explorer.current_file_group))
+    assert.is_true(
+      advanced,
+      "after staging a.txt the reviewer should advance to b.txt/unstaged, got " .. tostring(explorer.data.current_file_path) .. "/" .. tostring(explorer.data.current_file_group)
+    )
   end)
 
   it("advances to the next staged file after unstaging the reviewed file", function()
     local ready, explorer = open_explorer("c.txt")
     assert.is_true(ready, "explorer should open with an initial selection")
-    assert.is_true(vim.wait(3000, function()
-      return explorer.current_file_path == "c.txt" and explorer.current_file_group == "staged"
-    end, 50), "initial selection should be c.txt/staged")
+    assert.is_true(
+      vim.wait(3000, function()
+        return explorer.data.current_file_path == "c.txt" and explorer.data.current_file_group == "staged"
+      end, 50),
+      "initial selection should be c.txt/staged"
+    )
 
     -- Unstage c.txt, then refresh (what the .git fs-watcher triggers).
     repo.git("reset -- c.txt")
-    refresh_module.refresh(explorer)
+    refresh_module.request(explorer.tabpage, { full = true })
 
     -- Symmetric to staging: unstaging advances to the next *staged* file
     -- instead of chasing c.txt into the unstaged group.
-    assert.is_true(vim.wait(4000, function()
-      return explorer.current_file_path == "d.txt" and explorer.current_file_group == "staged"
-    end, 50),
-      "after unstaging c.txt the reviewer should advance to d.txt/staged, got "
-        .. tostring(explorer.current_file_path) .. "/" .. tostring(explorer.current_file_group))
+    assert.is_true(
+      vim.wait(4000, function()
+        return explorer.data.current_file_path == "d.txt" and explorer.data.current_file_group == "staged"
+      end, 50),
+      "after unstaging c.txt the reviewer should advance to d.txt/staged, got " .. tostring(explorer.data.current_file_path) .. "/" .. tostring(explorer.data.current_file_group)
+    )
   end)
 
   it("hiding/showing a group updates the tree synchronously and ]f skips hidden files", function()
     local ready, explorer = open_explorer("a.txt")
     assert.is_true(ready, "explorer should open")
-    assert.is_true(vim.wait(3000, function()
-      return explorer.current_file_path == "a.txt" and explorer.current_file_group == "unstaged"
-    end, 50), "initial selection should be a.txt/unstaged")
+    assert.is_true(
+      vim.wait(3000, function()
+        return explorer.data.current_file_path == "a.txt" and explorer.data.current_file_group == "unstaged"
+      end, 50),
+      "initial selection should be a.txt/unstaged"
+    )
 
     -- Stage a.txt -> advances to b.txt/unstaged
     repo.git("add a.txt")
-    refresh_module.refresh(explorer)
-    assert.is_true(vim.wait(4000, function()
-      return explorer.current_file_path == "b.txt" and explorer.current_file_group == "unstaged"
-    end, 50), "should advance to b.txt/unstaged")
+    refresh_module.request(explorer.tabpage, { full = true })
+    assert.is_true(
+      vim.wait(4000, function()
+        return explorer.data.current_file_path == "b.txt" and explorer.data.current_file_group == "unstaged"
+      end, 50),
+      "should advance to b.txt/unstaged"
+    )
 
     -- Hide the staged group (like `gs`). toggle_group rebuilds the tree
     -- synchronously from the cached status, so staged nodes are gone at once.
     explorer_actions.toggle_group(explorer, "staged")
-    assert.is_nil(line_for(explorer, "c.txt", "staged"),
-      "hiding a group must remove its files from the tree immediately")
+    assert.is_nil(line_for(explorer, "c.txt", "staged"), "hiding a group must remove its files from the tree immediately")
 
     -- ]f can therefore never reach a hidden staged file.
     for _ = 1, 4 do
       explorer_actions.navigate_next(explorer)
-      assert.equals("unstaged", explorer.current_file_group,
-        "]f must not visit hidden staged files (got " .. tostring(explorer.current_file_path)
-          .. "/" .. tostring(explorer.current_file_group) .. ")")
+      assert.equals(
+        "unstaged",
+        explorer.data.current_file_group,
+        "]f must not visit hidden staged files (got " .. tostring(explorer.data.current_file_path) .. "/" .. tostring(explorer.data.current_file_group) .. ")"
+      )
     end
 
     -- Show the staged group again: state updates synchronously the other way.
     explorer_actions.toggle_group(explorer, "staged")
-    assert.is_not_nil(line_for(explorer, "c.txt", "staged"),
-      "showing a group must restore its files to the tree immediately")
+    assert.is_not_nil(line_for(explorer, "c.txt", "staged"), "showing a group must restore its files to the tree immediately")
   end)
 
   it("keeps partially staged files in the unstaged group on refresh", function()
@@ -363,33 +378,40 @@ describe("Explorer review-flow re-selection (issue #347)", function()
     repo.write_file("a.txt", { "modified a.txt", "unstaged follow-up" })
     local ready, explorer = open_explorer("a.txt")
     assert.is_true(ready, "explorer should open")
-    assert.is_true(vim.wait(3000, function()
-      return explorer.current_file_path == "a.txt" and explorer.current_file_group == "unstaged"
-    end, 50), "initial selection should be a.txt/unstaged")
+    assert.is_true(
+      vim.wait(3000, function()
+        return explorer.data.current_file_path == "a.txt" and explorer.data.current_file_group == "unstaged"
+      end, 50),
+      "initial selection should be a.txt/unstaged"
+    )
 
     assert.is_not_nil(line_for(explorer, "a.txt", "unstaged"), "a.txt should appear in unstaged")
     assert.is_not_nil(line_for(explorer, "a.txt", "staged"), "a.txt should also appear in staged")
 
-    refresh_module.refresh(explorer)
+    refresh_module.request(explorer.tabpage, { full = true })
     vim.wait(1500)
-    assert.equals("a.txt", explorer.current_file_path,
-      "a.txt should still be the current file after a partial-stage refresh")
-    assert.equals("unstaged", explorer.current_file_group,
-      "a.txt should stay in the unstaged group")
+    assert.equals("a.txt", explorer.data.current_file_path, "a.txt should still be the current file after a partial-stage refresh")
+    assert.equals("unstaged", explorer.data.current_file_group, "a.txt should stay in the unstaged group")
   end)
 
   it("keeps the staged file selected when no unstaged files remain", function()
     local ready, explorer = open_explorer("a.txt")
     assert.is_true(ready, "explorer should open")
-    assert.is_true(vim.wait(3000, function()
-      return explorer.current_file_path == "a.txt" and explorer.current_file_group == "unstaged"
-    end, 50), "initial selection should be a.txt/unstaged")
+    assert.is_true(
+      vim.wait(3000, function()
+        return explorer.data.current_file_path == "a.txt" and explorer.data.current_file_group == "unstaged"
+      end, 50),
+      "initial selection should be a.txt/unstaged"
+    )
 
     repo.git("add a.txt b.txt")
-    refresh_module.refresh(explorer)
+    refresh_module.request(explorer.tabpage, { full = true })
 
-    assert.is_true(vim.wait(4000, function()
-      return explorer.current_file_path == "a.txt" and explorer.current_file_group == "staged"
-    end, 50), "when review is complete, the just-staged file should remain selected")
+    assert.is_true(
+      vim.wait(4000, function()
+        return explorer.data.current_file_path == "a.txt" and explorer.data.current_file_group == "staged"
+      end, 50),
+      "when review is complete, the just-staged file should remain selected"
+    )
   end)
 end)

@@ -220,7 +220,7 @@ describe("pull request fetching", function()
       "pull request review did not open"
     )
     assert.is_not_nil(session)
-    local files = require("codediff.ui.explorer.refresh").get_all_files(session.panel.view.tree)
+    local files = require("codediff.ui.explorer.tree").get_all_files(session.panel.view.tree)
     assert.equals(1, #files)
     assert.equals("review.txt", files[1].data.path)
     assert.equals("main", run(repo.dir, { "branch", "--show-current" }))

@@ -84,4 +84,71 @@ function M.create_tree_data(status_result, git_root, base_revision, is_dir_mode,
   end
 end
 
+local function walk_collapsible(tree, visit)
+  local function walk(node)
+    if not node.data or node.data.type ~= "group" and node.data.type ~= "directory" then
+      return
+    end
+    local key = node.data.path or node.data.name
+    if key then
+      visit(node, key)
+    end
+    for _, id in ipairs(node:get_child_ids() or {}) do
+      local child = tree:get_node(id)
+      if child then
+        walk(child)
+      end
+    end
+  end
+  for _, node in ipairs(tree:get_nodes()) do
+    walk(node)
+  end
+end
+
+-- Rebuild from supplied data, retaining the user's tree presentation state.
+function M.rebuild(explorer)
+  local data, tree = explorer.data, explorer.tree
+  if not data.status_result then
+    return
+  end
+  local collapsed = {}
+  walk_collapsible(tree, function(node, key)
+    collapsed[key] = not node:is_expanded()
+  end)
+  tree:set_nodes(M.create_tree_data(data.status_result, data.git_root, data.base_revision, not data.git_root, explorer.visible_groups))
+  walk_collapsible(tree, function(node, key)
+    if collapsed[key] then
+      node:collapse()
+    else
+      node:expand()
+    end
+  end)
+  if not explorer.is_hidden then
+    tree:render()
+  end
+end
+
+function M.get_all_files(tree)
+  local files = {}
+  local function collect(parent)
+    if not parent:is_expanded() then
+      return
+    end
+    for _, id in ipairs(parent:get_child_ids() or {}) do
+      local node = tree:get_node(id)
+      if node and node.data then
+        if node.data.type == "directory" then
+          collect(node)
+        elseif not node.data.type then
+          files[#files + 1] = { node = node, data = node.data }
+        end
+      end
+    end
+  end
+  for _, node in ipairs(tree:get_nodes()) do
+    collect(node)
+  end
+  return files
+end
+
 return M

@@ -38,7 +38,7 @@ local function open_explorer(temp_dir, focus_file)
       local e = lifecycle.get_panel_view(tp)
       if e and e.winid and vim.api.nvim_win_is_valid(e.winid)
           and e.bufnr and vim.api.nvim_buf_is_valid(e.bufnr)
-          and e.current_file_path ~= nil then
+          and e.data.current_file_path ~= nil then
         -- Pick the explorer wired with the auto-open j/k keymap; leftover
         -- explorers from prior tests (default config) lack it.
         local maps = vim.api.nvim_buf_get_keymap(e.bufnr, "n")
@@ -75,7 +75,7 @@ local function open_initial_explorer(temp_dir, view_mode, ignore_patterns)
   local explorer, session
   local ready = vim.wait(6000, function()
     explorer = lifecycle.get_panel_view(vim.api.nvim_get_current_tabpage())
-    if not explorer or not explorer.current_file_path then
+    if not explorer or not explorer.data.current_file_path then
       return false
     end
     session = lifecycle.get_session(explorer.tabpage)
@@ -101,7 +101,7 @@ local function assert_first_visible_file_selected(explorer, session, expected_pa
   local cursor_line = vim.api.nvim_win_get_cursor(explorer.winid)[1]
   local cursor_node = explorer.tree:get_node(cursor_line)
   assert.equals(expected_path, first_path)
-  assert.equals(first_path, explorer.current_file_path)
+  assert.equals(first_path, explorer.data.current_file_path)
   assert.equals(first_path, cursor_node.data.path)
   assert.equals(first_path, session.original.relative)
   assert.equals(first_path, session.modified.relative)
@@ -558,7 +558,7 @@ describe("Explorer Mode", function()
     vim.api.nvim_set_current_tabpage(tabpage)
 
     local target_line, target_path = find_file_node(explorer, function(data)
-      return data.path ~= explorer.current_file_path
+      return data.path ~= explorer.data.current_file_path
     end)
     assert.is_not_nil(target_line, "Should find a different file node")
 
@@ -587,8 +587,8 @@ describe("Explorer Mode", function()
     assert.is_true(ready, "Explorer should be ready with an initial selection")
     vim.api.nvim_set_current_tabpage(tabpage)
 
-    local initial_path = explorer.current_file_path
-    local initial_group = explorer.current_file_group
+    local initial_path = explorer.data.current_file_path
+    local initial_group = explorer.data.current_file_group
 
     -- Find a file node and its delta from the current cursor line.
     local cur_line = vim.api.nvim_win_get_cursor(explorer.winid)[1]
@@ -605,8 +605,8 @@ describe("Explorer Mode", function()
     vim.api.nvim_feedkeys(string.rep(motion, count), "tx", false)
 
     local opened = vim.wait(2000, function()
-      return explorer.current_file_path == target_path
-        and explorer.current_file_group == target_group
+      return explorer.data.current_file_path == target_path
+        and explorer.data.current_file_group == target_group
     end, 20)
     assert.is_true(opened, "j/k on a file node should auto-open its diff")
   end)
@@ -647,8 +647,8 @@ describe("Explorer Mode", function()
 
     -- Capture state *after* manual cursor placement (which itself doesn't
     -- trigger our keymap, only j/k do).
-    local before_path = explorer.current_file_path
-    local before_group = explorer.current_file_group
+    local before_path = explorer.data.current_file_path
+    local before_group = explorer.data.current_file_group
 
     -- One j: lands on the skip_line (which is a group/dir).
     vim.api.nvim_feedkeys("j", "tx", false)
@@ -656,9 +656,9 @@ describe("Explorer Mode", function()
     vim.wait(150)
     -- After landing on a group/dir, current_file_path must not have changed
     -- from before the j keypress.
-    assert.equals(before_path, explorer.current_file_path,
+    assert.equals(before_path, explorer.data.current_file_path,
       "Group/directory nodes should not trigger auto-open")
-    assert.equals(before_group, explorer.current_file_group,
+    assert.equals(before_group, explorer.data.current_file_group,
       "Group/directory nodes should not change current group")
   end)
 

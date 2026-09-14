@@ -16,6 +16,7 @@ describe("conflicted file in an inline tab", function()
 
     repo = h.create_temp_git_repo()
     repo.write_file("conf.txt", { "base1", "base2", "base3" })
+    repo.write_file("ordinary.txt", { "unchanged" })
     repo.git("add -A")
     repo.git("commit -m base")
     repo.git("checkout -b feature")
@@ -26,6 +27,7 @@ describe("conflicted file in an inline tab", function()
     repo.git("commit -am main")
     local merge_out = repo.git("merge feature --no-edit")
     assert.is_true(merge_out:find("CONFLICT", 1, true) ~= nil, "merge must conflict")
+    repo.write_file("ordinary.txt", { "ordinary change" })
   end)
 
   after_each(function()
@@ -40,37 +42,34 @@ describe("conflicted file in an inline tab", function()
 
   it("opens the three-pane merge view, not a single pane", function()
     local lifecycle = require("codediff.ui.lifecycle")
-    local path = require("codediff.core.path")
 
-    vim.cmd("edit " .. repo.path("conf.txt"))
+    vim.cmd("edit " .. repo.path("ordinary.txt"))
     vim.cmd("CodeDiff --inline")
     assert.is_true(
       vim.wait(15000, function()
-        return h.find_window_by_filetype("codediff-explorer") ~= nil
+        local session = lifecycle.get_session(vim.api.nvim_get_current_tabpage())
+        return session and session.modified.relative == "ordinary.txt" and session.stored_diff_result ~= nil
       end, 50),
-      "inline explorer never opened"
+      "ordinary file never settled in the inline explorer"
     )
 
     local tabpage = vim.api.nvim_get_current_tabpage()
     assert.equals("inline", lifecycle.get_session(tabpage).layout, "tab should start out inline")
 
-    -- Same config the explorer builds for a file in the Merge Changes group,
-    -- including which side lands on the left: conflict_ours_position decides,
-    -- and it defaults to putting OURS on the right.
+    -- Select through the session controller from a settled inline comparison.
+    -- conflict_ours_position defaults to putting OURS on the right.
     local ours_position = require("codediff.config").options.diff.conflict_ours_position or "right"
     local left_rev = ours_position == "right" and ":3" or ":2"
     local right_rev = ours_position == "right" and ":2" or ":3"
     local left_text = ours_position == "right" and "FEATURE1" or "MAIN1"
     local right_text = ours_position == "right" and "MAIN1" or "FEATURE1"
 
-    require("codediff.ui.view").update(tabpage, {
+    require("codediff.ui.refresh").select(tabpage, {
+      path = "conf.txt",
+      status = "UU",
+      group = "conflicts",
       git_root = repo.dir,
-      original = path.make_ref("conf.txt", repo.dir),
-      modified = path.make_ref("conf.txt", repo.dir),
-      original_revision = left_rev,
-      modified_revision = right_rev,
-      conflict = true,
-    }, false)
+    }, { no_jump = true })
 
     -- The result pane appears before the two sides finish loading, so wait for
     -- content rather than for the window.
@@ -91,6 +90,8 @@ describe("conflicted file in an inline tab", function()
     )
 
     local session = lifecycle.get_session(tabpage)
+    assert.equals(left_rev, session.original_revision)
+    assert.equals(right_rev, session.modified_revision)
 
     -- Both sides need their own window, or one overwrites the other.
     assert.is_not_nil(session.original_win, "OURS needs a window")

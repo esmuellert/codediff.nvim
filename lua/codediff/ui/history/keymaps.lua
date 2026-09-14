@@ -126,8 +126,7 @@ function M.setup(history, opts)
   -- Refresh (R key) - re-fetch commits
   if history_keymaps.refresh then
     panel_map(history_keymaps.refresh, function()
-      local refresh_module = require("codediff.ui.history.refresh")
-      refresh_module.refresh(history)
+      require("codediff.ui.refresh").request(history.tabpage, { full = true })
     end, "Refresh history")
   end
 

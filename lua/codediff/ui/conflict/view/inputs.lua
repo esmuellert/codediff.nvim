@@ -2,7 +2,6 @@
 local M = {}
 
 local core = require("codediff.ui.core")
-local config = require("codediff.config")
 local diff_module = require("codediff.core.diff")
 
 -- Conflict mode rendering: Both buffers show diff against base with alignment
@@ -19,11 +18,7 @@ local diff_module = require("codediff.core.diff")
 -- @param auto_scroll_to_first_hunk boolean: Whether to scroll to first change
 -- @return table: { base_to_original_diff, base_to_modified_diff }
 function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, original_lines, modified_lines, original_win, modified_win, auto_scroll_to_first_hunk)
-  local diff_options = {
-    max_computation_time_ms = config.options.diff.max_computation_time_ms,
-    ignore_trim_whitespace = config.options.diff.ignore_trim_whitespace,
-    compute_moves = config.options.diff.compute_moves,
-  }
+  local diff_options = require("codediff.ui.view.render").diff_options()
 
   -- Compute base -> original (incoming) diff
   local base_to_original_diff = diff_module.compute_diff(base_lines, original_lines, diff_options)

@@ -1,4 +1,4 @@
-local snapshot = require("codediff.ui.refresh.snapshot")
+local snapshot = require("codediff.ui.refresh.inputs")
 
 describe("refresh input snapshots", function()
   local git, original_get_content, session, buffers, callbacks
@@ -30,6 +30,20 @@ describe("refresh input snapshots", function()
     for _, buf in ipairs(buffers) do
       vim.api.nvim_buf_delete(buf, { force = true })
     end
+  end)
+
+  it("reads source definitions from the session without inspecting a panel", function()
+    session.source_revisions = { original = "review/topic", modified = ":0" }
+    session.panel = setmetatable({}, {
+      __index = function()
+        error("input reading must not inspect panel state")
+      end,
+    })
+    local sources = snapshot.describe(session)
+    assert.equals("review/topic", sources.original.revision)
+    assert.equals(":0", sources.modified.revision)
+    assert.equals(":2", sources.original.resolved)
+    assert.same(session.original, sources.original.path)
   end)
 
   it("settles all candidates before returning and does not mutate displayed buffers", function()

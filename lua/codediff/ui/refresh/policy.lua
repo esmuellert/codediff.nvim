@@ -62,13 +62,13 @@ function M.panel_needed(panel, event)
   if panel.name == "history" then
     return event.head == true or event.refs == true
   end
-  local view = panel.view or {}
-  if not view.git_root and view.dir1 then
+  local data = panel.data or {}
+  if not data.git_root and data.dir1 then
     return event.worktree == true
   end
-  if view.base_revision then
-    local refs = view.source_revisions or {}
-    return M.needs_read(refs.original or view.base_revision, event) or M.needs_read(refs.modified or view.target_revision or "WORKING", event)
+  if data.base_revision then
+    local refs = data.source_revisions or {}
+    return M.needs_read(refs.original or data.base_revision, event) or M.needs_read(refs.modified or data.target_revision or "WORKING", event)
   end
   return event.worktree == true or event.index == true or event.head == true or event.refs == true
 end

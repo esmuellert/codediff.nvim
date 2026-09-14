@@ -48,7 +48,7 @@ describe("toggle_staged_view (issue #352)", function()
     local ready = vim.wait(8000, function()
       for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
         local sess = lifecycle.get_session(tp)
-        if sess and (sess.panel or {}).view and (sess.panel or {}).view.current_file_path ~= nil then
+        if sess and (sess.panel or {}).view and (sess.panel or {}).view.data.current_file_path ~= nil then
           explorer = (sess.panel or {}).view
           return true
         end
@@ -62,13 +62,13 @@ describe("toggle_staged_view (issue #352)", function()
     local ready, explorer = open_status_explorer("both.txt")
     assert.is_true(ready, "explorer opens with a selection")
     assert.is_true(vim.wait(3000, function()
-      return explorer.current_file_path == "both.txt" and explorer.current_file_group == "unstaged"
+      return explorer.data.current_file_path == "both.txt" and explorer.data.current_file_group == "unstaged"
     end, 50), "initial selection is both.txt/unstaged")
 
     local ok = actions.toggle_staged_view(explorer)
     assert.is_true(ok, "toggle succeeds when file exists in both groups")
-    assert.equals("both.txt", explorer.current_file_path)
-    assert.equals("staged", explorer.current_file_group)
+    assert.equals("both.txt", explorer.data.current_file_path)
+    assert.equals("staged", explorer.data.current_file_group)
   end)
 
   it("swaps back to unstaged on a second toggle", function()
@@ -76,9 +76,9 @@ describe("toggle_staged_view (issue #352)", function()
     assert.is_true(ready)
     vim.wait(500)
     actions.toggle_staged_view(explorer)
-    assert.equals("staged", explorer.current_file_group)
+    assert.equals("staged", explorer.data.current_file_group)
     actions.toggle_staged_view(explorer)
-    assert.equals("unstaged", explorer.current_file_group)
+    assert.equals("unstaged", explorer.data.current_file_group)
   end)
 
   it("notifies and stays put when the file has no counterpart", function()
@@ -91,11 +91,11 @@ describe("toggle_staged_view (issue #352)", function()
       path = "only_staged.txt",
       old_path = nil,
       status = "M",
-      git_root = explorer.git_root,
+      git_root = explorer.data.git_root,
       group = "staged",
     })
     assert.is_true(vim.wait(2000, function()
-      return explorer.current_file_group == "staged"
+      return explorer.data.current_file_group == "staged"
     end, 50))
 
     local notified
@@ -107,7 +107,7 @@ describe("toggle_staged_view (issue #352)", function()
     vim.notify = orig
 
     assert.is_false(ok, "toggle refuses when the sibling group is empty")
-    assert.equals("staged", explorer.current_file_group, "selection is unchanged")
+    assert.equals("staged", explorer.data.current_file_group, "selection is unchanged")
     assert.is_not_nil(notified)
     h.assert_contains(notified, "No unstaged changes")
   end)
@@ -127,7 +127,7 @@ describe("toggle_staged_view (issue #352)", function()
       return false
     end, 50))
     -- Verify we're in staged-only mode.
-    assert.equals(":0", explorer.target_revision, "explorer is in staged-only mode")
+    assert.equals(":0", explorer.data.target_revision, "explorer is in staged-only mode")
 
     local notified
     local orig = vim.notify
@@ -156,7 +156,7 @@ describe("toggle_staged_view (issue #352)", function()
       end
       return false
     end, 50))
-    assert.is_not_nil(explorer.base_revision, "explorer is in revision mode")
+    assert.is_not_nil(explorer.data.base_revision, "explorer is in revision mode")
 
     local notified
     local orig = vim.notify

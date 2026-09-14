@@ -134,7 +134,7 @@ local function open_history_and_wait(repo, entry_file)
       if session and session.panel and session.panel.name == "history" and panel then
         tabpage = tp
         history = panel
-        return history.current_selection
+        return history.data.current_selection
           and session.original_revision
           and session.modified_revision
           and session.original_bufnr
@@ -285,7 +285,7 @@ describe("Layout toggle", function()
     repo.git('commit -m "third"')
 
     local tabpage, session, history = open_history_and_wait(repo, "file.txt")
-    local selected = vim.deepcopy(history.current_selection)
+    local selected = vim.deepcopy(history.data.current_selection)
 
     assert.equals("side-by-side", session.layout)
     assert.is_not_nil(selected, "History should track the current file selection")
@@ -298,9 +298,9 @@ describe("Layout toggle", function()
       return current_session.layout == "inline"
         and current_session.original_win == current_session.modified_win
         and current_history
-        and current_history.current_selection
-        and current_history.current_selection.commit_hash == selected.commit_hash
-        and current_history.current_selection.path == selected.path
+        and current_history.data.current_selection
+        and current_history.data.current_selection.commit_hash == selected.commit_hash
+        and current_history.data.current_selection.path == selected.path
         and #marks > 0
     end, "History toggle should replay the selected file as a native inline render")
 
@@ -314,9 +314,9 @@ describe("Layout toggle", function()
         and vim.api.nvim_win_is_valid(current_session.original_win)
         and vim.api.nvim_win_is_valid(current_session.modified_win)
         and current_history
-        and current_history.current_selection
-        and current_history.current_selection.commit_hash == selected.commit_hash
-        and current_history.current_selection.path == selected.path
+        and current_history.data.current_selection
+        and current_history.data.current_selection.commit_hash == selected.commit_hash
+        and current_history.data.current_selection.path == selected.path
     end, "History toggle should restore the same selected file in side-by-side mode")
   end)
 

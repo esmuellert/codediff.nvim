@@ -234,7 +234,7 @@ for _, backend in ipairs({ "native", "polling" }) do
         screen:await(function()
           return screen:exec([[
             local s = refresh_session()
-            return s.panel and s.panel.view.commits[1].subject == 'history-B'
+            return s.panel and s.panel.data.commits[1].subject == 'history-B'
           ]])
         end, "new commit did not reach history")
         h.preserved(screen, expected)

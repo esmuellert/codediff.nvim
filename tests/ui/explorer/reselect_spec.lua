@@ -69,7 +69,6 @@ describe("explorer re-selection", function()
   end
 
   local function select(explorer, file)
-    explorer.current_file_path = file
     explorer.on_file_select({ path = file, status = "M", group = "unstaged", git_root = repo.dir }, {})
     vim.wait(250)
   end
@@ -109,7 +108,6 @@ describe("explorer re-selection", function()
     local before = updates
 
     repo.git("add a.txt")
-    explorer.current_file_path = "a.txt"
     explorer.on_file_select({ path = "a.txt", status = "M", group = "staged", git_root = repo.dir }, {})
     vim.wait(1500)
 
@@ -126,7 +124,7 @@ describe("explorer re-selection", function()
     vim.wait(1500)
     local before = updates
 
-    explorer.status_result = {
+    explorer.data.status_result = {
       staged = { { path = "a.txt" } },
       unstaged = { { path = "a.txt" } },
       conflicts = {},
@@ -144,7 +142,6 @@ describe("explorer re-selection", function()
     vim.wait(1500)
     local before = updates
 
-    explorer.current_file_path = "a.txt"
     explorer.on_file_select({ path = "a.txt", status = "M", group = "unstaged", git_root = repo.dir }, { force = true })
     vim.wait(1500)
 

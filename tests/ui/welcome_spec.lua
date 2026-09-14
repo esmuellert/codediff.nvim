@@ -264,9 +264,9 @@ describe("Welcome Page", function()
       vim.fn.system("git -C " .. vim.fn.shellescape(repo.dir) .. " checkout -- test.txt")
 
       -- Trigger refresh
-      local refresh = require("codediff.ui.explorer.refresh")
+      local refresh = require("codediff.ui.refresh")
       local explorer = (session.panel or {}).view
-      refresh.refresh(explorer)
+      refresh.request(explorer.tabpage, { full = true })
 
       -- Wait for welcome buffer to appear
       local welcome = require("codediff.ui.welcome")
@@ -293,12 +293,12 @@ describe("Welcome Page", function()
       repo.write_file("test.txt", { "line 1", "line 2 changed again" })
 
       -- Trigger refresh again
-      refresh.refresh(explorer)
+      refresh.request(explorer.tabpage, { full = true })
 
       -- Wait for tree to update (refresh is async)
       local tree_updated = vim.wait(10000, function()
         -- The tree should now have files
-        local files = refresh.get_all_files(explorer.tree)
+        local files = require("codediff.ui.explorer.tree").get_all_files(explorer.tree)
         return #files > 0
       end, 100)
 

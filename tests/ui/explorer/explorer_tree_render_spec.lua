@@ -55,29 +55,28 @@ describe("Explorer tree render", function()
     -- time it drains — an artifact of feeding a tab-scoped keymap from an
     -- explorer buffer that shadows navigation entries with its own maps.
     local navigation = require("codediff.ui.view.navigation")
-    local before = explorer.current_file_path
+    local before = explorer.data.current_file_path
     assert.is_not_nil(before, "explorer should have a currently-selected file after opening")
 
     -- Only one changed file? Then next_file is a no-op by design (cycle over
     -- a single item), and asserting a change would be wrong. Guard.
-    local refresh_module = require("codediff.ui.explorer.refresh")
-    local all_files = refresh_module.get_all_files(explorer.tree)
+    local all_files = require("codediff.ui.explorer.tree").get_all_files(explorer.tree)
     assert.is_true(#all_files >= 2,
       "test setup should produce >= 2 changed files, got " .. #all_files)
 
     navigation.next_file()
-    -- next_file updates explorer.current_file_path synchronously, but the
+    -- next_file updates the session selection synchronously, but the
     -- diff render (view.update) runs via vim.schedule + async git.get_file.
     -- Wait for BOTH the explorer selection AND the modified buffer name to
     -- catch up, so the assertions below verify the full end-to-end path.
     vim.wait(5000, function()
-      if explorer.current_file_path == before then return false end
+      if explorer.data.current_file_path == before then return false end
       local _, buf = lifecycle.get_buffers(tabpage)
       if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
-      return vim.api.nvim_buf_get_name(buf):find(explorer.current_file_path, 1, true) ~= nil
+      return vim.api.nvim_buf_get_name(buf):find(explorer.data.current_file_path, 1, true) ~= nil
     end, 25)
 
-    assert.are_not.equal(before, explorer.current_file_path,
+    assert.are_not.equal(before, explorer.data.current_file_path,
       "next_file must select a different file; still on '" .. tostring(before) .. "'")
 
     -- And the modified pane must show that new file's content, not stale
@@ -86,8 +85,8 @@ describe("Explorer tree render", function()
     assert.is_not_nil(mod_buf)
     local mod_name = vim.api.nvim_buf_get_name(mod_buf)
     assert.is_true(
-      mod_name:find(explorer.current_file_path, 1, true) ~= nil,
-      "modified buffer name '" .. mod_name .. "' should match the newly-selected file '" .. explorer.current_file_path .. "'")
+      mod_name:find(explorer.data.current_file_path, 1, true) ~= nil,
+      "modified buffer name '" .. mod_name .. "' should match the newly-selected file '" .. explorer.data.current_file_path .. "'")
   end)
 end)
 

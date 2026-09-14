@@ -83,11 +83,9 @@ function M.create_session(tabpage, session_config, panes)
 
   -- Create complete session in one step
   active_diffs[tabpage] = {
-    -- Panel & Git Context (immutable)
-    -- `panel.data` is construction material: panel.lua consumes it to build the
-    -- panel, which copies forward whatever it still needs (pathspec,
-    -- status_result). Keeping it on the session would be a second, stale copy.
-    panel = session_config.panel and { name = session_config.panel.name } or nil,
+    tabpage = tabpage,
+    -- Panel data belongs to the session; the sidebar only renders it.
+    panel = session_config.panel and { name = session_config.panel.name, data = require("codediff.ui.refresh.panel").new(session_config) } or nil,
     merge = session_config.conflict or nil,
     git_root = session_config.git_root,
     original = session_config.original,

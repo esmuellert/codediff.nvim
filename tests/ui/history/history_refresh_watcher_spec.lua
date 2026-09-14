@@ -37,18 +37,17 @@ describe("history refresh transport lifecycle", function()
       original = path.empty(),
       modified = path.empty(),
     }, { original_bufnr = a, modified_bufnr = b, original_win = win, modified_win = win, lines_diff = {} })
-    local history = { git_root = repo.dir, bufnr = a, winid = win, opts = {}, commits = {}, is_hidden = false }
+    local history = { data = lifecycle.get_session(tab).panel.data, bufnr = a, winid = win, is_hidden = false }
     lifecycle.set_panel_view(tab, history)
-    require("codediff.ui.history.refresh").setup_auto_refresh(history, tab)
-    local controller = lifecycle.get_session(tab).refresh
+    local controller = refresh.attach(tab)
     assert.is_function(handlers.on_ready)
     handlers.on_ready()
-    assert.is_true(history._native_watcher_ready)
+    assert.is_true(controller.native)
     assert.is_false(controller.polling)
     handlers.on_error("EPERM")
     local timer = controller.poll
     assert.is_true(controller.polling)
-    assert.is_false(history._native_watcher_ready)
+    assert.is_false(controller.native)
     handlers.on_error("EPERM")
     assert.equals(timer, controller.poll)
     refresh.dispose(tab)

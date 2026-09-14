@@ -1,7 +1,7 @@
 -- What the history panel lists under a commit.
 --
--- history_file_filter_spec covers filter.apply itself; this covers whether the
--- history panel calls it. Removing the filter call left the whole suite green.
+-- history_file_filter_spec covers filter.apply itself; this covers whether
+-- session data reaches the history view with the filter applied.
 
 local h = dofile("tests/helpers.lua")
 h.ensure_plugin_loaded()
@@ -15,7 +15,7 @@ local function expand_newest_commit()
   local opened = vim.wait(15000, function()
     for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
       local view = lifecycle.get_panel_view(tp)
-      if view and view._load_commit_files and view.tree then
+      if view and view.load_commit_files and view.tree then
         history = view
         return true
       end
@@ -38,7 +38,7 @@ local function expand_newest_commit()
   end
 
   local done = false
-  history._load_commit_files(commit_node, function()
+  history.load_commit_files(commit_node, function()
     done = true
   end)
   if not vim.wait(10000, function()
@@ -76,6 +76,29 @@ describe("history panel file list", function()
     if repo then
       repo.cleanup()
     end
+  end)
+
+  it("rebuilds supplied commit data without fetching files from the renderer", function()
+    repo.write_file("kept.txt", { "content" })
+    repo.git("add .")
+    repo.git("commit -m second")
+    require("codediff").setup({})
+    vim.cmd("cd " .. vim.fn.fnameescape(repo.dir))
+    vim.cmd("CodeDiff history")
+    assert.is_not_nil(expand_newest_commit())
+    local session = require("codediff.ui.lifecycle").get_session(vim.api.nvim_get_current_tabpage())
+    local history = session.panel.view
+    assert.is_true(history.data == session.panel.data)
+    local git = require("codediff.core.git")
+    local get_files = git.get_commit_files
+    git.get_commit_files = function()
+      error("history rendering must not fetch commit files")
+    end
+    local ok, err = pcall(history.on_data, session.panel.data, { list = true })
+    git.get_commit_files = get_files
+    assert.is_true(ok, tostring(err))
+    local text = table.concat(vim.api.nvim_buf_get_lines(history.bufnr, 0, -1, false), "\n")
+    h.assert_contains(text, "kept.txt", "expanded files should render from session data")
   end)
 
   it("hides files matching explorer.file_filter.ignore", function()

@@ -148,4 +148,53 @@ function M.open_real_file(win, target)
   return vim.api.nvim_get_current_buf()
 end
 
+-- Replace generated content without changing the buffer's editing permissions.
+function M.set_lines(buf, lines)
+  if vim.deep_equal(vim.api.nvim_buf_get_lines(buf, 0, -1, false), lines) then
+    return
+  end
+  local modifiable, readonly = vim.bo[buf].modifiable, vim.bo[buf].readonly
+  vim.bo[buf].modifiable, vim.bo[buf].readonly = true, false
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable, vim.bo[buf].readonly = modifiable, readonly
+end
+
+-- Install a resolved input in the existing pane, without reopening the view.
+function M.update_content(session, side, input, lines)
+  local buf = session[side .. "_bufnr"]
+  if not input.path or input.path.absolute == "" then
+    return
+  end
+  if not M.is_virtual_revision(input.revision) then
+    if vim.bo[buf].buftype ~= "" then
+      M.set_lines(buf, lines)
+    end
+    return
+  end
+  if input.resolved ~= session[side .. "_revision"] then
+    local name = virtual_file.create_url(session.git_root, input.resolved, input.path.relative)
+    local existing = bufnr_exact(name)
+    if existing ~= -1 and vim.api.nvim_buf_is_loaded(existing) then
+      buf = existing
+    else
+      buf = vim.api.nvim_create_buf(false, true)
+      if existing == -1 then
+        vim.api.nvim_buf_set_name(buf, name)
+      end
+      vim.bo[buf].buftype = "nowrite"
+      vim.bo[buf].bufhidden = "hide"
+      vim.bo[buf].swapfile = false
+    end
+    session[side .. "_bufnr"] = buf
+    local win = session[side .. "_win"]
+    local hidden = side == "original" and session.layout == "inline" and session.single_side ~= "original"
+    if win and vim.api.nvim_win_is_valid(win) and not hidden then
+      vim.api.nvim_win_set_buf(win, buf)
+      vim.bo[buf].bufhidden = "wipe"
+    end
+  end
+  virtual_file.set_content(buf, lines, input.path.relative)
+  session[side .. "_revision"] = input.resolved
+end
+
 return M
