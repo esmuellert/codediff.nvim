@@ -1,7 +1,7 @@
 -- A deterministic Git graph shared by refresh and UI-operation E2Es.
 -- Every invocation returns a separate TMP repository and linked worktree.
 local M = {}
-local repositories = require("tests.framework.repository")
+local repositories = require("tests.support.repository")
 
 M.files = {
   ["a.txt"] = { "start", "base-A", "context", "end", "tail" },

@@ -39,9 +39,13 @@ local DEFAULT_TIMEOUT_MS = 300000
 
 local function env_number(name)
   local raw = vim.env[name]
-  if not raw or raw == "" then return nil end
+  if not raw or raw == "" then
+    return nil
+  end
   local n = tonumber(raw)
-  if not n or n < 1 then return nil end
+  if not n or n < 1 then
+    return nil
+  end
   return math.floor(n)
 end
 
@@ -54,7 +58,9 @@ local function default_jobs()
   local ok, cpus = pcall(function()
     return uv.available_parallelism()
   end)
-  if not ok or type(cpus) ~= "number" or cpus < 1 then cpus = 2 end
+  if not ok or type(cpus) ~= "number" or cpus < 1 then
+    cpus = 2
+  end
   return math.max(2, math.min(cpus * 2, 16))
 end
 
@@ -62,25 +68,25 @@ end
 -- Discovery
 -- ---------------------------------------------------------------------------
 
---- Find every `*_spec.lua` under `dir`, as sorted repo-relative paths.
---
--- Replaces the shell-side `find`/`for /r` discovery. Paths are normalized to
--- forward slashes so the ordering, the log, and the `%q`-quoted argument
--- handed to the child are identical on every platform (a Windows path pasted
--- raw into a Lua string would also mangle `\U`, `\t`, ... escapes).
---
--- `globpath()` rather than `vim.fs.find()`: it exists on every Neovim version,
--- so discovery never becomes the reason an older Neovim can't run the suite.
--- `nosuf = true` keeps a stray 'wildignore' from silently hiding spec files.
-function M.discover(dir)
-  dir = dir or "tests"
+--- Discover a test layer, directory or single spec as sorted repo-relative paths.
+-- `nosuf = true` prevents 'wildignore' from silently hiding coverage.
+function M.discover(target)
+  local layers = { all = "tests", unit = "tests/unit", integration = "tests/integration", e2e = "tests/e2e" }
+  if not target or target == "" then
+    target = "all"
+  end
+  local dir = (layers[target] or target):gsub("\\", "/")
   local root = vim.fn.getcwd():gsub("\\", "/")
-
-  local matches = vim.fn.globpath(dir, "**/*_spec.lua", true, true)
+  local matches
+  if vim.fn.filereadable(dir) == 1 then
+    matches = dir:match("_spec%.lua$") and { dir } or {}
+  else
+    matches = vim.fn.globpath(dir, "**/*_spec.lua", true, true)
+  end
 
   local specs = {}
   for _, path in ipairs(matches) do
-    local norm = path:gsub("\\", "/")
+    local norm = vim.fn.fnamemodify(path, ":p"):gsub("\\", "/")
     -- Make absolute paths relative to the repo root so the log is readable and
     -- the child's loader resolves them from cwd.
     if norm:sub(1, #root + 1) == root .. "/" then
@@ -129,7 +135,9 @@ local function run_parallel(specs, opts)
   local next_index, emitted = 1, 0
 
   local function spawn_next()
-    if next_index > #specs then return end
+    if next_index > #specs then
+      return
+    end
     local spec = specs[next_index]
     next_index = next_index + 1
 
@@ -184,10 +192,10 @@ end
 -- ---------------------------------------------------------------------------
 
 --- Run every discovered spec file. Returns (ok, results).
--- @param opts table|nil  { dir, jobs, timeout }
+-- @param opts table|nil { dir = layer|directory|spec, jobs, timeout }
 function M.run(opts)
   opts = opts or {}
-  local specs = M.discover(opts.dir)
+  local specs = M.discover(opts.dir or vim.env.CODEDIFF_TEST_TARGET)
 
   local timeout = opts.timeout or env_number("CODEDIFF_TEST_TIMEOUT") or DEFAULT_TIMEOUT_MS
   local jobs = opts.jobs or env_number("CODEDIFF_TEST_JOBS") or default_jobs()
@@ -233,7 +241,9 @@ function M.run(opts)
   reporter.print_suite_summary(results, total_ms)
 
   for _, r in ipairs(results) do
-    if not r.ok then return false, results end
+    if not r.ok then
+      return false, results
+    end
   end
   return true, results
 end

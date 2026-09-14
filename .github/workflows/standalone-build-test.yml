@@ -79,14 +79,14 @@ jobs:
       - name: Setup Neovim
         uses: ./.github/actions/setup-neovim
 
-      - name: Run integration test (Ubuntu/macOS)
+      - name: Run command smoke E2E (Ubuntu/macOS)
         if: matrix.os != 'windows-latest'
         run: |
           nvim --headless --noplugin -u tests/init.lua \
-            -c "lua require('tests.framework').run_and_exit('tests/full_integration_spec.lua')"
+            -c "lua require('tests.framework').run_and_exit('tests/e2e/commands/smoke_spec.lua')"
 
-      - name: Run integration test (Windows)
+      - name: Run command smoke E2E (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          nvim --headless --noplugin -u tests/init.lua -c "lua require('tests.framework').run_and_exit('tests/full_integration_spec.lua')"
+          nvim --headless --noplugin -u tests/init.lua -c "lua require('tests.framework').run_and_exit('tests/e2e/commands/smoke_spec.lua')"

@@ -1,6 +1,6 @@
 -- Hand-authored screen rows for a six-line buffer: one, two, three, four, five, six.
 -- These are visual expectations, not output from the gutter calculator.
-return {
+local M = {
   {
     name = "single real position",
     range = { start_line = 2, end_line = 3 },
@@ -116,3 +116,40 @@ return {
     rows = { "  one", "  ╱╱╱╱", "  two", "╭─three", "╰─four", "  five", "  ╱╱╱╱", "  six" },
   },
 }
+
+-- A real merge with an interior filler in incoming, plus a second file whose
+-- filler is on the opposite side. Both use independently authored expectations.
+function M.new_repo()
+  local repo = require("tests.support.repository").new({ unborn = true })
+  repo.write_file("conf.txt", { "before", "base1", "base2", "base3", "after", "tail" })
+  repo.write_file("other.txt", { "beforeB", "baseB", "afterB" })
+  repo.write_file("deleted.txt", { "deleted one", "deleted two" })
+  repo.commit("base")
+  repo.command({ "checkout", "-b", "incoming" })
+  repo.write_file("conf.txt", { "before", "base1", "THEIRS2", "THEIRS3", "after", "tail" })
+  repo.write_file("other.txt", { "beforeB", "THEIRS_B", "extraB", "afterB" })
+  repo.commit("incoming")
+  repo.command({ "checkout", "main" })
+  repo.write_file("conf.txt", { "before", "OURS1", "inserted", "OURS2", "base3", "after", "tail" })
+  repo.write_file("other.txt", { "beforeB", "OURS_B", "afterB" })
+  repo.commit("current")
+  repo.command({ "merge", "incoming", "--no-edit" }, 1)
+  repo.write_file("fresh.txt", { "fresh one", "fresh two" })
+  repo.write_file("plain-left.txt", { "before", "same", "keep", "after" })
+  repo.write_file("plain-right.txt", { "before", "same", "keep", "inserted", "after" })
+  return repo
+end
+
+M.merge_rows = {
+  original = { "  before", "╭─base1", "│ THEIRS2", "│ ╱╱╱╱", "╰─THEIRS3", "  after", "  tail" },
+  modified = { "  before", "╭─OURS1", "│ inserted", "│ OURS2", "╰─base3", "  after", "  tail" },
+  result = { "  before", "╭─base1", "│ base2", "╰─base3", "  after", "  tail" },
+}
+
+M.other_merge_rows = {
+  original = { "  beforeB", "╭─THEIRS_B", "╰─extraB", "  afterB" },
+  modified = { "  beforeB", "╭─╱╱╱╱", "╰─OURS_B", "  afterB" },
+  result = { "  beforeB", "[ baseB", "  afterB" },
+}
+
+return M

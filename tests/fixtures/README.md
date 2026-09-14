@@ -1,8 +1,8 @@
 # Repository fixtures
 
-Git-backed tests share `tests/framework/repository.lua`. The UI E2Es use the
-small deterministic graph in `refresh_repo.lua`; older tests obtain an empty
-worktree through `tests/helpers.lua:create_temp_git_repo()`.
+Git-backed tests share `tests/support/repository.lua`. The UI E2Es use the
+small deterministic graph in `refresh_repo.lua`; empty fixtures are available
+through `require("tests.support").create_temp_git_repo()`.
 
 ## Isolation and lifecycle
 
@@ -61,6 +61,10 @@ the corresponding commits. The seed's `main` stays at `fixture/base`.
 Golden contents are declared in `refresh_repo.files`; assertions do not ask the
 production diff/merge calculator to construct their expectations.
 
+`conflict_gutter.lua` keeps the focused gutter expectations and a `new_repo()`
+builder on the same factory. `keymap_matrix.txt` is the hand-reviewed mapping
+golden; its capture driver belongs to `support/keymaps.lua`, not to fixture data.
+
 ## API
 
 ```lua
@@ -84,7 +88,7 @@ that must explicitly expect code 1.
 The lower-level factory supports special states through the same lifecycle:
 
 ```lua
-local repositories = require("tests.framework.repository")
+local repositories = require("tests.support.repository")
 local unborn = repositories.new({ unborn = true })
 local ordinary = repositories.new({ worktree = false, unborn = true })
 local remote = repositories.new({ bare = true, unborn = true })
@@ -110,4 +114,4 @@ then run:
 Use the same profile to reproduce a failing operation. Print `fixture_repo.dir`
 to inspect it from another shell while Neovim is running. The worktree is removed
 when this Neovim exits. The full scenario map is in
-[`ui/refresh/COVERAGE.md`](../ui/refresh/COVERAGE.md).
+[`e2e/COVERAGE.md`](../e2e/COVERAGE.md).
