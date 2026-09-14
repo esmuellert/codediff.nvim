@@ -118,7 +118,7 @@ local function find_file_node(explorer, predicate)
 end
 
 describe("Explorer Mode", function()
-  local temp_dir
+  local temp_dir, repo
   local original_cwd
 
   before_each(function()
@@ -133,16 +133,9 @@ describe("Explorer Mode", function()
     -- Save original working directory
     original_cwd = vim.fn.getcwd()
     
-    -- Create temporary git repository for testing
-    temp_dir = vim.fn.tempname()
-    vim.fn.mkdir(temp_dir, "p")
+    repo = h.create_temp_git_repo()
+    temp_dir = repo.dir
     vim.fn.chdir(temp_dir)
-    
-    -- Initialize git repo
-    h.git_cmd(temp_dir, "init")
-    h.git_cmd(temp_dir, "branch -m main")
-    h.git_cmd(temp_dir, 'config user.email "test@example.com"')
-    h.git_cmd(temp_dir, 'config user.name "Test User"')
     
     -- Create and commit initial file
     vim.fn.writefile({"line 1", "line 2"}, temp_dir .. "/file1.txt")
@@ -176,8 +169,9 @@ describe("Explorer Mode", function()
     -- Wait for async operations to complete before deleting temp directory
     vim.wait(200)
     
-    if temp_dir and vim.fn.isdirectory(temp_dir) == 1 then
-      vim.fn.delete(temp_dir, "rf")
+    if repo then
+      repo.cleanup()
+      repo = nil
     end
   end)
 

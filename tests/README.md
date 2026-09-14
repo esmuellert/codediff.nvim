@@ -64,8 +64,8 @@ nvim --headless --noplugin -u tests/init.lua \
 
 Each spec file gets its own child `nvim --headless` process, so specs stay
 isolated from one another. `tests/framework/supervisor.lua` runs those children
-concurrently from a single parent Neovim, which cuts the suite from ~150s to
-~35s on a 4-core machine.
+concurrently from a single parent Neovim. Runtime depends on the selected
+scenario matrix and available workers; use `CODEDIFF_TEST_JOBS` to control it.
 
 Children never share the parent's stdout: their output is buffered in full and
 printed as one contiguous block when they exit. Letting concurrent processes
@@ -95,6 +95,20 @@ they opened files from, and a watcher left pointing at a deleted path prints
 | `CODEDIFF_TEST_JOBS` | 2x CPUs, capped at 16 | Concurrent spec workers. `1` forces sequential. |
 | `CODEDIFF_TEST_TIMEOUT` | `300000` | Per-spec timeout in ms; guards against a hung spec stalling CI. |
 | `NO_COLOR` / `CODEDIFF_TEST_NO_COLOR` | unset | Disable ANSI colors. |
+
+## Repository fixtures
+
+Git-backed tests share [`framework/repository.lua`](framework/repository.lua).
+Each case gets an isolated repository and linked worktree in TMP, cloned from an
+immutable seed without hardlinks. Refs, index files and object databases are not
+shared between cases. Cleanup removes the worktree and its Git metadata.
+
+[`fixtures/refresh_repo.lua`](fixtures/refresh_repo.lua) supplies the named UI
+profiles: basic, hunks, workspace, history and merge. Empty/unborn repositories,
+regular `.git` directories, bare local remotes and SHA-256 use the same factory.
+The test bootstrap isolates Git configuration and inherited repository overrides.
+See [`fixtures/README.md`](fixtures/README.md) for the graph, API and interactive
+reproduction commands.
 
 ## Screen-grid regressions
 
@@ -130,6 +144,10 @@ fails. A grid failure reports the pane/focus context, display row, expected
 text and actual text. These are cell-level checks, not font or pixel snapshots.
 
 ## Refresh regressions
+
+The [main-to-branch coverage map](ui/refresh/COVERAGE.md) lists each changed
+production responsibility, its scenario IDs, and matrix parameters. It separates
+named scenarios from expanded executions and from unit/component tests.
 
 `ui/refresh/*_e2e_spec.lua` exercises the session refresh controller through real
 file writes, Git index/ref changes and rendered screen cells. It covers both

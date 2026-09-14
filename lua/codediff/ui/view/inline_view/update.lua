@@ -30,7 +30,7 @@ local setup_keymaps = inline_keymaps.setup
 local function fetch_into_scratch(revision, git_root, relative, bufnr, done)
   require("codediff.core.git").get_file_content(revision, git_root, relative, function(err, lines)
     vim.schedule(function()
-      if set_scratch_lines(bufnr, err and {} or lines) then
+      if require("codediff.core.virtual_file").set_content(bufnr, err and {} or lines, relative) then
         done()
       end
     end)
@@ -49,10 +49,6 @@ local function open_modified_for_update(win, session_config, is_virtual)
     local mod_buf = new_scratch()
     vim.bo[mod_buf].modifiable = true
     vim.api.nvim_win_set_buf(win, mod_buf)
-    local ft = vim.filetype.match({ filename = session_config.modified.absolute })
-    if ft then
-      vim.bo[mod_buf].filetype = ft
-    end
     return mod_buf
   end
 
@@ -79,7 +75,7 @@ local function fill_original_for_update(orig_buf, session_config, is_virtual, do
     return
   end
 
-  local orig_path = (session_config.original.absolute ~= "" and session_config.original.absolute) or session_config.modified.absolute
+  local orig_path = session_config.original.absolute
   if orig_path and orig_path ~= "" then
     local real_bufnr = vim.fn.bufadd(orig_path)
     vim.fn.bufload(real_bufnr)

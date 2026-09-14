@@ -6,6 +6,15 @@ function M.save_buffer_state(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return nil
   end
+  -- A second session must save the user's setting, not the first session's
+  -- temporary disabled value for this shared buffer.
+  for _, session in pairs(require("codediff.ui.lifecycle.session").get_active_diffs()) do
+    if session.original_bufnr == bufnr and session.original_state then
+      return vim.deepcopy(session.original_state)
+    elseif session.modified_bufnr == bufnr and session.modified_state then
+      return vim.deepcopy(session.modified_state)
+    end
+  end
   local state = {}
   if vim.lsp.inlay_hint then
     state.inlay_hints_enabled = vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr })

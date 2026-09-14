@@ -16,8 +16,8 @@ function M.new(session_config)
       data.dir1, data.dir2 = session_config.original.absolute, session_config.modified.absolute
     end
   else
-    data.opts = { range = data.range, file_path = data.file_path, base_revision = data.base_revision, line_range = data.line_range }
-    data.commits, data.files = data.commits or {}, {}
+    data.opts = { range = data.range, file_path = data.file_path, base_revision = data.base_revision, line_range = data.line_range, reverse = data.reverse }
+    data.commits, data.files, data.parents = data.commits or {}, {}, {}
   end
   return data
 end
@@ -34,7 +34,24 @@ function M.resolve(config, done)
   end
   for _, side in ipairs({ "original", "modified" }) do
     local revision = config[side .. "_revision"]
-    if revision and not policy.is_working(revision) and not revision:match("^:[0-3]:?$") then
+    if side == "original" and revision and config.parent_commit then
+      remaining = remaining + 1
+      git.get_revision_parents(config.parent_commit, config.git_root, function(err, parents)
+        vim.schedule(function()
+          if not err then
+            if config.parent_cache then
+              config.parent_cache[config.parent_commit] = parents
+            end
+            config.original_revision = parents[1]
+            config.source_revisions.original = parents[1]
+            if not parents[1] then
+              config.original, config.single_side = path.empty(), "modified"
+            end
+          end
+          settled(err)
+        end)
+      end)
+    elseif revision and not policy.is_working(revision) and not revision:match("^:[0-3]:?$") then
       remaining = remaining + 1
       git.resolve_revision(revision, config.git_root, function(err, hash)
         vim.schedule(function()
@@ -57,7 +74,7 @@ function M.read(session, done)
     end)
   end
   if panel.name == "history" then
-    local opts = { no_merges = true, path = data.opts.file_path }
+    local opts = { no_merges = true, path = data.opts.file_path, line_range = data.opts.line_range, reverse = data.opts.reverse }
     local range = data.opts.range or ""
     if range == "" then
       opts.limit = 100
@@ -165,12 +182,19 @@ function M.comparison(panel, file)
     return
   end
   local original, modified = file.old_path or file.path, file.path
-  local original_revision, modified_revision, conflict, line_range
+  local original_revision, modified_revision, conflict, line_range, parent_commit, root_commit
   if panel.name == "history" then
     if not file.commit_hash or file.commit_hash == "" then
       return
     end
-    original_revision = data.opts.base_revision or (file.commit_hash .. "^")
+    local parents = data.parents and data.parents[file.commit_hash]
+    if data.opts.base_revision then
+      original_revision = data.opts.base_revision
+    elseif parents then
+      original_revision, root_commit = parents[1], #parents == 0
+    else
+      original_revision, parent_commit = file.commit_hash .. "^", file.commit_hash
+    end
     modified_revision = file.commit_hash
     original = data.opts.base_revision and file.path or original
     line_range = data.opts.line_range
@@ -189,7 +213,7 @@ function M.comparison(panel, file)
       original_revision, modified_revision = "HEAD", "WORKING"
       for _, staged in ipairs(data.status_result.staged or {}) do
         if staged.path == file.path then
-          original_revision = ":0"
+          original_revision, original = ":0", file.path
           break
         end
       end
@@ -198,7 +222,7 @@ function M.comparison(panel, file)
       end
     end
   end
-  local single_side
+  local single_side = root_commit and "modified" or nil
   if data.git_root then
     if file.status == "??" or file.status == "A" then
       single_side, original_revision = "modified", nil
@@ -216,6 +240,8 @@ function M.comparison(panel, file)
     conflict = conflict,
     single_side = single_side,
     line_range = line_range,
+    parent_commit = parent_commit,
+    parent_cache = data.parents,
   }
 end
 

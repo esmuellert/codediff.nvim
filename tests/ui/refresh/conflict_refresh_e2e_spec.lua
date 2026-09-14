@@ -8,7 +8,7 @@ local function merge_repo()
   repo.git("checkout main")
   repo.write_file("a.txt", { "start", "current-A", "context", "end", "tail" })
   repo.git("commit -am current")
-  local _, code = repo.git("merge incoming --no-edit")
+  local _, code = repo.git("merge incoming --no-edit", 1)
   assert.equals(1, code, "fixture must conflict")
   return repo
 end
@@ -166,7 +166,7 @@ for _, backend in ipairs({ "native", "polling" }) do
         end
         repo.git("add -A")
         repo.git("commit -m current")
-        local _, code = repo.git("merge incoming --no-edit")
+        local _, code = repo.git("merge incoming --no-edit", 1)
         assert.equals(1, code)
         screen = h.screen(backend, "side-by-side")
         h.open(screen, repo)

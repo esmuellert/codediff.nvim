@@ -32,7 +32,7 @@ local function setup_command()
 end
 
 describe("Explorer refresh and single-file stability", function()
-  local temp_dir
+  local temp_dir, repo
   local original_cwd
   local original_get_panel_view
   local original_get_status_with_line_stats
@@ -80,13 +80,9 @@ describe("Explorer refresh and single-file stability", function()
     require("codediff").setup({ diff = { layout = "side-by-side" } })
     setup_command()
     original_cwd = vim.fn.getcwd()
-    temp_dir = vim.fn.tempname()
-    vim.fn.mkdir(temp_dir, "p")
+    repo = h.create_temp_git_repo()
+    temp_dir = repo.dir
     vim.fn.chdir(temp_dir)
-    h.git_cmd(temp_dir, "init")
-    h.git_cmd(temp_dir, "branch -m main")
-    h.git_cmd(temp_dir, 'config user.email "test@example.com"')
-    h.git_cmd(temp_dir, 'config user.name "Test User"')
     vim.fn.writefile({ "line 1", "line 2" }, temp_dir .. "/file1.txt")
     h.git_cmd(temp_dir, "add file1.txt")
     h.git_cmd(temp_dir, 'commit -m "initial"')
@@ -109,8 +105,9 @@ describe("Explorer refresh and single-file stability", function()
     vim.cmd("tabonly")
     vim.fn.chdir(original_cwd)
     vim.wait(200)
-    if temp_dir and vim.fn.isdirectory(temp_dir) == 1 then
-      vim.fn.delete(temp_dir, "rf")
+    if repo then
+      repo.cleanup()
+      repo = nil
     end
   end)
 

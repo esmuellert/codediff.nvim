@@ -5,26 +5,11 @@ local git = require('codediff.core.git')
 
 -- Helper: create a temp git repo with multiple commits affecting different line ranges
 local function create_test_repo()
-  local temp_dir = vim.fn.tempname()
-  vim.fn.mkdir(temp_dir, "p")
-
+  local repo = require("tests.framework.repository").new({ unborn = true })
   local function run_git(args)
-    local cmd = string.format('git -C "%s" %s', temp_dir, args)
-    local output = vim.fn.system(cmd)
-    return output, vim.v.shell_error
+    return repo.git(args, 0)
   end
-
-  run_git("init")
-  run_git("config user.email 'test@test.com'")
-  run_git("config user.name 'Test'")
-  run_git("branch -m main")
-
-  local function write_file(name, lines)
-    local path = temp_dir .. "/" .. name
-    local f = io.open(path, "w")
-    f:write(table.concat(lines, "\n") .. "\n")
-    f:close()
-  end
+  local write_file = repo.write_file
 
   -- Commit 1: initial file with header + two functions
   write_file("test.lua", {
@@ -86,12 +71,7 @@ local function create_test_repo()
   run_git("add .")
   run_git('commit -m "update header"')
 
-  return {
-    dir = temp_dir,
-    cleanup = function()
-      vim.fn.delete(temp_dir, "rf")
-    end,
-  }
+  return repo
 end
 
 describe("Line-range History - get_commit_list with line_range", function()

@@ -17,7 +17,7 @@ local function setup_command()
 end
 
 describe("Full Integration Suite", function()
-  local temp_dir
+  local temp_dir, repo
   local commit_hash_1
   local commit_hash_2
 
@@ -31,16 +31,8 @@ describe("Full Integration Suite", function()
     -- Setup command
     setup_command()
 
-    -- Create temporary git repository for testing
-    temp_dir = vim.fn.tempname()
-    vim.fn.mkdir(temp_dir, "p")
-
-    -- Initialize git repo
-    git("init")
-    -- Rename branch to main to be sure
-    git("branch -m main")
-    git('config user.email "test@example.com"')
-    git('config user.name "Test User"')
+    repo = require("tests.framework.repository").new({ unborn = true })
+    temp_dir = repo.dir
 
     -- Commit 1
     vim.fn.writefile({ "line 1", "line 2" }, temp_dir .. "/file.txt")
@@ -74,8 +66,9 @@ describe("Full Integration Suite", function()
     vim.wait(200)
 
     -- Clean up
-    if temp_dir and vim.fn.isdirectory(temp_dir) == 1 then
-      vim.fn.delete(temp_dir, "rf")
+    if repo then
+      repo.cleanup()
+      repo = nil
     end
   end)
 

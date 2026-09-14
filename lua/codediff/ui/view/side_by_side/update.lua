@@ -296,11 +296,21 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   lifecycle.update_paths(tabpage, session_config.original, session_config.modified)
 
   -- Delete old virtual buffers if they were virtual AND are not reused
-  if lifecycle.is_original_virtual(tabpage) and old_original_buf ~= original_info.bufnr and old_original_buf ~= modified_info.bufnr then
+  if
+    lifecycle.is_original_virtual(tabpage)
+    and old_original_buf ~= original_info.bufnr
+    and old_original_buf ~= modified_info.bufnr
+    and not lifecycle.is_buffer_shared(old_original_buf, tabpage)
+  then
     pcall(vim.api.nvim_buf_delete, old_original_buf, { force = true })
   end
 
-  if lifecycle.is_modified_virtual(tabpage) and old_modified_buf ~= modified_info.bufnr and old_modified_buf ~= original_info.bufnr then
+  if
+    lifecycle.is_modified_virtual(tabpage)
+    and old_modified_buf ~= modified_info.bufnr
+    and old_modified_buf ~= original_info.bufnr
+    and not lifecycle.is_buffer_shared(old_modified_buf, tabpage)
+  then
     pcall(vim.api.nvim_buf_delete, old_modified_buf, { force = true })
   end
 

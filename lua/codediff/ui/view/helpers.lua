@@ -49,6 +49,12 @@ end
 ---@param revision string?
 ---@param ref Path `.relative` builds the codediff:// URL; `.absolute` identifies the real file
 function M.prepare_buffer(is_virtual, git_root, revision, ref)
+  if not is_virtual and ref.absolute == "" then
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[buf].buftype = "nofile"
+    vim.bo[buf].bufhidden = "wipe"
+    return { bufnr = buf, needs_edit = false }
+  end
   if is_virtual then
     -- Virtual file: generate URL from the repo-relative path
     local virtual_url = virtual_file.create_url(git_root, revision, ref.relative)
@@ -117,7 +123,17 @@ function M.show_real_file_buffer(win, bufnr)
   -- Only normal (file-backed) buffers are timestamp-checked by Neovim; scratch
   -- and codediff:// buffers are skipped, so don't bother them.
   if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "" then
-    pcall(vim.cmd, "silent! checktime " .. bufnr)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local file = vim.api.nvim_buf_get_name(bufnr)
+    -- A clean BufNewFile buffer needs an explicit read when the file appears:
+    -- checktime asks W13 instead of reloading it, even with autoread enabled.
+    if not vim.bo[bufnr].modified and #lines == 1 and lines[1] == "" and vim.fn.filereadable(file) == 1 then
+      vim.api.nvim_buf_call(bufnr, function()
+        vim.cmd("silent edit!")
+      end)
+    else
+      pcall(vim.cmd, "silent! checktime " .. bufnr)
+    end
   end
   vim.api.nvim_win_set_buf(win, bufnr)
 end
@@ -163,13 +179,13 @@ end
 function M.update_content(session, side, input, lines)
   local buf = session[side .. "_bufnr"]
   if not input.path or input.path.absolute == "" then
-    return
+    return buf
   end
   if not M.is_virtual_revision(input.revision) then
     if vim.bo[buf].buftype ~= "" then
       M.set_lines(buf, lines)
     end
-    return
+    return buf
   end
   if input.resolved ~= session[side .. "_revision"] then
     local name = virtual_file.create_url(session.git_root, input.resolved, input.path.relative)
@@ -185,7 +201,6 @@ function M.update_content(session, side, input, lines)
       vim.bo[buf].bufhidden = "hide"
       vim.bo[buf].swapfile = false
     end
-    session[side .. "_bufnr"] = buf
     local win = session[side .. "_win"]
     local hidden = side == "original" and session.layout == "inline" and session.single_side ~= "original"
     if win and vim.api.nvim_win_is_valid(win) and not hidden then
@@ -195,6 +210,7 @@ function M.update_content(session, side, input, lines)
   end
   virtual_file.set_content(buf, lines, input.path.relative)
   session[side .. "_revision"] = input.resolved
+  return buf
 end
 
 return M

@@ -1,0 +1,95 @@
+local h = require("tests.ui.refresh.helpers")
+
+-- These exercise the public codediff:// BufReadCmd path without a diff session.
+-- Callback timing is controlled, but every response comes from a real Git read.
+describe("virtual revision buffer E2E", function()
+  local repo, screen
+  before_each(function()
+    repo = h.repo()
+    repo.write_file("sample.lua", { "local value = 'index-one'", "return value" })
+    repo.command({ "add", "sample.lua" })
+    screen = h.screen("virtual")
+  end)
+  after_each(function()
+    h.close(screen, repo)
+    screen, repo = nil, nil
+  end)
+  local function open(file)
+    local url = "codediff:///" .. repo.dir .. "///:0/" .. (file or "sample.lua")
+    screen:command("edit " .. vim.fn.fnameescape(url))
+  end
+  local function text(value)
+    screen:await(function()
+      h.assert_no_errors(screen)
+      return h.grid_contains(screen, value)
+    end, "revision buffer grid never showed " .. value)
+  end
+
+  it("[V01] loads a revision as a highlighted, read-only buffer", function()
+    open()
+    text("index-one")
+    local opts = screen:exec([[
+      return { vim.bo.buftype, vim.bo.modifiable, vim.bo.readonly, vim.bo.filetype,
+        vim.diagnostic.is_enabled({ bufnr = vim.api.nvim_get_current_buf() }) }
+    ]])
+    assert.same({ "nowrite", false, true, "", false }, opts)
+    -- Even an explicitly unlocked virtual buffer must not write to Git or disk.
+    screen:command("setlocal modifiable noreadonly")
+    h.feed(screen, "ggccLOCAL-ONLY<Esc>")
+    h.feed(screen, ":write!<CR>")
+    text("LOCAL-ONLY")
+    assert.equals("local value = 'index-one'", repo.read_file("sample.lua")[1])
+    assert.equals("local value = 'index-one'", repo.blob_lines(":0", "sample.lua")[1])
+  end)
+
+  it("[V02] an older BufReadCmd completion cannot replace a newer load", function()
+    h.hold_content(screen, "sample.lua")
+    open()
+    screen:await(function()
+      return screen:exec("return #refresh_test.held == 1")
+    end)
+    repo.write_file("sample.lua", { "local value = 'index-two'", "return value" })
+    repo.command({ "add", "sample.lua" })
+    screen:command("edit!")
+    screen:await(function()
+      return screen:exec("return #refresh_test.held == 2")
+    end)
+    screen:exec("table.remove(refresh_test.held)()")
+    text("index-two")
+    local stale = false
+    screen.on_flush = function()
+      stale = stale or h.grid_contains(screen, "index-one")
+    end
+    h.release_content(screen)
+    vim.wait(200)
+    screen.on_flush = nil
+    assert.is_false(stale, "a stale Git read appeared on the screen")
+    text("index-two")
+    assert.same({ "local value = 'index-two'", "return value" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+  end)
+
+  it("[V03] wiping a revision while its read is pending leaves the replacement buffer intact", function()
+    h.hold_content(screen, "sample.lua")
+    open()
+    screen:await(function()
+      return screen:exec("return #refresh_test.held == 1")
+    end)
+    local old = screen:exec("return vim.api.nvim_get_current_buf()")
+    screen:command("enew!")
+    h.feed(screen, "iREPLACEMENT<Esc>")
+    h.release_content(screen)
+    text("REPLACEMENT")
+    vim.wait(150)
+    assert.is_false(screen:exec("return vim.api.nvim_buf_is_valid(...)", { old }))
+    assert.same({ "REPLACEMENT" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+  end)
+
+  it("[V04] a file missing from the requested revision loads an empty read-only buffer", function()
+    open("absent.lua")
+    h.idle(screen)
+    assert.same({ "" }, screen:exec("return vim.api.nvim_buf_get_lines(0, 0, -1, false)"))
+    assert.is_false(screen:exec("return vim.bo.modifiable"))
+    assert.is_true(screen:exec("return vim.bo.readonly"))
+    assert.is_false(h.grid_contains(screen, "index-one"))
+  end)
+end)

@@ -395,16 +395,9 @@ describe("Inline diff with explorer", function()
       return
     end
 
-    -- Create a real git repo with a staged newly-added file
-    local repo = vim.fn.tempname()
-    vim.fn.mkdir(repo, "p")
-    local function git(args)
-      local out = vim.fn.system({ "git", "-C", repo, unpack(args) })
-      assert(vim.v.shell_error == 0, "git " .. table.concat(args, " ") .. " failed: " .. out)
-    end
-    git({ "init", "-q" })
-    git({ "config", "user.email", "t@t" })
-    git({ "config", "user.name", "t" })
+    local fixture = require("tests.framework.repository").new({ unborn = true })
+    local repo = fixture.dir
+    local git = fixture.command
 
     local rel = "newfile.txt"
     vim.fn.writefile({ "alpha", "beta", "gamma", "delta" }, repo .. "/" .. rel)
@@ -452,7 +445,8 @@ describe("Inline diff with explorer", function()
         .. ")"
     )
 
-    vim.fn.delete(repo, "rf")
+    lifecycle.cleanup(tabpage)
+    fixture.cleanup()
   end)
 
   it("Deleted files use a whole-file delete highlight across suspend and resume", function()

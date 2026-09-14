@@ -22,11 +22,8 @@ describe("Issue #498 regression — unborn HEAD is treated as the empty tree", f
   local GIT_EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
   local function make_unborn_repo()
-    -- `h.create_temp_git_repo()` already runs `git init` + `git config` + `git
-    -- branch -m main` but never commits, so the returned repo is in the
-    -- unborn-branch state we need. We rely on this rather than wiping and
-    -- reinitializing manually so the setup stays cross-platform (the previous
-    -- attempt used `rm -rf` and `cd &&` chains that don't work on Windows).
+    -- The shared fixture provides an unborn main branch in a TMP worktree;
+    -- it has no HEAD commit despite being cloned from an internal seed.
     repo = h.create_temp_git_repo()
   end
 

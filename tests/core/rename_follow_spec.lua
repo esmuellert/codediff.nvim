@@ -3,22 +3,17 @@
 
 local git = require("codediff.core.git")
 
--- Helper: create a temp git repo (uses table-form vim.fn.system for Windows compat)
 local function create_rename_repo()
-  local dir = vim.fn.tempname()
-  vim.fn.mkdir(dir, "p")
+  local repo = require("tests.framework.repository").new({ unborn = true })
   local function run(...)
-    return vim.fn.system(vim.list_extend({ "git", "-C", dir }, { ... }))
+    return repo.command({ ... })
   end
-  run("init")
-  run("config", "user.email", "test@test.com")
-  run("config", "user.name", "test")
-  return dir, run
+  return repo.dir, run, repo.cleanup
 end
 
 describe("resolve_path_at_revision", function()
   it("Returns old path for a renamed file", function()
-    local dir, run = create_rename_repo()
+    local dir, run, cleanup = create_rename_repo()
 
     vim.fn.writefile({ "content" }, dir .. "/old.lua")
     run("add", ".")
@@ -41,11 +36,11 @@ describe("resolve_path_at_revision", function()
     assert.is_true(done, "Callback should complete")
     assert.equal("old.lua", resolved, "Should resolve to old path before rename")
 
-    vim.fn.delete(dir, "rf")
+    cleanup()
   end)
 
   it("Returns same path for a file without renames", function()
-    local dir, run = create_rename_repo()
+    local dir, run, cleanup = create_rename_repo()
 
     vim.fn.writefile({ "content" }, dir .. "/stable.lua")
     run("add", ".")
@@ -69,7 +64,7 @@ describe("resolve_path_at_revision", function()
     assert.is_true(done, "Callback should complete")
     assert.equal("stable.lua", resolved, "Should return same path when no rename")
 
-    vim.fn.delete(dir, "rf")
+    cleanup()
   end)
 
 end)

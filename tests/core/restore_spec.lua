@@ -4,53 +4,14 @@
 
 local git = require("codediff.core.git")
 
--- Helper to run sync git commands in a directory
-local function git_sync(args, cwd)
-  local cmd = vim.list_extend({ "git" }, args)
-  local result = vim.fn.system(cmd, nil)
-  if vim.v.shell_error ~= 0 then
-    error("git command failed: " .. table.concat(cmd, " ") .. "\n" .. result)
-  end
-  return vim.trim(result)
-end
-
--- Helper to create a temp git repo with history
 local function create_test_repo()
-  local temp_dir = vim.fn.tempname()
-  vim.fn.mkdir(temp_dir, "p")
-
-  local old_dir = vim.fn.getcwd()
-  vim.fn.chdir(temp_dir)
-
-  git_sync({ "init" }, temp_dir)
-  git_sync({ "config", "user.email", "test@test.com" }, temp_dir)
-  git_sync({ "config", "user.name", "Test" }, temp_dir)
-
-  -- Commit 1: initial content
-  vim.fn.writefile({ "version 1" }, temp_dir .. "/file.txt")
-  git_sync({ "add", "file.txt" }, temp_dir)
-  git_sync({ "commit", "-m", "commit 1" }, temp_dir)
-  local commit1 = git_sync({ "rev-parse", "HEAD" }, temp_dir)
-
-  -- Commit 2: updated content
-  vim.fn.writefile({ "version 2" }, temp_dir .. "/file.txt")
-  git_sync({ "add", "file.txt" }, temp_dir)
-  git_sync({ "commit", "-m", "commit 2" }, temp_dir)
-  local commit2 = git_sync({ "rev-parse", "HEAD" }, temp_dir)
-
-  -- Working tree change (unstaged)
-  vim.fn.writefile({ "version 3 working" }, temp_dir .. "/file.txt")
-
-  vim.fn.chdir(old_dir)
-
-  return {
-    dir = temp_dir,
-    commit1 = commit1,
-    commit2 = commit2,
-    cleanup = function()
-      vim.fn.delete(temp_dir, "rf")
-    end,
-  }
+  local repo = require("tests.framework.repository").new({ unborn = true })
+  repo.write_file("file.txt", { "version 1" })
+  repo.commit1 = repo.commit("commit 1")
+  repo.write_file("file.txt", { "version 2" })
+  repo.commit2 = repo.commit("commit 2")
+  repo.write_file("file.txt", { "version 3 working" })
+  return repo
 end
 
 describe("restore_file", function()

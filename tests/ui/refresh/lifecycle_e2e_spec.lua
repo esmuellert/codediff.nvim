@@ -194,6 +194,178 @@ for _, backend in ipairs({ "native", "polling" }) do
         h.expect_text(screen, "modified", "next-B")
       end)
 
+      it("[T09] defers ordinary-file updates while hidden and restores them without moving focus", function()
+        write_a("working-A")
+        h.open(screen, repo)
+        h.focus(screen, "modified", 4)
+        local view = h.panes(screen).modified.view
+        screen:command("tabnew")
+        local away = screen:exec("return vim.api.nvim_get_current_tabpage()")
+        write_a("changed-while-away")
+        vim.wait(650)
+        assert.equals(away, screen:exec("return vim.api.nvim_get_current_tabpage()"))
+        screen:command("tabprevious")
+        h.expect_text(screen, "modified", "changed-while-away")
+        h.idle(screen)
+        assert.same(view, h.panes(screen).modified.view)
+      end)
+
+      it("[T10] a hidden input wipe retires its controller before the tab is resumed", function()
+        write_a("working-A")
+        h.open(screen, repo)
+        local buf = h.panes(screen).original.buf
+        screen:exec("refresh_test.retired = refresh_session().refresh")
+        screen:command("tabnew")
+        screen:command("bwipeout! " .. buf)
+        screen:command("tabprevious")
+        screen:await(function()
+          return screen:exec("return refresh_test.retired.closed and refresh_session() == nil")
+        end)
+        write_a("after-wipe")
+        vim.wait(100)
+        h.assert_no_errors(screen)
+      end)
+
+      it("[T11] closing a diff pane releases the session and its pending work", function()
+        write_a("working-A")
+        h.open(screen, repo)
+        h.focus(screen, "modified")
+        screen:command("close!")
+        screen:await(function()
+          return screen:exec("return refresh_session() == nil")
+        end)
+        write_a("after-close")
+        vim.wait(100)
+        h.assert_no_errors(screen)
+      end)
+
+      it("[T12] retries a real Git read failure without publishing partial inputs", function()
+        open_staged()
+        local expected = h.panes(screen).modified.lines
+        screen:command("tabnew")
+        write_a("recovered-index")
+        repo.command({ "add", "a.txt" })
+        local oid = vim.trim(repo.command({ "rev-parse", ":0:a.txt" }))
+        local object = repo.git_path("objects") .. "/" .. oid:sub(1, 2) .. "/" .. oid:sub(3)
+        assert((vim.uv or vim.loop).fs_rename(object, object .. ".held"))
+        screen:command("tabprevious")
+        screen:await(function()
+          return screen:exec([[
+            for _, message in ipairs(refresh_test.notifications) do
+              if message.message:find('CodeDiff refresh:', 1, true) then return true end
+            end
+            return false
+          ]])
+        end, "failed Git read was not reported")
+        assert.same(expected, h.panes(screen).modified.lines)
+        assert((vim.uv or vim.loop).fs_rename(object .. ".held", object))
+        h.expect_text(screen, "modified", "recovered-index")
+        h.idle(screen)
+      end)
+
+      it("[T13] follows a file outside Git and can return to another repository", function()
+        write_a("working-A")
+        repo.write_file("../outside.txt", { "outside-repository" })
+        other_repo = h.repo()
+        other_repo.replace("b.txt", 2, "other-working")
+        h.open(screen, repo, "CodeDiff file HEAD")
+        h.focus(screen, "modified")
+        h.feed(screen, ":edit " .. vim.fn.fnameescape(repo.root .. "/outside.txt") .. "<CR>")
+        h.expect_text(screen, "modified", "outside-repository")
+        h.expect_lines(screen, "original", { "" })
+        h.idle(screen)
+        assert.is_nil(screen:exec("return refresh_session().git_root"))
+        h.feed(screen, ":edit " .. vim.fn.fnameescape(other_repo.path("b.txt")) .. "<CR>")
+        h.expect_text(screen, "original", "base-B")
+        h.expect_text(screen, "modified", "other-working")
+      end)
+
+      it("[T14] restores user buffer mappings after a refreshed session closes", function()
+        write_a("working-A")
+        screen:exec(
+          [[
+          local filename = ...
+          require('codediff').setup({ keymaps = { view = { stage_hunk = '<F7>' } } })
+          vim.cmd('edit ' .. vim.fn.fnameescape(filename))
+          vim.keymap.set('n', '<F7>', function()
+            vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'USER-MAPPING' })
+          end, { buffer = true })
+        ]],
+          { repo.path("a.txt") }
+        )
+        h.open(screen, repo)
+        h.action(screen, "view", "stage_hunk", "modified", 2)
+        screen:await(function()
+          return screen:exec("return refresh_session().modified_revision == ':0'")
+        end)
+        h.idle(screen)
+        h.action(screen, "view", "quit", "modified")
+        screen:await(function()
+          return screen:exec("return refresh_session() == nil")
+        end)
+        h.feed(screen, "<F7>")
+        screen:await(function()
+          return h.grid_contains(screen, "USER-MAPPING")
+        end)
+        assert.equals("working-A", repo.blob_lines(":0", "a.txt")[2])
+      end)
+
+      it("[T15] restores the working buffer's original inlay-hint setting after refresh", function()
+        write_a("working-A")
+        local buf = screen:exec(
+          [[
+          vim.cmd('edit ' .. vim.fn.fnameescape((...)))
+          local buf = vim.api.nvim_get_current_buf()
+          vim.lsp.inlay_hint.enable(true, { bufnr = buf })
+          return buf
+        ]],
+          { repo.path("a.txt") }
+        )
+        h.open(screen, repo, "CodeDiff file HEAD")
+        assert.is_false(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = ... })", { buf }))
+        repo.git("commit -am moved-head")
+        h.expect_text(screen, "original", "working-A")
+        h.idle(screen)
+        h.action(screen, "view", "quit", "modified")
+        screen:await(function()
+          return screen:exec("return refresh_session() == nil")
+        end)
+        assert.is_true(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = ... })", { buf }))
+      end)
+
+      it("[T16] shares a working buffer across tabs without losing edits when one closes", function()
+        write_a("working-A")
+        local buf = screen:exec(
+          [[
+          vim.cmd('edit ' .. vim.fn.fnameescape((...)))
+          local buf = vim.api.nvim_get_current_buf()
+          vim.lsp.inlay_hint.enable(true, { bufnr = buf })
+          return buf
+        ]],
+          { repo.path("a.txt") }
+        )
+        h.open(screen, repo)
+        local first = h.panes(screen).tab
+        screen:command("tabnew")
+        h.open(screen, repo)
+        write_a("next-A")
+        h.expect_text(screen, "modified", "next-A")
+        h.focus(screen, "modified", 2)
+        h.feed(screen, "ccSHARED-EDIT<Esc>")
+        h.expect_text(screen, "modified", "SHARED-EDIT")
+        h.action(screen, "view", "quit", "modified")
+        screen:exec("refresh_test.tab = ...; vim.api.nvim_set_current_tabpage(refresh_test.tab)", { first })
+        h.expect_text(screen, "modified", "SHARED-EDIT")
+        h.idle(screen)
+        assert.equals("next-A", repo.read_file("a.txt")[2])
+        assert.is_false(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = ... })", { buf }))
+        h.action(screen, "view", "quit", "modified")
+        screen:await(function()
+          return screen:exec("return refresh_session() == nil")
+        end)
+        assert.is_true(screen:exec("return vim.lsp.inlay_hint.is_enabled({ bufnr = ... })", { buf }))
+      end)
+
       if backend == "native" then
         it("continues from the real watcher into polling after the process exits", function()
           write_a("working-A")

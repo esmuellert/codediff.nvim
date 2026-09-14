@@ -1,6 +1,6 @@
 local M = {}
 local Screen = require("tests.framework.screen")
-local helpers = require("tests.helpers")
+local fixture = require("tests.fixtures.refresh_repo")
 local watcher_path
 
 function M.native_watcher()
@@ -20,28 +20,22 @@ function M.native_watcher()
   return watcher_path
 end
 
-function M.repo()
-  local repo = helpers.create_temp_git_repo()
-  repo.write_file("a.txt", { "start", "base-A", "context", "end", "tail" })
-  repo.write_file("b.txt", { "start", "base-B", "end" })
-  repo.write_file("background.txt", { "unchanged" })
-  repo.git("add -A")
-  repo.git("commit -m base")
-  repo.base = vim.trim(repo.git("rev-parse HEAD"))
-  return repo
+function M.repo(profile, options)
+  return fixture.new(profile, options)
 end
 
-function M.screen(backend, layout)
+function M.screen(backend, layout, options)
   local binary = backend == "native" and M.native_watcher() or ""
   local screen = Screen.new(120, 40)
   screen.backend = backend
   screen:exec(
     [[
-    local backend, layout, binary = ...
-    require('codediff').setup({
+    local backend, layout, binary, options = ...
+    vim.g.mapleader = ' '
+    require('codediff').setup(vim.tbl_deep_extend('force', {
       diff = { layout = layout, jump_to_first_change = false, compute_moves = false },
       explorer = { width = 28 },
-    })
+    }, options))
     vim.o.hidden = true
     vim.o.autoread = true
     vim.o.number = false
@@ -132,21 +126,21 @@ function M.screen(backend, layout)
       return require('codediff.ui.lifecycle').get_session(refresh_test.tab or vim.api.nvim_get_current_tabpage())
     end
   ]],
-    { backend, layout or "side-by-side", binary }
+    { backend, layout or "side-by-side", binary, options or {} }
   )
   return screen
 end
 
-function M.open(screen, repo, command, expected)
+function M.open(screen, repo, command, expected, source_file)
   screen:exec(
     [[
-    local root, command = ...
+    local root, command, source_file = ...
     refresh_test.tab = nil
     vim.cmd('cd ' .. vim.fn.fnameescape(root))
-    vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/a.txt'))
+    vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. source_file))
     vim.cmd(command)
   ]],
-    { repo.dir, command or "CodeDiff" }
+    { repo.dir, command or "CodeDiff", source_file or "a.txt" }
   )
   screen:await(function()
     M.assert_no_errors(screen)
@@ -307,21 +301,27 @@ function M.watch_grid(screen)
   end
 end
 
-function M.select(screen, filename)
+function M.panel_cursor(screen, text, group)
   screen:exec(
     [[
+    local text, group = ...
     local panel = refresh_session().panel.view
     vim.api.nvim_set_current_win(panel.winid)
-    for row, text in ipairs(vim.api.nvim_buf_get_lines(panel.bufnr, 0, -1, false)) do
-      if text:find((...), 1, true) then
+    for row, line in ipairs(vim.api.nvim_buf_get_lines(panel.bufnr, 0, -1, false)) do
+      local node = panel.tree:get_node(row)
+      if line:find(text, 1, true) and (not group or node and node.data and node.data.group == group) then
         vim.api.nvim_win_set_cursor(panel.winid, { row, 0 })
         return
       end
     end
-    error('file is absent from the rendered panel')
+    error('entry is absent from the rendered panel: ' .. text)
   ]],
-    { filename }
+    { text, group }
   )
+end
+
+function M.select(screen, filename, group)
+  M.panel_cursor(screen, filename, group)
   M.feed(screen, "<CR>")
 end
 
@@ -362,6 +362,170 @@ function M.feed(screen, keys)
   screen:await(function()
     return screen:exec("return refresh_test.keys_done")
   end, "keys did not finish")
+end
+
+function M.focus(screen, side, line)
+  screen:exec(
+    [[
+    local side, line = ...
+    local s = refresh_session()
+    local win = side == 'panel' and s.panel.view.winid or s[side .. '_win']
+    assert(win and vim.api.nvim_win_is_valid(win), 'pane is not visible: ' .. side)
+    vim.api.nvim_set_current_win(win)
+    if line then vim.api.nvim_win_set_cursor(win, { line, 0 }) end
+  ]],
+    { side, line }
+  )
+end
+
+function M.key(screen, group, action)
+  return screen:exec(
+    [[
+    local group, action = ...
+    local key = require('codediff.config').options.keymaps[group][action]
+    assert(type(key) == 'string', 'missing key binding: ' .. group .. '.' .. action)
+    return key:gsub('<[Ll]eader>', vim.g.mapleader or '\\'):gsub('<[Ll]ocal[Ll]eader>', vim.g.maplocalleader or '\\')
+  ]],
+    { group, action }
+  )
+end
+
+function M.action(screen, group, action, side, line)
+  if side then
+    M.focus(screen, side, line)
+  end
+  M.feed(screen, M.key(screen, group, action))
+end
+
+function M.grid_contains(screen, text)
+  for row = 1, screen.height do
+    if screen:text(row, 1, screen.width):find(text, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+function M.panel_contains(screen, text)
+  local rect = screen:exec([[
+    local panel = refresh_session().panel.view
+    if panel.is_hidden or not panel.winid or not vim.api.nvim_win_is_valid(panel.winid) then return nil end
+    local p = vim.api.nvim_win_get_position(panel.winid)
+    return { p[1] + 1, p[2] + 1, vim.api.nvim_win_get_height(panel.winid), vim.api.nvim_win_get_width(panel.winid) }
+  ]])
+  if not rect then
+    return false
+  end
+  for row = rect[1], rect[1] + rect[3] - 1 do
+    if screen:text(row, rect[2], rect[4]):find(text, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+function M.expect_panel(screen, text, present)
+  screen:await(function()
+    M.assert_no_errors(screen)
+    return M.panel_contains(screen, text) == (present ~= false)
+  end, "panel grid did not " .. (present == false and "remove " or "show ") .. text)
+end
+
+function M.reveal(screen, side, text)
+  M.focus(screen, side)
+  screen:exec(
+    [[
+    local text = ...
+    for line, value in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+      if value:find(text, 1, true) then
+        vim.api.nvim_win_set_cursor(0, { line, 0 })
+        return
+      end
+    end
+    error('buffer does not contain ' .. text)
+  ]],
+    { text }
+  )
+  M.feed(screen, "zz")
+  M.expect_text(screen, side, text)
+end
+
+-- Confirm through Neovim's actual dialog, without replacing vim.fn.confirm.
+function M.confirm(screen, keys, prompt, answer)
+  screen:input(keys)
+  screen:await(function()
+    return M.grid_contains(screen, prompt)
+  end, "confirmation prompt was not rendered")
+  screen:input(answer)
+  M.feed(screen, "")
+end
+
+function M.expect_lines(screen, side, expected)
+  screen:await(function()
+    M.assert_no_errors(screen)
+    local panes = M.panes(screen)
+    return panes[side] and vim.deep_equal(expected, panes[side].lines)
+  end, side .. " contents did not match the fixture expectation")
+end
+
+function M.cell_for(screen, side, text)
+  local rect = screen:exec(
+    [[
+    local s = refresh_session()
+    local win = s[(...) .. '_win']
+    if not win or not vim.api.nvim_win_is_valid(win) then return nil end
+    local p = vim.api.nvim_win_get_position(win)
+    return { p[1] + 1, p[2] + 1, vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }
+  ]],
+    { side }
+  )
+  if not rect then
+    return
+  end
+  for row = rect[1], rect[1] + rect[3] - 1 do
+    local value = screen:text(row, rect[2], rect[4])
+    local first = value:find(text, 1, true)
+    if first then
+      return row, rect[2] + vim.fn.strdisplaywidth(value:sub(1, first - 1))
+    end
+  end
+end
+
+function M.window_text(screen, win)
+  local rect = screen:exec(
+    [[
+    local win = ...
+    if not vim.api.nvim_win_is_valid(win) then return nil end
+    local p = vim.api.nvim_win_get_position(win)
+    local border = vim.api.nvim_win_get_config(win).border
+    local top = border and border[2] and border[2] ~= '' and 1 or 0
+    local left = border and border[8] and border[8] ~= '' and 1 or 0
+    return { p[1] + 1 + top, p[2] + 1 + left, vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }
+  ]],
+    { win }
+  )
+  if not rect then
+    return ""
+  end
+  local rows = {}
+  for row = rect[1], rect[1] + rect[3] - 1 do
+    rows[#rows + 1] = screen:text(row, rect[2], rect[4])
+  end
+  return table.concat(rows):gsub("%s+$", "")
+end
+
+function M.close(screen, repo)
+  local ok, err = true, nil
+  if screen then
+    if screen.exit_code == nil then
+      ok, err = pcall(M.assert_no_errors, screen)
+    end
+    screen:close()
+  end
+  if repo then
+    repo.cleanup()
+  end
+  assert(ok, err)
 end
 
 return M

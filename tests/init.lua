@@ -11,6 +11,14 @@ vim.env.CODEDIFF_WATCHER_NO_AUTO_INSTALL = "1"
 -- Disable ShaDa (fixes Windows permission issues in CI)
 vim.opt.shadafile = "NONE"
 
+-- Never inherit a hook's repository/index overrides or user Git filters into
+-- fixture operations. Every test process and embedded UI gets the same sandbox.
+for _, name in ipairs({ "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES" }) do
+  vim.env[name] = nil
+end
+vim.env.GIT_CONFIG_NOSYSTEM = "1"
+vim.env.GIT_CONFIG_GLOBAL = vim.fn.tempname() .. "_gitconfig"
+
 -- Keep git line-ending-neutral for every throwaway repository the specs create.
 --
 -- GitHub's Windows runners ship `core.autocrlf=true` in the global git config, so
@@ -22,8 +30,8 @@ vim.opt.shadafile = "NONE"
 -- real output and turns green assertions red on Windows only.
 --
 -- `GIT_CONFIG_COUNT` (git 2.31+) injects the override into every git process this
--- Neovim spawns, which covers the plugin's own calls as well as the several
--- helpers that run `git init` themselves. Environment config outranks the system,
+-- Neovim spawns, covering both the plugin's calls and the shared repository
+-- fixture factory. Environment config outranks the system,
 -- global and repository config files.
 vim.env.GIT_CONFIG_COUNT = "1"
 vim.env.GIT_CONFIG_KEY_0 = "core.autocrlf"
@@ -35,11 +43,7 @@ vim.opt.rtp:prepend(cwd)
 
 -- Ensure lua/ directory is in package.path for direct requires. Also add the
 -- repository root so `require("tests.framework")` resolves to tests/framework/init.lua.
-package.path = package.path
-  .. ";" .. cwd .. "/lua/?.lua"
-  .. ";" .. cwd .. "/lua/?/init.lua"
-  .. ";" .. cwd .. "/?.lua"
-  .. ";" .. cwd .. "/?/init.lua"
+package.path = package.path .. ";" .. cwd .. "/lua/?.lua" .. ";" .. cwd .. "/lua/?/init.lua" .. ";" .. cwd .. "/?.lua" .. ";" .. cwd .. "/?/init.lua"
 
 vim.opt.swapfile = false
 
@@ -61,7 +65,7 @@ vim.opt.swapfile = false
 vim.g.loaded_autoread = 1
 
 -- Load plugin files (for integration tests that need commands)
-vim.cmd('runtime! plugin/*.lua plugin/*.vim')
+vim.cmd("runtime! plugin/*.lua plugin/*.vim")
 
 -- Setup plugin
 require("codediff").setup()

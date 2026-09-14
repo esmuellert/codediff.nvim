@@ -52,7 +52,7 @@ end
 
 describe("pull request fetching", function()
   local repo
-  local remote
+  local remote, remote_fixture
   local base_revision
   local head_revision
   local merge_revision
@@ -60,9 +60,8 @@ describe("pull request fetching", function()
 
   before_each(function()
     repo = h.create_temp_git_repo()
-    remote = h.create_temp_dir()
-    run(remote, { "init", "--bare" })
-    run(remote, { "symbolic-ref", "HEAD", "refs/heads/main" })
+    remote_fixture = require("tests.framework.repository").new({ bare = true, unborn = true })
+    remote = remote_fixture.dir
 
     repo.write_file("review.txt", { "base" })
     repo.git("add review.txt")
@@ -101,8 +100,9 @@ describe("pull request fetching", function()
     if repo then
       repo.cleanup()
     end
-    if remote then
-      vim.fn.delete(remote, "rf")
+    if remote_fixture then
+      remote_fixture.cleanup()
+      remote_fixture = nil
     end
   end)
 

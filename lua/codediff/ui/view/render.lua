@@ -205,8 +205,11 @@ function M.update(session, data, changes)
   local old_original, old_modified = session.original_bufnr, session.modified_bufnr
   local ok, err = xpcall(function()
     if changes.inputs then
-      helpers.update_content(session, "original", data.sources.original, data.original)
-      helpers.update_content(session, "modified", data.sources.modified, data.modified)
+      local original = helpers.update_content(session, "original", data.sources.original, data.original)
+      local modified = helpers.update_content(session, "modified", data.sources.modified, data.modified)
+      if original ~= old_original or modified ~= old_modified then
+        require("codediff.ui.lifecycle").update_buffers(session.tabpage, original, modified)
+      end
     end
     if session.result_bufnr then
       local diffs =
@@ -226,7 +229,6 @@ function M.update(session, data, changes)
     session.changedtick.original = api.nvim_buf_get_changedtick(session.original_bufnr)
     session.changedtick.modified = api.nvim_buf_get_changedtick(session.modified_bufnr)
     if old_original ~= session.original_bufnr or old_modified ~= session.modified_bufnr then
-      require("codediff.ui.lifecycle").update_buffers(session.tabpage, session.original_bufnr, session.modified_bufnr)
       if session.reapply_keymaps then
         session.reapply_keymaps()
       end

@@ -434,7 +434,7 @@ describe("Git read-only queries do not write the index (#494)", function()
   end
 
   local function index_bytes(repo)
-    return table.concat(vim.fn.readfile(repo.dir .. "/.git/index", "b"), "\n")
+    return table.concat(vim.fn.readfile(repo.git_path("index"), "b"), "\n")
   end
 
   it("get_status leaves .git/index untouched", function()
@@ -463,7 +463,7 @@ describe("Git read-only queries do not write the index (#494)", function()
   -- error to the user.
   it("read-only queries still succeed while another git process holds index.lock", function()
     local repo = make_repo_with_stale_index()
-    local lock = repo.dir .. "/.git/index.lock"
+    local lock = repo.git_path("index.lock")
     vim.fn.writefile({ "" }, lock)
 
     local done, err = false, nil

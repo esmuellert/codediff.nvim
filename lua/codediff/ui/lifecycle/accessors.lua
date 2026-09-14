@@ -115,6 +115,18 @@ function M.find_tabpage_by_buffer(bufnr)
   return nil
 end
 
+--- Whether another live session still owns this buffer, including hidden tabs.
+function M.is_buffer_shared(bufnr, except_tabpage)
+  for tabpage, sess in pairs(get_active_diffs()) do
+    if tabpage ~= except_tabpage and vim.api.nvim_tabpage_is_valid(tabpage) then
+      if sess.original_bufnr == bufnr or sess.modified_bufnr == bufnr or sess.result_bufnr == bufnr then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 --- Check if original buffer is virtual
 function M.is_original_virtual(tabpage)
   local active_diffs = get_active_diffs()
@@ -321,11 +333,13 @@ function M.update_buffers(tabpage, original_bufnr, modified_bufnr)
   local state = require("codediff.ui.lifecycle.state")
   local gutter_signs = require("codediff.ui.gutter_signs")
 
-  if sess.original_bufnr ~= original_bufnr and sess.original_bufnr ~= modified_bufnr then
+  if sess.original_bufnr ~= original_bufnr and sess.original_bufnr ~= modified_bufnr and not M.is_buffer_shared(sess.original_bufnr, tabpage) then
     gutter_signs.clear_buffer(sess.original_bufnr)
+    state.restore_buffer_state(sess.original_bufnr, sess.original_state)
   end
-  if sess.modified_bufnr ~= original_bufnr and sess.modified_bufnr ~= modified_bufnr then
+  if sess.modified_bufnr ~= original_bufnr and sess.modified_bufnr ~= modified_bufnr and not M.is_buffer_shared(sess.modified_bufnr, tabpage) then
     gutter_signs.clear_buffer(sess.modified_bufnr)
+    state.restore_buffer_state(sess.modified_bufnr, sess.modified_state)
   end
 
   -- Hand mappings back to any buffer that is leaving the session. Without this
@@ -348,12 +362,18 @@ function M.update_buffers(tabpage, original_bufnr, modified_bufnr)
     sess.keymaps:detach_buffers_except(keep)
   end
 
+  local saved = { [sess.original_bufnr] = sess.original_state, [sess.modified_bufnr] = sess.modified_state }
+  local original_state = saved[original_bufnr] or state.save_buffer_state(original_bufnr)
+  local modified_state = saved[modified_bufnr] or state.save_buffer_state(modified_bufnr)
   sess.original_bufnr = original_bufnr
   sess.modified_bufnr = modified_bufnr
 
-  -- Save buffer states for new buffers (critical for suspend/resume!)
-  sess.original_state = state.save_buffer_state(original_bufnr)
-  sess.modified_state = state.save_buffer_state(modified_bufnr)
+  -- Keep the user's original settings when only the other pane changes.
+  sess.original_state, sess.modified_state = original_state, modified_state
+  if require("codediff.config").options.diff.disable_inlay_hints and vim.lsp.inlay_hint then
+    vim.lsp.inlay_hint.enable(false, { bufnr = original_bufnr })
+    vim.lsp.inlay_hint.enable(false, { bufnr = modified_bufnr })
+  end
 
   return true
 end

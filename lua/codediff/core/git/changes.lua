@@ -61,7 +61,7 @@ function M.get_status(git_root, callback, pathspec)
   -- Trailing `-- <paths>` scopes the status to a pathspec (nil/empty = all files).
   -- `-u<mode>` (untracked-files scan; #389) is read from explorer.untracked config.
   run_git_async(
-    vim.list_extend({ "status", "--porcelain", "-u" .. untracked_mode(), "-M", "--" }, pathspec or {}), -- -M to detect renames
+    vim.list_extend({ "status", "--porcelain", "-z", "-u" .. untracked_mode(), "-M", "--" }, pathspec or {}), -- -M to detect renames
     { cwd = git_root, no_optional_locks = true },
     function(err, output)
       if err then
@@ -75,15 +75,21 @@ function M.get_status(git_root, callback, pathspec)
         conflicts = {},
       }
 
-      for line in output:gmatch("[^\r\n]+") do
+      local entries = vim.split(output, "\0", { plain = true, trimempty = true })
+      local i = 1
+      while i <= #entries do
+        local line = entries[i]
         if #line >= 3 then
           local index_status = line:sub(1, 1)
           local worktree_status = line:sub(2, 2)
-          local path_part = unquote_path(line:sub(4))
+          local path, old_path = line:sub(4), nil
 
-          -- Handle renames: "old_path -> new_path"
-          local old_path, new_path = path_part:match("^(.+) %-> (.+)$")
-          local path = old_path and new_path or path_part -- Use new_path for display if rename
+          -- Porcelain -z provides raw paths; renamed entries put the old name
+          -- in the following record, without quoting or an ambiguous arrow.
+          if index_status == "R" or index_status == "C" or worktree_status == "R" or worktree_status == "C" then
+            i = i + 1
+            old_path = entries[i]
+          end
           local is_rename = old_path ~= nil
 
           -- Check for merge conflicts first (takes priority)
@@ -113,6 +119,7 @@ function M.get_status(git_root, callback, pathspec)
             end
           end
         end
+        i = i + 1
       end
 
       callback(nil, result)
@@ -300,7 +307,7 @@ end
 -- callback: function(err, files) where files is array of:
 --   { path, status, old_path }
 function M.get_commit_files(commit_hash, git_root, callback)
-  run_git_async({ "diff-tree", "--no-commit-id", "--name-status", "-r", "-M", commit_hash }, { cwd = git_root }, function(err, output)
+  run_git_async({ "diff-tree", "--root", "--no-commit-id", "--name-status", "-r", "-M", commit_hash }, { cwd = git_root }, function(err, output)
     if err then
       callback(err, nil)
       return
