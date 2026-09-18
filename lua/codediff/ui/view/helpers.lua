@@ -159,9 +159,10 @@ function M.open_real_file(win, target)
     return bufnr
   end
 
-  vim.api.nvim_set_current_win(win)
-  vim.cmd("edit " .. vim.fn.fnameescape(target))
-  return vim.api.nvim_get_current_buf()
+  return vim.api.nvim_win_call(win, function()
+    vim.cmd("edit " .. vim.fn.fnameescape(target))
+    return vim.api.nvim_get_current_buf()
+  end)
 end
 
 -- Replace generated content without changing the buffer's editing permissions.
