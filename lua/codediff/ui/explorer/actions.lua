@@ -58,7 +58,7 @@ function M.navigate_next(explorer)
 
   -- Update tree selection visually (switch to explorer window temporarily)
   local current_win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_is_valid(explorer.winid) then
+  if explorer.winid and vim.api.nvim_win_is_valid(explorer.winid) then
     local line = find_node_line(explorer, next_file.data.path, next_file.data.group)
     if line then
       vim.api.nvim_set_current_win(explorer.winid)
@@ -114,7 +114,7 @@ function M.navigate_prev(explorer)
 
   -- Update tree selection visually (switch to explorer window temporarily)
   local current_win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_is_valid(explorer.winid) then
+  if explorer.winid and vim.api.nvim_win_is_valid(explorer.winid) then
     local line = find_node_line(explorer, prev_file.data.path, prev_file.data.group)
     if line then
       vim.api.nvim_set_current_win(explorer.winid)
