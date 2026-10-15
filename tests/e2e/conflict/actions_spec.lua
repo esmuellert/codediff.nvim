@@ -175,6 +175,21 @@ for _, backend in ipairs({ "native", "polling" }) do
           assert.equals("", repo.command({ "ls-files", "--unmerged", "merge.txt" }))
           assert.same(expected("current", true), repo.blob_lines(":0", "merge.txt"))
         end)
+
+        it("[C16] hover previews the focused input's conflict against the merge base", function()
+          act("hover")
+          local hover = screen:exec("return refresh_session()._hover_win")
+          assert.is_not_nil(hover)
+          screen:await(function()
+            return h.window_text(screen, hover):find("base%-one%s+current%-one") ~= nil
+          end, "base line was not rendered above the current side")
+          assert.equals(" Ours (Current) vs Base ", screen:exec("return vim.api.nvim_win_get_config(...).title[1][1]", { hover }))
+          h.feed(screen, "j")
+          screen:await(function()
+            return not screen:exec("return vim.api.nvim_win_is_valid(...)", { hover })
+          end, "hover did not close on cursor movement")
+          h.expect_lines(screen, "result", expected())
+        end)
       end)
     end
   end
