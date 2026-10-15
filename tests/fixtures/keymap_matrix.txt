@@ -221,6 +221,7 @@ panel    n  zc             Close fold
 panel    n  zo             Open fold
 
 ## conflict
+original n  K              Preview hunk against merge base
 original n  [c             Previous hunk
 original n  [x             Previous conflict
 original n  \cB            Accept ALL both changes
@@ -244,6 +245,7 @@ original n  t              Toggle diff layout
 original x  ih             Hunk textobject
 original o  ih             Hunk textobject
 original v  ih             Hunk textobject
+modified n  K              Preview hunk against merge base
 modified n  [c             Previous hunk
 modified n  [x             Previous conflict
 modified n  \cB            Accept ALL both changes

@@ -381,6 +381,7 @@ Setup entry point:
         prev_conflict = "[x",
         diffget_incoming = "2do",
         diffget_current = "3do",
+        hover = "K",
       },
     },
   })
