@@ -103,6 +103,8 @@ local EXPECT = {
     fold_toggle_recursive = { "explorer" },
     fold_open_all = { "explorer" },
     fold_close_all = { "explorer" },
+    scroll_down = { "explorer" },
+    scroll_up = { "explorer" },
   },
   history = {
     select = { "history" },
@@ -116,6 +118,8 @@ local EXPECT = {
     fold_toggle_recursive = { "history" },
     fold_open_all = { "history" },
     fold_close_all = { "history" },
+    scroll_down = { "history" },
+    scroll_up = { "history" },
   },
   conflict = {
     accept_incoming = { "conflict" },

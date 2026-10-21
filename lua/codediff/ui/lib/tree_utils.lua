@@ -42,7 +42,7 @@ function M.get_root_node(tree)
   return find_root(node)
 end
 
--- Setup all fold-related keymaps on a tree buffer.
+-- Setup fold and diff-scroll keymaps on a tree buffer.
 -- @param opts table { tree, keymaps, bufnr, tabpage }
 function M.setup_fold_keymaps(opts)
   local tree = opts.tree
@@ -138,6 +138,18 @@ function M.setup_fold_keymaps(opts)
     update_tree_view(root)
   end
 
+  local function scroll_diff(key)
+    return function()
+      local orig_win, mod_win = require("codediff.ui.lifecycle").get_windows(tabpage)
+      local win = mod_win or orig_win
+      if win and vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_call(win, function()
+          vim.cmd("normal! " .. vim.keycode(key))
+        end)
+      end
+    end
+  end
+
   local fold_bindings = {
     { key = "fold_open", fn = fold_open, desc = "Open fold" },
     { key = "fold_open_recursive", fn = fold_open_recursive, desc = "Open fold recursively" },
@@ -147,6 +159,8 @@ function M.setup_fold_keymaps(opts)
     { key = "fold_toggle_recursive", fn = fold_toggle_recursive, desc = "Toggle fold recursively" },
     { key = "fold_open_all", fn = fold_open_all, desc = "Open all folds" },
     { key = "fold_close_all", fn = fold_close_all, desc = "Close all folds" },
+    { key = "scroll_down", fn = scroll_diff("<C-d>"), desc = "Scroll diff down" },
+    { key = "scroll_up", fn = scroll_diff("<C-u>"), desc = "Scroll diff up" },
   }
   local map_options = { noremap = true, silent = true, nowait = true }
   local lifecycle = require("codediff.ui.lifecycle")

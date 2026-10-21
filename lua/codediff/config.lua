@@ -147,6 +147,8 @@ M.defaults = {
       fold_toggle_recursive = "zA", -- Toggle fold recursively
       fold_open_all = "zR", -- Open all folds in tree
       fold_close_all = "zM", -- Close all folds in tree
+      scroll_down = "<C-d>", -- Scroll diff panes down half a page
+      scroll_up = "<C-u>", -- Scroll diff panes up half a page
     },
     history = {
       select = "<CR>", -- Select commit/file or toggle expand
@@ -161,6 +163,8 @@ M.defaults = {
       fold_toggle_recursive = "zA",
       fold_open_all = "zR",
       fold_close_all = "zM",
+      scroll_down = "<C-d>",
+      scroll_up = "<C-u>",
     },
     -- Conflict mode keymaps (only active in merge conflict views)
     conflict = {
