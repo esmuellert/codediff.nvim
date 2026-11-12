@@ -159,6 +159,9 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
     end
   end
 
+  -- Optional fourth pane: the merge base, in the middle of the top row.
+  require("codediff.ui.conflict.view.base").sync(tabpage)
+
   local conflict = require("codediff.ui.conflict")
   conflict.attach_gutter(original_win, modified_win)
 

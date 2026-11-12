@@ -40,6 +40,7 @@ M.defaults = {
     conflict_result_position = "bottom", -- Position of result buffer in conflict view: "bottom" or "center"
     conflict_result_height = 30, -- Height of result buffer in bottom layout (percentage of total height)
     conflict_result_width_ratio = { 1, 1, 1 }, -- Width ratio for center layout panes {left, center, right} (e.g., {1, 2, 1} for wider result)
+    conflict_show_base = false, -- Show the merge base (:1) as a 4th conflict pane in the middle of the top row (toggle with keymaps.conflict.toggle_base)
     cycle_next_hunk = true, -- Wrap around when navigating hunks (]c/[c): true = cycle, false = stop at first/last
     cycle_next_file = true, -- Wrap around when navigating files (]f/[f): true = cycle, false = stop at first/last
     cycle_hunks_across_files = false, -- ]c/[c at file boundary jumps to first/last hunk of next/prev file (explorer/history mode)
@@ -178,6 +179,7 @@ M.defaults = {
       -- Vimdiff-style numbered diffget (from result buffer)
       diffget_incoming = "2do", -- Get hunk from incoming (left/theirs) buffer
       diffget_current = "3do", -- Get hunk from current (right/ours) buffer
+      toggle_base = "<leader>cm", -- Show/hide the merge base (:1) pane
     },
   },
 }

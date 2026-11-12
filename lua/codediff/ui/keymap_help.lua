@@ -152,6 +152,7 @@ local function build_sections(keymaps, is_bound, shape)
         { ckm.prev_conflict, "Previous conflict" },
         { ckm.diffget_incoming, "Get hunk from incoming" },
         { ckm.diffget_current, "Get hunk from current" },
+        { ckm.toggle_base, "Toggle merge base pane" },
       }, is_bound)
     )
   end
