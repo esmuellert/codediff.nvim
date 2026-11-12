@@ -166,6 +166,7 @@ Both methods automatically place the library in the plugin root directory.
       conflict_result_position = "bottom", -- "bottom" (default): result below diff panes or "center": result between diff panes (three columns)
       conflict_result_height = 30,         -- Height of result pane in bottom layout (% of total height)
       conflict_result_width_ratio = { 1, 1, 1 }, -- Width ratio for center layout panes {left, center, right} (e.g., {1, 2, 1} for wider result)
+      conflict_show_base = false,          -- Show the merge base (:1) as a 4th pane in the middle of the top row
       cycle_next_hunk = true,             -- Wrap around when navigating hunks (]c/[c): false to stop at first/last
       cycle_next_file = true,             -- Wrap around when navigating files (]f/[f): false to stop at first/last
       cycle_hunks_across_files = false,   -- ]c/[c at file boundary hops to first/last hunk of next/prev file (explorer/history)
@@ -302,6 +303,7 @@ Both methods automatically place the library in the plugin root directory.
         prev_conflict = "[x",            -- Jump to previous conflict
         diffget_incoming = "2do",        -- Get hunk from incoming (left/theirs) buffer
         diffget_current = "3do",         -- Get hunk from current (right/ours) buffer
+        toggle_base = "<leader>cm",      -- Show/hide the merge base (:1) pane
       },
     },
   },
