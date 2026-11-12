@@ -167,6 +167,74 @@ describe("Merge Alignment", function()
   end)
 end)
 
+describe("Merge Alignment with a visible Base pane", function()
+  local include_base = true
+
+  local function make_change(orig_start, orig_end, mod_start, mod_end)
+    return {
+      original = { start_line = orig_start, end_line = orig_end },
+      modified = { start_line = mod_start, end_line = mod_end },
+      inner_changes = {},
+    }
+  end
+
+  local function total(fillers)
+    local sum = 0
+    for _, filler in ipairs(fillers or {}) do
+      sum = sum + filler.count
+    end
+    return sum
+  end
+
+  local function displayed_rows(lines, fillers)
+    return #lines + total(fillers)
+  end
+
+  it("omits base fillers unless requested", function()
+    local diff = { changes = { make_change(2, 5, 2, 3) } }
+    local fillers = merge_alignment.compute_merge_fillers_and_conflicts(diff, diff, { "a", "b", "c", "d", "e", "f" }, { "a", "X", "e", "f" }, { "a", "X", "e", "f" })
+    assert.is_nil(fillers.base_fillers)
+    assert.equal(0, total(fillers.left_fillers))
+    assert.equal(0, total(fillers.right_fillers))
+  end)
+
+  it("pads both inputs when Base is taller than either side", function()
+    local base_lines = { "a", "b", "c", "d", "e", "f" }
+    local left_lines = { "a", "X", "e", "f" }
+    local right_lines = { "a", "Y", "e", "f" }
+    local diff1 = { changes = { make_change(2, 5, 2, 3) } }
+    local diff2 = { changes = { make_change(2, 5, 2, 3) } }
+
+    local fillers = merge_alignment.compute_merge_fillers_and_conflicts(diff1, diff2, base_lines, left_lines, right_lines, include_base)
+
+    assert.equal(0, total(fillers.base_fillers))
+    assert.equal(2, total(fillers.left_fillers))
+    assert.equal(2, total(fillers.right_fillers))
+    assert.equal(displayed_rows(base_lines, fillers.base_fillers), displayed_rows(left_lines, fillers.left_fillers))
+    assert.equal(displayed_rows(base_lines, fillers.base_fillers), displayed_rows(right_lines, fillers.right_fillers))
+  end)
+
+  it("pads Base when the inputs grew", function()
+    local base_lines = { "a", "b", "c", "d" }
+    local left_lines = { "a", "L1", "L2", "L3", "c", "d" }
+    local right_lines = { "a", "R1", "R2", "c", "d" }
+    local diff1 = { changes = { make_change(2, 3, 2, 5) } }
+    local diff2 = { changes = { make_change(2, 3, 2, 4) } }
+
+    local fillers = merge_alignment.compute_merge_fillers_and_conflicts(diff1, diff2, base_lines, left_lines, right_lines, include_base)
+
+    assert.equal(2, total(fillers.base_fillers))
+    assert.equal(0, total(fillers.left_fillers))
+    assert.equal(1, total(fillers.right_fillers))
+    assert.equal(6, displayed_rows(base_lines, fillers.base_fillers))
+    assert.equal(6, displayed_rows(right_lines, fillers.right_fillers))
+    for _, filler in ipairs(fillers.base_fillers) do
+      assert.is_number(filler.after_line)
+      assert.is_true(filler.count > 0)
+    end
+  end)
+end)
+
 describe("compute_auto_merged_result", function()
   local function make_diff(changes)
     return { changes = changes or {} }

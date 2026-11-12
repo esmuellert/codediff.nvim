@@ -457,16 +457,23 @@ end
 -- base_lines: array of base content lines
 -- left_lines_content: array of input1 content lines
 -- right_lines_content: array of input2 content lines
-function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
+-- base_bufnr: optional buffer showing base (:1); when given it is aligned with both inputs
+function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content, base_bufnr)
   local merge_alignment = require("codediff.ui.conflict.merge")
+  if base_bufnr and not vim.api.nvim_buf_is_valid(base_bufnr) then
+    base_bufnr = nil
+  end
 
   -- Clear existing highlights and fillers
-  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_highlight, 0, -1)
-  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_filler, 0, -1)
-  vim.api.nvim_buf_clear_namespace(left_bufnr, ns_conflict, 0, -1)
-  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_highlight, 0, -1)
-  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_filler, 0, -1)
-  vim.api.nvim_buf_clear_namespace(right_bufnr, ns_conflict, 0, -1)
+  local rendered_buffers = { left_bufnr, right_bufnr }
+  if base_bufnr then
+    table.insert(rendered_buffers, base_bufnr)
+  end
+  for _, bufnr in ipairs(rendered_buffers) do
+    vim.api.nvim_buf_clear_namespace(bufnr, ns_highlight, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, ns_filler, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, ns_conflict, 0, -1)
+  end
   gutter_signs.clear_buffer(left_bufnr)
   gutter_signs.clear_buffer(right_bufnr)
 
@@ -475,8 +482,40 @@ function M.render_merge_view(left_bufnr, right_bufnr, base_to_left_diff, base_to
   local right_lines = vim.api.nvim_buf_get_lines(right_bufnr, 0, -1, false)
 
   -- Compute alignments to identify conflict regions (where both sides have changes)
+  local include_base = base_bufnr ~= nil
   local alignments, conflict_left_changes, conflict_right_changes =
-    merge_alignment.compute_merge_fillers_and_conflicts(base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content)
+    merge_alignment.compute_merge_fillers_and_conflicts(base_to_left_diff, base_to_right_diff, base_lines, left_lines_content, right_lines_content, include_base)
+
+  -- Base shows the text each side replaced in conflict regions. Both sides
+  -- often replaced the same base range, so each range is highlighted once.
+  if base_bufnr then
+    local base_buf_lines = vim.api.nvim_buf_get_lines(base_bufnr, 0, -1, false)
+    local highlighted = {}
+    local function first_time(kind, range)
+      local key = table.concat({ kind, range.start_line, range.start_col or 0, range.end_line, range.end_col or 0 }, ":")
+      if highlighted[key] then
+        return false
+      end
+      highlighted[key] = true
+      return true
+    end
+    for _, changes in ipairs({ conflict_left_changes, conflict_right_changes }) do
+      for _, change in ipairs(changes) do
+        local range = change.original
+        if range and range.end_line > range.start_line and first_time("line", range) then
+          apply_line_highlights(base_bufnr, range, "CodeDiffLineDelete")
+        end
+        for _, inner in ipairs(change.inner_changes or {}) do
+          if inner.original and not is_empty_range(inner.original) and first_time("char", inner.original) then
+            apply_char_highlight(base_bufnr, inner.original, "CodeDiffCharDelete", base_buf_lines)
+          end
+        end
+      end
+    end
+    for _, filler in ipairs(alignments.base_fillers or {}) do
+      filler_renderer.place(base_bufnr, filler.after_line - 1, filler.count)
+    end
+  end
 
   -- Render highlights ONLY for conflict regions (where both left and right modified the same base region)
   -- This matches VSCode's behavior of only highlighting conflicting changes

@@ -184,9 +184,7 @@ local function render_conflict_view(ctx)
         base_lines,
         ctx.original_lines,
         ctx.modified_lines,
-        original_win,
-        modified_win,
-        config.options.diff.jump_to_first_change
+        { original_win = original_win, modified_win = modified_win, auto_scroll_to_first_hunk = config.options.diff.jump_to_first_change }
       )
       if not conflict_diffs then
         return

@@ -13,11 +13,15 @@ local diff_module = require("codediff.core.diff")
 -- @param base_lines table: Base content (:1:)
 -- @param original_lines table: Incoming content (:3:)
 -- @param modified_lines table: Current content (:2:)
--- @param original_win number: Left window
--- @param modified_win number: Right window
--- @param auto_scroll_to_first_hunk boolean: Whether to scroll to first change
+-- @param opts table?: Optional settings
+--   - original_win number?: Left window; with modified_win, set up scrollbind
+--   - modified_win number?: Right window
+--   - auto_scroll_to_first_hunk boolean?: Scroll both windows to the first change
+--   - base_bufnr number?: Base pane buffer (:1:) to align with both inputs, when shown
 -- @return table: { base_to_original_diff, base_to_modified_diff }
-function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, original_lines, modified_lines, original_win, modified_win, auto_scroll_to_first_hunk)
+function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, original_lines, modified_lines, opts)
+  opts = opts or {}
+  local original_win, modified_win = opts.original_win, opts.modified_win
   local diff_options = require("codediff.ui.view.render").diff_options()
 
   -- Compute base -> original (incoming) diff
@@ -35,7 +39,8 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
   end
 
   -- Render merge view with alignment and filler lines
-  local render_result = core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines)
+  local render_result =
+    core.render_merge_view(original_buf, modified_buf, base_to_original_diff, base_to_modified_diff, base_lines, original_lines, modified_lines, opts.base_bufnr)
 
   -- Enable native scrollbind for the two conflict input panes.
   if original_win and modified_win and vim.api.nvim_win_is_valid(original_win) and vim.api.nvim_win_is_valid(modified_win) then
@@ -47,7 +52,7 @@ function M.compute_and_render_conflict(original_buf, modified_buf, base_lines, o
     vim.wo[modified_win].scrollbind = true
 
     -- Scroll to first change in either buffer
-    if auto_scroll_to_first_hunk then
+    if opts.auto_scroll_to_first_hunk then
       local first_line = nil
       if #base_to_original_diff.changes > 0 then
         first_line = base_to_original_diff.changes[1].modified.start_line
