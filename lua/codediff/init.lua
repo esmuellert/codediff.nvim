@@ -6,8 +6,8 @@ function M.setup(opts)
   local config = require("codediff.config")
   config.setup(opts)
 
-  local render = require("codediff.ui")
-  render.setup_highlights()
+  local highlights = require("codediff.ui.highlights")
+  highlights.setup()
 end
 
 -- Navigate to next hunk in the current diff view
