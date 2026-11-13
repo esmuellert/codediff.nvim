@@ -171,6 +171,14 @@ Git merge tool:
   git config --global merge.tool codediff
   git config --global mergetool.codediff.cmd 'nvim "$MERGED" -c "CodeDiff merge \"$MERGED\""'
 <
+                                                      *codediff-merge-base*
+The conflict view shows Incoming, Current and Result. Press `<leader>cm`
+(`keymaps.conflict.toggle_base`) to show or hide a read-only Base pane with
+the common ancestor (:1), or set `diff.conflict_show_base = true` to open it
+by default. Base appears in the middle of the top row: between Incoming and
+Current when Result is at the bottom, and above Result when
+`conflict_result_position = "center"`. It scrolls with the inputs and is
+aligned line-for-line with them.
 
 ==============================================================================
 CONFIGURATION                                        *codediff-configuration*
@@ -274,6 +282,7 @@ Setup entry point:
       conflict_result_position = "bottom",
       conflict_result_height = 30,
       conflict_result_width_ratio = { 1, 1, 1 },
+      conflict_show_base = false,
       jump_to_first_change = true,
       highlight_added_deleted_files = false,
       highlight_priority = 100,
@@ -381,6 +390,7 @@ Setup entry point:
         prev_conflict = "[x",
         diffget_incoming = "2do",
         diffget_current = "3do",
+        toggle_base = "<leader>cm",
       },
     },
   })

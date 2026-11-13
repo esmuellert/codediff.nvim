@@ -450,6 +450,7 @@ function M.set_result(tabpage, result_bufnr, result_win)
       sess.keymaps:release_scope("conflict")
     end
     require("codediff.ui.conflict").teardown_gutter(tabpage)
+    require("codediff.ui.conflict.view.base").teardown(sess, false)
     sess.conflict_blocks = nil
     sess.result_base_lines = nil
     sess.merge_base_lines = nil

@@ -83,6 +83,9 @@ local function cleanup_diff(tabpage)
     vim.w[diff.result_win].codediff_restore = nil
   end
 
+  -- Base pane (optional fourth conflict pane) is a codediff-owned scratch buffer.
+  require("codediff.ui.conflict.view.base").teardown(diff, true)
+
   -- Clear conflict file tracking (buffers remain, just not tracked)
   diff.conflict_files = {}
 
@@ -95,7 +98,7 @@ local function cleanup_diff(tabpage)
 end
 
 local function owns_window(diff, winid)
-  if diff.original_win == winid or diff.modified_win == winid or diff.result_win == winid then
+  if diff.original_win == winid or diff.modified_win == winid or diff.result_win == winid or diff.base_win == winid then
     return true
   end
   local panel_view = diff.panel and diff.panel.view

@@ -32,6 +32,9 @@ local keymap = require("codediff.keymap")
 --     -- Conflict mode result buffer (3-way merge)
 --     result_bufnr = number?,  -- Real file buffer reset to BASE
 --     result_win = number?,    -- Bottom window for result
+--     base_bufnr = number?,    -- Scratch buffer holding the merge base (:1)
+--     base_win = number?,      -- Optional Base pane (middle of the top row)
+--     show_base = boolean?,    -- Session Base-pane preference; nil follows config
 --     conflict_files = table?, -- { [file_path] = true } tracks files opened in conflict mode
 --   }
 -- }

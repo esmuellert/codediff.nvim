@@ -228,6 +228,7 @@ original n  \cO            Accept ALL current changes
 original n  \cT            Accept ALL incoming changes
 original n  \cX            Discard ALL, reset to base
 original n  \cb            Accept both changes
+original n  \cm            Toggle merge base pane
 original n  \co            Accept current change
 original n  \ct            Accept incoming change
 original n  \cx            Discard changes (keep base)
@@ -251,6 +252,7 @@ modified n  \cO            Accept ALL current changes
 modified n  \cT            Accept ALL incoming changes
 modified n  \cX            Discard ALL, reset to base
 modified n  \cb            Accept both changes
+modified n  \cm            Toggle merge base pane
 modified n  \co            Accept current change
 modified n  \ct            Accept incoming change
 modified n  \cx            Discard changes (keep base)
@@ -276,6 +278,7 @@ result   n  \cO            Accept ALL current changes
 result   n  \cT            Accept ALL incoming changes
 result   n  \cX            Discard ALL, reset to base
 result   n  \cb            Accept both changes
+result   n  \cm            Toggle merge base pane
 result   n  \co            Accept current change
 result   n  \ct            Accept incoming change
 result   n  \cx            Discard changes (keep base)

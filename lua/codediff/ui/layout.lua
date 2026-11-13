@@ -67,6 +67,8 @@ function M.arrange(tabpage)
   end
 
   local has_result = result_win and vim.api.nvim_win_is_valid(result_win)
+  local base_win = session.base_win
+  local has_base = has_result and base_win and vim.api.nvim_win_is_valid(base_win)
 
   -- Step 2: Collect diff windows and sum their current widths
   -- In center layout, result is a sibling column — include it
@@ -74,9 +76,13 @@ function M.arrange(tabpage)
   local result_position = config.options.diff.conflict_result_position
   local result_is_center = has_result and result_position == "center"
 
+  -- The Base pane is a top-row column of its own in bottom layout, and shares
+  -- the middle column with Result in center layout.
   local available = vim.api.nvim_win_get_width(original_win) + vim.api.nvim_win_get_width(modified_win)
   if result_is_center then
     available = available + vim.api.nvim_win_get_width(result_win)
+  elseif has_base then
+    available = available + vim.api.nvim_win_get_width(base_win)
   end
 
   -- Step 3: Handle result window height (bottom layout)
@@ -103,6 +109,18 @@ function M.arrange(tabpage)
     vim.api.nvim_win_set_width(left_win, lw)
     vim.api.nvim_win_set_width(result_win, cw)
     vim.api.nvim_win_set_width(right_win, available - lw - cw)
+
+    if has_base then
+      -- Base sits above Result, split the middle column evenly.
+      local column = vim.api.nvim_win_get_height(base_win) + vim.api.nvim_win_get_height(result_win)
+      vim.api.nvim_win_set_height(base_win, math.floor(column / 2))
+    end
+  elseif has_base then
+    -- Three top-row panes: Incoming | Base | Current, equal split
+    local third = math.floor(available / 3)
+    vim.api.nvim_win_set_width(original_win, third)
+    vim.api.nvim_win_set_width(base_win, third)
+    vim.api.nvim_win_set_width(modified_win, available - 2 * third)
   else
     -- Two diff panes, equal split
     local half = math.floor(available / 2)

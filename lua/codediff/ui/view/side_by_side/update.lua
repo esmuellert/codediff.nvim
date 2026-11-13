@@ -232,8 +232,11 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
           if not current() or not vim.api.nvim_buf_is_valid(original_info.bufnr) or not vim.api.nvim_buf_is_valid(modified_info.bufnr) then
             return
           end
-          local conflict_diffs =
-            compute_and_render_conflict(original_info.bufnr, modified_info.bufnr, base_lines, original_lines, modified_lines, original_win, modified_win, should_auto_scroll)
+          local conflict_diffs = compute_and_render_conflict(original_info.bufnr, modified_info.bufnr, base_lines, original_lines, modified_lines, {
+            original_win = original_win,
+            modified_win = modified_win,
+            auto_scroll_to_first_hunk = should_auto_scroll,
+          })
 
           if conflict_diffs then
             lifecycle.update_buffers(tabpage, original_info.bufnr, modified_info.bufnr)

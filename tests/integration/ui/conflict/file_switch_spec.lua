@@ -145,4 +145,34 @@ describe("conflict mode single-file switching", function()
     assert.is_true(vim.api.nvim_buf_is_valid(result_bufnr), "result buffer must stay valid")
     assert.is_true(vim.api.nvim_buf_is_loaded(result_bufnr), "result buffer must only be hidden, never unloaded")
   end)
+
+  it("closes the Base pane with the conflict view and brings it back on return", function()
+    local config = require("codediff.config")
+    local saved_show_base = config.options.diff.conflict_show_base
+    config.options.diff.conflict_show_base = true
+    local ok, err = pcall(function()
+      local base_view = require("codediff.ui.conflict.view.base")
+      local lifecycle = require("codediff.ui.lifecycle")
+      open_conflict_view()
+      local session = lifecycle.get_session(tabpage)
+      assert.is_true(base_view.is_visible(session), "Base pane opens when enabled")
+      local window_count = #vim.api.nvim_tabpage_list_wins(tabpage)
+
+      require("codediff.ui.view.side_by_side").show_untracked_file(tabpage, repo.path("fresh.txt"))
+      assert.is_false(base_view.is_visible(session), "Base pane must not survive into the single-file view")
+      assert.is_nil(session.base_win)
+
+      reopen_conflict_view()
+      assert.is_true(
+        vim.wait(5000, function()
+          return base_view.is_visible(session)
+        end, 20),
+        "Base pane must be restored with the conflict view"
+      )
+      assert.equals(window_count, #vim.api.nvim_tabpage_list_wins(tabpage))
+      assert.same({ "base1", "base2", "base3" }, vim.api.nvim_buf_get_lines(session.base_bufnr, 0, -1, false))
+    end)
+    config.options.diff.conflict_show_base = saved_show_base
+    assert.is_true(ok, err)
+  end)
 end)
