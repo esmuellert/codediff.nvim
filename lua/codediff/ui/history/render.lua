@@ -240,15 +240,23 @@ end
 
 function M.get_all_files(tree)
   local files = {}
-  for _, commit in ipairs(tree:get_nodes()) do
-    if commit:is_expanded() then
-      for _, id in ipairs(commit:get_child_ids() or {}) do
-        local node = tree:get_node(id)
-        if node and node.data and node.data.type == "file" then
+  local function collect(parent)
+    if not parent:is_expanded() then
+      return
+    end
+    for _, id in ipairs(parent:get_child_ids() or {}) do
+      local node = tree:get_node(id)
+      if node and node.data then
+        if node.data.type == "directory" then
+          collect(node)
+        elseif node.data.type == "file" then
           files[#files + 1] = { node = node, data = node.data }
         end
       end
     end
+  end
+  for _, commit in ipairs(tree:get_nodes()) do
+    collect(commit)
   end
   return files
 end
