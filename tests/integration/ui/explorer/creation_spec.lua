@@ -605,6 +605,42 @@ describe("Explorer Mode", function()
     assert.is_true(opened, "j/k on a file node should auto-open its diff")
   end)
 
+  it("Keeps explorer focus when auto-opening an unloaded untracked file in inline layout", function()
+    require("codediff").setup({
+      diff = { layout = "inline" },
+      explorer = { auto_open_on_cursor = true },
+    })
+
+    local ready, tabpage, explorer = open_explorer(temp_dir, "file1.txt")
+    assert.is_true(ready, "Explorer should be ready with an initial selection")
+    vim.api.nvim_set_current_tabpage(tabpage)
+
+    local target_line, target_path, target_group = find_file_node(explorer, function(data)
+      return data.status == "??"
+    end)
+    assert.is_not_nil(target_line, "Should find an untracked file node")
+    assert.equals(-1, vim.fn.bufnr(temp_dir .. "/" .. target_path), "Untracked file should not already have a buffer")
+
+    local cur_line = vim.api.nvim_win_get_cursor(explorer.winid)[1]
+    vim.api.nvim_set_current_win(explorer.winid)
+    local motion = target_line > cur_line and "j" or "k"
+    local count = math.abs(target_line - cur_line)
+    vim.api.nvim_feedkeys(string.rep(motion, count), "tx", false)
+
+    local target_abs = vim.uv.fs_realpath(temp_dir .. "/" .. target_path)
+    local opened = vim.wait(2000, function()
+      local session = require("codediff.ui.lifecycle").get_session(tabpage)
+      local modified_bufnr = session and session.modified_bufnr
+      return explorer.data.current_file_path == target_path
+        and explorer.data.current_file_group == target_group
+        and modified_bufnr
+        and vim.api.nvim_buf_is_valid(modified_bufnr)
+        and vim.uv.fs_realpath(vim.api.nvim_buf_get_name(modified_bufnr)) == target_abs
+    end, 20)
+    assert.is_true(opened, "j/k on the untracked file should auto-open its preview")
+    assert.equals(explorer.winid, vim.api.nvim_get_current_win(), "Auto-opening should preserve explorer focus")
+  end)
+
   it("Ignores j/k landing on group/directory nodes when auto_open_on_cursor is enabled", function()
     require("codediff").setup({
       diff = { layout = "side-by-side" },
