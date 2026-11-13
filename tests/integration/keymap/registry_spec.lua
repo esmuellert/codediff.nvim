@@ -582,4 +582,43 @@ describe("keymap registry", function()
       assert.equals(0, slots.count())
     end)
   end)
+
+  describe("which-key", function()
+    local saved
+
+    before_each(function()
+      saved = package.loaded["which-key.buf"]
+    end)
+
+    after_each(function()
+      package.loaded["which-key.buf"] = saved
+    end)
+
+    -- which-key's nowait <leader> trigger only fires immediately while it is
+    -- newer than every longer <leader> mapping on the buffer, so codediff must
+    -- ask which-key to re-attach after changing a buffer's mappings.
+    it("asks which-key to rebuild a buffer once per batch of claims and releases", function()
+      local cleared = {}
+      package.loaded["which-key.buf"] = {
+        clear = function(opts)
+          table.insert(cleared, opts.buf)
+        end,
+      }
+
+      local bufnr = new_buf()
+      local r = keymap.new("test")
+      r:claim(bufnr, "n", "<leader>hs", noop, {})
+      r:claim(bufnr, "n", "<leader>hu", noop, {})
+      vim.wait(100, function()
+        return #cleared > 0
+      end)
+      assert.same({ bufnr }, cleared)
+
+      r:dispose()
+      vim.wait(100, function()
+        return #cleared > 1
+      end)
+      assert.same({ bufnr, bufnr }, cleared)
+    end)
+  end)
 end)

@@ -64,6 +64,30 @@ local function read_current(bufnr, mode, lhs)
   return result
 end
 
+-- which-key installs a buffer-local `nowait` trigger per prefix (e.g. <leader>).
+-- Neovim only honors `nowait` when that mapping is found before any longer one
+-- sharing its prefix, and buffer-local mappings are searched newest first. So
+-- mapping <leader>hs on a buffer which-key already attached to makes <leader>
+-- wait the full 'timeoutlen' and the popup never appears in time. Asking
+-- which-key to rebuild the buffer (what it does itself on LspAttach) puts its
+-- trigger back in front and refreshes the listed mappings.
+local which_key_pending = {}
+
+local function refresh_which_key(bufnr)
+  if not package.loaded["which-key.buf"] or which_key_pending[bufnr] then
+    return
+  end
+  which_key_pending[bufnr] = true
+  vim.schedule(function()
+    which_key_pending[bufnr] = nil
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      pcall(function()
+        require("which-key.buf").clear({ buf = bufnr })
+      end)
+    end
+  end)
+end
+
 --- True when `current` is a buffer-local mapping (not a global fallback).
 local function is_buffer_local(current)
   return current ~= nil and current.buffer == 1
@@ -135,6 +159,7 @@ local function install(slot, claim)
     -- against this snapshot: another plugin may reuse the same RHS, or even the
     -- same callback, while changing options, and that is still its mapping.
     slot.applied_map = read_current(slot.bufnr, slot.mode, slot.lhs)
+    refresh_which_key(slot.bufnr)
   else
     slot.applied = nil
     slot.applied_map = nil
@@ -185,6 +210,7 @@ local function restore(slot)
   else
     pcall(vim.keymap.del, slot.mode, slot.lhs, { buffer = slot.bufnr })
   end
+  refresh_which_key(slot.bufnr)
   slot.applied = nil
   slot.applied_map = nil
 end
