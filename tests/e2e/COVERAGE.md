@@ -39,7 +39,7 @@ are difficult to express through a Git merge. They are not counted below.
 ## Scenario matrix
 
 A named scenario is distinct from its parameterized executions. The matrix has
-133 named scenarios and 548 E2E executions on a platform with a native watcher.
+134 named scenarios and 556 E2E executions on a platform with a native watcher.
 This is the refresh change-audit matrix, not the entire E2E suite. Other command,
 working-file and diagnostic E2Es are additional coverage. Fixture self-tests,
 unit tests and component integrations are not included in these counts.
@@ -53,7 +53,7 @@ unit tests and component integrations are not included in these counts.
 | [view/hunk_actions_spec.lua](view/hunk_actions_spec.lua) | 14 | 54 | both transports/layouts; manual-only mode runs per layout |
 | [explorer/actions_spec.lua](explorer/actions_spec.lua) | 20 | 80 | both transports/layouts |
 | [history/actions_spec.lua](history/actions_spec.lua) | 14 | 56 | both transports/layouts |
-| [conflict/actions_spec.lua](conflict/actions_spec.lua) | 15 | 120 | both transports × ours left/right × Result bottom/center |
+| [conflict/actions_spec.lua](conflict/actions_spec.lua) | 16 | 128 | both transports × ours left/right × Result bottom/center |
 | [refresh/sources_spec.lua](refresh/sources_spec.lua) | 19 | 74 | both transports/layouts; plain-file case runs per layout |
 | [virtual_file/buffers_spec.lua](virtual_file/buffers_spec.lua) | 4 | 4 | direct public `codediff://` buffer commands |
 
@@ -164,6 +164,7 @@ Each ID is part of the test name, making failures and source searches traceable.
 | C01–C05 | Independent fixture seed, marker cells/colors, per-block resolution, undo/redo/discard |
 | C06–C11 | Whole-file resolution/reset and numbered diffget |
 | C12–C15 | Conflict navigation, save, unrelated staging, quit dialogs, finish-and-stage workflow |
+| C16 | Input-pane hover preview of a conflict against the merge base |
 | S01–S05 | Unicode/BOM/CRLF, virtual syntax/readonly, no final newline, empty files |
 | S06–S10 | Renames, fixed ancestry, movable tags, regular Git directories, SHA-256 |
 | S11–S14 | Plain paths with spaces/Unicode, literal arrows, renamed arrows, unborn branches |

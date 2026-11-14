@@ -302,6 +302,7 @@ Both methods automatically place the library in the plugin root directory.
         prev_conflict = "[x",            -- Jump to previous conflict
         diffget_incoming = "2do",        -- Get hunk from incoming (left/theirs) buffer
         diffget_current = "3do",         -- Get hunk from current (right/ours) buffer
+        hover = "K",                     -- Preview the conflict under cursor against the merge base
       },
     },
   },

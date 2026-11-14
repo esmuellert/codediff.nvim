@@ -7,6 +7,7 @@ local resolve = require("codediff.keymap.resolve")
 local tracking = require("codediff.ui.conflict.tracking")
 local resolution = require("codediff.ui.conflict.resolution")
 local navigation = require("codediff.ui.conflict.navigation")
+local hover = require("codediff.ui.conflict.hover")
 
 -- Dot-repeatable actions are expr mappings (see conflict.tracking).
 local REPEATABLE_ACTIONS = {
@@ -88,6 +89,14 @@ function M.setup_keymaps(tabpage)
             extra = { desc = action.desc, expr = true },
           })
         end
+      else
+        -- Input panes only, so the Result (the real file) keeps the user's own key
+        bind(bufnr, { key = "hover" }, {
+          rhs = function()
+            hover.toggle(tabpage)
+          end,
+          extra = { desc = "Preview hunk against merge base" },
+        })
       end
     end
   end

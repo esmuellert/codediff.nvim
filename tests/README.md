@@ -152,7 +152,7 @@ hand-authored projections; real merge E2Es keep the full controller active.
 ## Behavioral coverage
 
 [e2e/COVERAGE.md](e2e/COVERAGE.md) maps the refresh changes against `main` to
-scenario IDs and parameterized executions. Its 133 named scenarios / 548
+scenario IDs and parameterized executions. Its 134 named scenarios / 556
 executions are a specific cross-feature matrix, **not the total E2E suite** and
 not a count of unit or integration tests. Additional command and working-file
 E2Es live alongside it. The runner reports the selected suite's actual counts.

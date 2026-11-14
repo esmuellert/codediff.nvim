@@ -130,6 +130,7 @@ local EXPECT = {
     prev_conflict = { "conflict" },
     diffget_incoming = { "conflict" },
     diffget_current = { "conflict" },
+    hover = { "conflict" },
   },
 }
 

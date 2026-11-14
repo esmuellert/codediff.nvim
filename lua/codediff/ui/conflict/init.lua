@@ -8,6 +8,7 @@ local gutter = require("codediff.ui.conflict.gutter")
 local resolution = require("codediff.ui.conflict.resolution")
 local navigation = require("codediff.ui.conflict.navigation")
 local keymaps = require("codediff.ui.conflict.keymaps")
+local hover = require("codediff.ui.conflict.hover")
 
 -- Delegate to tracking module
 M.run_repeatable_action = tracking.run_repeatable_action
@@ -35,6 +36,9 @@ M.diffget_current = resolution.diffget_current
 -- Delegate to navigation module
 M.navigate_next_conflict = navigation.navigate_next_conflict
 M.navigate_prev_conflict = navigation.navigate_prev_conflict
+
+-- Delegate to hover module
+M.toggle_hover = hover.toggle
 
 -- Delegate to keymaps module
 M.setup_keymaps = keymaps.setup_keymaps
