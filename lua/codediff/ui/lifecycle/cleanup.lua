@@ -139,6 +139,31 @@ function M.setup_autocmds()
     end,
   })
 
+  -- The mouse wheel scrolls the window under the pointer, but Neovim syncs
+  -- 'scrollbind' only from the current window. Replay the sync from a pane
+  -- scrolled without focus, so hovering a fresh view scrolls its peers too.
+  vim.api.nvim_create_autocmd("WinScrolled", {
+    group = augroup,
+    callback = function()
+      local diff = session.get_active_diffs()[vim.api.nvim_get_current_tabpage()]
+      if not diff then
+        return
+      end
+
+      local current_win = vim.api.nvim_get_current_win()
+      for id, delta in pairs(vim.v.event) do
+        local win = tonumber(id)
+        if win and win ~= current_win and delta.topline ~= 0 and vim.api.nvim_win_is_valid(win) and owns_window(diff, win) and vim.wo[win].scrollbind then
+          -- A no-op normal command runs the native scrollbind check with this
+          -- pane as curwin, which keeps the panes' relative offset intact.
+          vim.api.nvim_win_call(win, function()
+            vim.cmd([[execute "normal! \<Ignore>"]])
+          end)
+        end
+      end
+    end,
+  })
+
   -- When a window is closed, check if we should cleanup the diff
   vim.api.nvim_create_autocmd("WinClosed", {
     group = augroup,
