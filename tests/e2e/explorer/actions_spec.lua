@@ -166,6 +166,16 @@ for _, backend in ipairs({ "native", "polling" }) do
         h.expect_text(screen, "modified", "working-A")
       end)
 
+      it("[E21] file navigation works while an initially hidden panel has never been shown", function()
+        screen:exec("require('codediff').setup({ explorer = { hidden = true } })")
+        open("CodeDiff -- a.txt b.txt")
+        h.action(screen, "view", "next_file", "modified")
+        h.expect_text(screen, "modified", "working-B")
+        h.idle(screen)
+        h.action(screen, "view", "prev_file", "modified")
+        h.expect_text(screen, "original", "index-A")
+      end)
+
       it("[E13] pathspecs and ignore filters continue to apply after external changes", function()
         screen:exec("require('codediff').setup({ explorer = { file_filter = { ignore = { 'nested/**' } } } })")
         open("CodeDiff -- a.txt nested/alpha.txt")
