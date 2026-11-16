@@ -111,6 +111,8 @@ modified o  ih             Hunk textobject
 modified v  ih             Hunk textobject
 panel    n  -              Toggle stage/unstage
 panel    n  <2-LeftMouse>  Select file
+panel    n  <C-D>          Scroll diff down
+panel    n  <C-U>          Scroll diff up
 panel    n  <CR>           Select/toggle entry
 panel    n  K              Show full path
 panel    n  R              Refresh explorer
@@ -188,6 +190,8 @@ modified o  ih             Hunk textobject
 modified v  ih             Hunk textobject
 panel    n  -              Toggle stage/unstage
 panel    n  <2-LeftMouse>  Select file
+panel    n  <C-D>          Scroll diff down
+panel    n  <C-U>          Scroll diff up
 panel    n  <CR>           Select/toggle entry
 panel    n  K              Show full path
 panel    n  R              Refresh explorer

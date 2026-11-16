@@ -359,6 +359,8 @@ Setup entry point:
         fold_toggle_recursive = "zA",
         fold_open_all = "zR",
         fold_close_all = "zM",
+        scroll_down = "<C-d>",
+        scroll_up = "<C-u>",
       },
       history = {
         select = "<CR>",
@@ -371,6 +373,8 @@ Setup entry point:
         fold_toggle_recursive = "zA",
         fold_open_all = "zR",
         fold_close_all = "zM",
+        scroll_down = "<C-d>",
+        scroll_up = "<C-u>",
       },
       conflict = {
         accept_incoming = "<leader>ct",

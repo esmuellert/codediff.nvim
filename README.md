@@ -273,6 +273,8 @@ Both methods automatically place the library in the plugin root directory.
         fold_toggle_recursive = "zA", -- Toggle fold recursively
         fold_open_all = "zR",       -- Open all folds in tree
         fold_close_all = "zM",      -- Close all folds in tree
+        scroll_down = "<C-d>",      -- Scroll diff panes down half a page
+        scroll_up = "<C-u>",        -- Scroll diff panes up half a page
       },
       history = {
         select = "<CR>",    -- Select commit/file or toggle expand
@@ -287,6 +289,8 @@ Both methods automatically place the library in the plugin root directory.
         fold_toggle_recursive = "zA", -- Toggle fold recursively
         fold_open_all = "zR",       -- Open all folds in tree
         fold_close_all = "zM",      -- Close all folds in tree
+        scroll_down = "<C-d>",      -- Scroll diff panes down half a page
+        scroll_up = "<C-u>",        -- Scroll diff panes up half a page
       },
       conflict = {
         accept_incoming = "<leader>ct",  -- Accept incoming (theirs/left) change

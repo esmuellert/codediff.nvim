@@ -110,6 +110,8 @@ local function build_sections(keymaps, is_bound, shape)
         { ekm.fold_toggle_recursive, "Toggle fold recursively" },
         { ekm.fold_open_all, "Open all folds" },
         { ekm.fold_close_all, "Close all folds" },
+        { ekm.scroll_down, "Scroll diff down" },
+        { ekm.scroll_up, "Scroll diff up" },
       }, is_bound)
     )
   end
@@ -131,6 +133,8 @@ local function build_sections(keymaps, is_bound, shape)
         { hkm.fold_toggle_recursive, "Toggle fold recursively" },
         { hkm.fold_open_all, "Open all folds" },
         { hkm.fold_close_all, "Close all folds" },
+        { hkm.scroll_down, "Scroll diff down" },
+        { hkm.scroll_up, "Scroll diff up" },
       }, is_bound)
     )
   end
