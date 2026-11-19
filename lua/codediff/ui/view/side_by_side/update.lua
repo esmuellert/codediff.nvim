@@ -197,12 +197,20 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     modified = modified_is_virtual and modified_info.needs_edit,
   }
 
-  local render_everything = function()
+  local render_everything
+  render_everything = function()
     if not current() then
       return
     end
     -- Guard: Check if windows are still valid
     if not vim.api.nvim_win_is_valid(original_win) or not vim.api.nvim_win_is_valid(modified_win) then
+      return
+    end
+
+    -- Guard: a reentrant vim.wait() (e.g. from a BufEnter autocmd fired by
+    -- open_real_file) can run this before reload_side has assigned bufnr.
+    if not original_info.bufnr or not modified_info.bufnr then
+      vim.schedule(render_everything)
       return
     end
 
