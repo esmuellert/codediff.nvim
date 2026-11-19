@@ -210,7 +210,9 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     -- Guard: a reentrant vim.wait() (e.g. from a BufEnter autocmd fired by
     -- open_real_file) can run this before reload_side has assigned bufnr.
     if not original_info.bufnr or not modified_info.bufnr then
-      vim.schedule(render_everything)
+      -- A timer, not vim.schedule: vim.wait() drains scheduled callbacks, so
+      -- re-queueing here would spin inside the very wait that blocks us.
+      vim.defer_fn(render_everything, 10)
       return
     end
 
