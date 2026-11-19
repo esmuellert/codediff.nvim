@@ -394,6 +394,32 @@ describe("Explorer review-flow re-selection (issue #347)", function()
     assert.equals("unstaged", explorer.data.current_file_group, "a.txt should stay in the unstaged group")
   end)
 
+  it("reloads the buffer of a restored file that is not shown in the diff", function()
+    vim.cmd("edit " .. repo.path("b.txt"))
+    local b_buf = vim.api.nvim_get_current_buf()
+    local ready, explorer = open_explorer("a.txt")
+    assert.is_true(ready, "explorer should open")
+
+    local line = line_for(explorer, "b.txt", "unstaged")
+    assert.is_not_nil(line, "b.txt should appear in unstaged")
+    vim.api.nvim_set_current_win(explorer.winid)
+    vim.api.nvim_win_set_cursor(explorer.winid, { line, 0 })
+
+    local original_confirm = vim.fn.confirm
+    vim.fn.confirm = function()
+      return 1
+    end
+    explorer_actions.restore_entry(explorer, explorer.tree)
+    vim.fn.confirm = original_confirm
+
+    assert.is_true(
+      vim.wait(4000, function()
+        return vim.api.nvim_buf_get_lines(b_buf, 0, -1, false)[1] == "original b.txt"
+      end, 50),
+      "b.txt buffer should show the restored content, got " .. vim.inspect(vim.api.nvim_buf_get_lines(b_buf, 0, -1, false))
+    )
+  end)
+
   it("keeps the staged file selected when no unstaged files remain", function()
     local ready, explorer = open_explorer("a.txt")
     assert.is_true(ready, "explorer should open")

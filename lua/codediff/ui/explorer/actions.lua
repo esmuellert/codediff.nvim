@@ -410,6 +410,28 @@ function M.unstage_all(explorer)
   end)
 end
 
+local function real_path(file)
+  local resolved = vim.loop.fs_realpath(file)
+  return resolved and resolved:gsub("\\", "/")
+end
+
+-- Reload clean buffers of restored files, since Neovim does not see the git
+-- write until focus returns or :checktime runs
+local function reload_restored_buffers(git_root, entry_path)
+  local target = real_path(git_root .. "/" .. entry_path)
+  if not target then
+    return
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == "" and not vim.bo[buf].modified then
+      local file = real_path(vim.api.nvim_buf_get_name(buf))
+      if file and (file == target or vim.startswith(file, target .. "/")) then
+        pcall(vim.cmd, "silent! checktime " .. buf)
+      end
+    end
+  end
+end
+
 -- Restore/discard changes to the selected file or directory
 function M.restore_entry(explorer, tree)
   if not explorer or not explorer.data.git_root then
@@ -463,21 +485,25 @@ function M.restore_entry(explorer, tree)
       -- Run git restore for tracked changes, then git clean for untracked
       git.restore_file(explorer.data.git_root, entry_path, explorer.data.base_revision, function(restore_err)
         git.delete_untracked(explorer.data.git_root, entry_path, function(clean_err)
-          if restore_err and clean_err then
-            vim.schedule(function()
+          vim.schedule(function()
+            if restore_err and clean_err then
               vim.notify("Failed to restore: " .. restore_err, vim.log.levels.ERROR)
-            end)
-          end
+            else
+              reload_restored_buffers(explorer.data.git_root, entry_path)
+            end
+          end)
         end)
       end)
     else
       -- Restore tracked file
       git.restore_file(explorer.data.git_root, entry_path, explorer.data.base_revision, function(err)
-        if err then
-          vim.schedule(function()
+        vim.schedule(function()
+          if err then
             vim.notify(err, vim.log.levels.ERROR)
-          end)
-        end
+          else
+            reload_restored_buffers(explorer.data.git_root, entry_path)
+          end
+        end)
       end)
     end
   end
