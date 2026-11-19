@@ -197,6 +197,15 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
     modified = modified_is_virtual and modified_info.needs_edit,
   }
 
+  -- A scheduled render can run while M.update is still loading the other side:
+  -- vim.wait inside an LspAttach handler (e.g. yaml-companion's request_sync)
+  -- during open_real_file's :edit pumps the vim.schedule queue, so the other
+  -- side's bufnr may still be nil here (see #592). nvim_buf_is_valid(nil)
+  -- throws instead of returning false, and dropping the render would leave
+  -- the view unrendered because readiness fires only once. Remember the
+  -- attempt instead; M.update re-arms it once both sides are loaded.
+  local render_deferred = false
+
   local render_everything = function()
     if not current() then
       return
@@ -206,7 +215,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
       return
     end
 
-    -- Guard: Check if buffers are still valid
+    -- Guard: Check if buffers are still valid. A nil bufnr means the render
+    -- ran re-entrantly before M.update assigned it; defer, don't drop.
+    if original_info.bufnr == nil or modified_info.bufnr == nil then
+      render_deferred = true
+      return
+    end
     if not vim.api.nvim_buf_is_valid(original_info.bufnr) or not vim.api.nvim_buf_is_valid(modified_info.bufnr) then
       return
     end
@@ -288,6 +302,12 @@ function M.update(tabpage, session_config, auto_scroll_to_first_hunk)
   render_when_reloaded(tabpage, original_info, modified_info, wait_state, render_everything)
   reload_side(original_win, original_info, original_is_virtual)
   reload_side(modified_win, modified_info, modified_is_virtual)
+
+  -- A render that ran re-entrantly while a side was still loading (see above)
+  -- was deferred instead of dropped; re-arm it now that both bufnrs exist.
+  if render_deferred then
+    vim.schedule(render_everything)
+  end
 
   welcome_window.sync(original_win)
   welcome_window.sync(modified_win)
