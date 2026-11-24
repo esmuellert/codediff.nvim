@@ -149,12 +149,15 @@ function M.create_tree_file_nodes(files, git_root, group)
 
     local current = dir_tree
     for i = 1, #parts - 1 do
-      local dir_name = parts[i]
-      if not current[dir_name] then
-        current[dir_name] = { _is_dir = true, _children = {}, _files = {} }
+      -- Git can report a file and a directory at the same path.
+      local dir_key = "/" .. parts[i]
+      local directory = current[dir_key]
+      if not directory then
+        directory = { _is_dir = true, _children = {}, _files = {} }
+        current[dir_key] = directory
       end
-      current[dir_name]._files[#current[dir_name]._files + 1] = file
-      current = current[dir_name]._children
+      directory._files[#directory._files + 1] = file
+      current = directory._children
     end
 
     -- Add file at leaf
@@ -178,7 +181,7 @@ function M.create_tree_file_nodes(files, git_root, group)
         if #children_keys == 1 and item._children[children_keys[1]]._is_dir then
           local child_key = children_keys[1]
           local child = item._children[child_key]
-          local merged_key = key .. "/" .. child_key
+          local merged_key = key .. child_key
           subtree[merged_key] = child
           subtree[key] = nil
         end
@@ -213,7 +216,6 @@ function M.create_tree_file_nodes(files, git_root, group)
     local total = #sorted_keys
     for idx, key in ipairs(sorted_keys) do
       local item = subtree[key]
-      local full_path = parent_path ~= "" and (parent_path .. "/" .. key) or key
       local is_last = (idx == total)
 
       -- Copy parent indent state and add current level
@@ -225,12 +227,14 @@ function M.create_tree_file_nodes(files, git_root, group)
 
       if item._is_dir then
         -- Directory node - children need to know this dir's is_last status
+        local name = key:sub(2)
+        local full_path = parent_path ~= "" and (parent_path .. "/" .. name) or name
         local children = build_nodes(item._children, full_path, node_indent_state)
         nodes[#nodes + 1] = Tree.Node({
-          text = key,
+          text = name,
           data = {
             type = "directory",
-            name = key,
+            name = name,
             dir_path = full_path,
             group = group,
             indent_state = node_indent_state,

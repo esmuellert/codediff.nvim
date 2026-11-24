@@ -134,4 +134,30 @@ describe("Directory Flattening", function()
     assert.equals(1, #tree_nodes)
     assert.equals("src", tree_nodes[1].data.name)
   end)
+
+  local added = { path = "skills/foo", status = "A" }
+  local deleted = { path = "skills/foo/SKILL.md", status = "D" }
+
+  for _, case in ipairs({
+    { order = "file first", files = { added, deleted } },
+    { order = "directory first", files = { deleted, added } },
+  }) do
+    it("Keeps a file and directory at the same path with " .. case.order .. " (#583)", function()
+      config.options.explorer.view_mode = "tree"
+      config.options.explorer.flatten_dirs = true
+
+      local tree_nodes = nodes.create_tree_file_nodes(case.files, "/tmp/repo", "staged")
+
+      assert.equals(1, #tree_nodes)
+      local root = tree_nodes[1]
+      assert.equals("skills", root.data.dir_path)
+      assert.equals(2, #root._children)
+      local directory, file = unpack(root._children)
+      assert.equals("skills/foo", directory.data.dir_path)
+      assert.equals("skills/foo/SKILL.md", directory._children[1].data.path)
+      assert.equals("D", directory._children[1].data.status)
+      assert.equals("skills/foo", file.data.path)
+      assert.equals("A", file.data.status)
+    end)
+  end
 end)
