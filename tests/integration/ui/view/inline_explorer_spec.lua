@@ -478,4 +478,82 @@ describe("Inline diff with explorer", function()
 
     vim.fn.delete(file_path)
   end)
+
+  describe("hunk navigation from the explorer panel (#202)", function()
+    local h = require("tests.support")
+    local nav = require("codediff.ui.view.navigation")
+    local repo
+
+    before_each(function()
+      repo = h.create_temp_git_repo()
+      repo.write_file("a.txt", { "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9" })
+      repo.git("add .")
+      repo.git("commit -m initial")
+      repo.write_file("a.txt", { "a1", "a2 EDIT", "a3", "a4", "a5", "a6", "a7", "a8 EDIT", "a9" })
+    end)
+
+    after_each(function()
+      while vim.fn.tabpagenr("$") > 1 do
+        vim.cmd("tabclose!")
+      end
+      repo.cleanup()
+    end)
+
+    local function open_explorer_focused()
+      vim.cmd("edit " .. repo.path("a.txt"))
+      require("codediff.commands").vscode_diff({ fargs = {} })
+      local tabpage
+      local ready = vim.wait(8000, function()
+        for _, tp in ipairs(vim.api.nvim_list_tabpages()) do
+          local session = lifecycle.get_session(tp)
+          local changes = session and session.stored_diff_result and session.stored_diff_result.changes
+          if changes ~= nil and #changes == 2 and lifecycle.get_panel_view(tp) ~= nil then
+            tabpage = tp
+            return true
+          end
+        end
+        return false
+      end, 20)
+      assert.is_true(ready, "explorer diff should load with two hunks")
+
+      local session = lifecycle.get_session(tabpage)
+      assert.equal("inline", session.layout)
+      local panel = lifecycle.get_panel_view(tabpage)
+      vim.api.nvim_set_current_win(panel.winid)
+      return session, panel
+    end
+
+    local function hunk_lines(session)
+      local lines = {}
+      for _, change in ipairs(session.stored_diff_result.changes) do
+        table.insert(lines, change.modified.start_line)
+      end
+      return lines
+    end
+
+    it("next_hunk moves focus to the diff window", function()
+      local session, panel = open_explorer_focused()
+      local panel_cursor = vim.api.nvim_win_get_cursor(panel.winid)
+      vim.api.nvim_win_set_cursor(session.modified_win, { 1, 0 })
+
+      assert.is_true(nav.next_hunk())
+
+      assert.equal(session.modified_win, vim.api.nvim_get_current_win())
+      assert.equal(hunk_lines(session)[1], vim.api.nvim_win_get_cursor(0)[1])
+      assert.same(panel_cursor, vim.api.nvim_win_get_cursor(panel.winid), "explorer cursor must not move")
+    end)
+
+    it("prev_hunk moves focus to the diff window", function()
+      local session, panel = open_explorer_focused()
+      local panel_cursor = vim.api.nvim_win_get_cursor(panel.winid)
+      local line_count = vim.api.nvim_buf_line_count(session.modified_bufnr)
+      vim.api.nvim_win_set_cursor(session.modified_win, { line_count, 0 })
+
+      assert.is_true(nav.prev_hunk())
+
+      assert.equal(session.modified_win, vim.api.nvim_get_current_win())
+      assert.equal(hunk_lines(session)[2], vim.api.nvim_win_get_cursor(0)[1])
+      assert.same(panel_cursor, vim.api.nvim_win_get_cursor(panel.winid), "explorer cursor must not move")
+    end)
+  end)
 end)
